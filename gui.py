@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Простой GUI-обёртка для NanoDecompiler (только Windows).
+Простой GUI-обёртка для NanoDecompiler (только Windows). Тёмно-синяя тема +
+лёгкая прозрачность окна + цветной лог (разные цвета под [*]/[+]/[!]/ошибки,
+как в цветной консоли).
 
-Запускается автоматически из main.py, если main.py запущен БЕЗ аргументов
-на Windows (напр. двойной клик по run.bat). В Termux/Android/Linux/macOS
-этот файл вообще не импортируется - там всё как раньше, через командную
-строку (main.py plugin.jar).
+Запускается автоматически из main.py, если main.py запущен на Windows
+(см. main.py::main()). В Termux/Android/Linux/macOS этот файл вообще не
+импортируется - там всё как раньше, через командную строку
+(main.py plugin.jar).
 
 Сама декомпиляция выполняется в фоновом потоке (process_jar может идти
 долго на больших jar), чтобы окно не "зависало"; вывод print() из main.py
@@ -21,7 +23,26 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 
-from main import process_jar, NANO_DECOMPILER_VERSION
+from main import process_jar, NANO_DECOMPILER_VERSION, classify_line
+
+# ---- палитра: тёмно-синяя, с голубыми акцентами ----
+BG_ROOT = "#0b1622"
+BG_PANEL = "#0f2036"
+BG_ENTRY = "#0c1b2c"
+BG_LOG = "#081120"
+FG_TEXT = "#dbe9fa"
+FG_DIM = "#6f93b3"
+ACCENT = "#3fa9f5"
+ACCENT_HOVER = "#5cc1ff"
+ACCENT_DARK = "#153450"
+BORDER = "#1c3a57"
+
+COLOR_INFO = "#4fb8ff"
+COLOR_OK = "#4fe38b"
+COLOR_WARN = "#e8b339"
+COLOR_ERROR = "#ff6b6b"
+COLOR_BANNER = "#7fd4ff"
+COLOR_DIM = FG_DIM
 
 
 class _QueueWriter:
@@ -45,48 +66,77 @@ class _QueueWriter:
         return False
 
 
+def _classify_line(line):
+    return classify_line(line)
+
+
 class NanoDecompilerGUI:
     def __init__(self, root, initial_jar=None):
         self.root = root
         self.root.title(NANO_DECOMPILER_VERSION)
-        self.root.geometry("800x520")
-        self.root.minsize(620, 380)
+        self.root.geometry("820x540")
+        self.root.minsize(640, 400)
+        self.root.configure(bg=BG_ROOT)
+        try:
+            self.root.attributes("-alpha", 0.94)  # лёгкая прозрачность (Windows)
+        except Exception:
+            pass
+
+        self._setup_style()
 
         self.queue = queue.Queue()
         self.running = False
         self.last_out_dir = None
 
-        pad = {"padx": 8, "pady": 6}
+        top = ttk.Frame(root, style="Panel.TFrame", padding=10)
+        top.pack(fill="x", padx=10, pady=(10, 4))
 
-        top = ttk.Frame(root)
-        top.pack(fill="x", **pad)
-
-        ttk.Label(top, text=".jar плагина:").grid(row=0, column=0, sticky="w")
+        ttk.Label(top, text=".jar плагина:", style="Dim.TLabel").grid(row=0, column=0, sticky="w")
         self.jar_var = tk.StringVar()
-        ttk.Entry(top, textvariable=self.jar_var).grid(row=0, column=1, sticky="ew", padx=4)
-        ttk.Button(top, text="Обзор...", command=self._pick_jar).grid(row=0, column=2)
+        ttk.Entry(top, textvariable=self.jar_var, style="Dark.TEntry").grid(
+            row=0, column=1, sticky="ew", padx=6)
+        ttk.Button(top, text="Обзор...", style="Accent.TButton",
+                   command=self._pick_jar).grid(row=0, column=2)
 
-        ttk.Label(top, text="Папка для результата:").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Label(top, text="Папка для результата:", style="Dim.TLabel").grid(
+            row=1, column=0, sticky="w", pady=(8, 0))
         self.out_var = tk.StringVar()
-        ttk.Entry(top, textvariable=self.out_var).grid(row=1, column=1, sticky="ew", padx=4, pady=(6, 0))
-        ttk.Button(top, text="Обзор...", command=self._pick_out_dir).grid(row=1, column=2, pady=(6, 0))
+        ttk.Entry(top, textvariable=self.out_var, style="Dark.TEntry").grid(
+            row=1, column=1, sticky="ew", padx=6, pady=(8, 0))
+        ttk.Button(top, text="Обзор...", style="Accent.TButton",
+                   command=self._pick_out_dir).grid(row=1, column=2, pady=(8, 0))
 
         top.columnconfigure(1, weight=1)
 
-        btn_row = ttk.Frame(root)
-        btn_row.pack(fill="x", **pad)
-        self.run_btn = ttk.Button(btn_row, text="Декомпилировать", command=self._start)
+        btn_row = ttk.Frame(root, style="Root.TFrame")
+        btn_row.pack(fill="x", padx=10, pady=4)
+        self.run_btn = ttk.Button(btn_row, text="Декомпилировать", style="Primary.TButton",
+                                   command=self._start)
         self.run_btn.pack(side="left")
-        self.open_btn = ttk.Button(btn_row, text="Открыть папку с результатом",
+        self.open_btn = ttk.Button(btn_row, text="Открыть папку с результатом", style="Accent.TButton",
                                     command=self._open_out_dir, state="disabled")
         self.open_btn.pack(side="left", padx=8)
 
-        self.log = scrolledtext.ScrolledText(root, state="disabled", wrap="none",
-                                              font=("Consolas", 9))
-        self.log.pack(fill="both", expand=True, **pad)
+        log_frame = tk.Frame(root, bg=BORDER, bd=0)
+        log_frame.pack(fill="both", expand=True, padx=10, pady=6)
+        self.log = scrolledtext.ScrolledText(
+            log_frame, state="disabled", wrap="none", font=("Consolas", 9),
+            bg=BG_LOG, fg=FG_TEXT, insertbackground=FG_TEXT,
+            selectbackground=ACCENT_DARK, selectforeground=FG_TEXT,
+            relief="flat", bd=0, highlightthickness=1,
+            highlightbackground=BORDER, highlightcolor=ACCENT,
+        )
+        self.log.pack(fill="both", expand=True, padx=1, pady=1)
+        self.log.tag_configure("banner", foreground=COLOR_BANNER)
+        self.log.tag_configure("info", foreground=COLOR_INFO)
+        self.log.tag_configure("ok", foreground=COLOR_OK)
+        self.log.tag_configure("warn", foreground=COLOR_WARN)
+        self.log.tag_configure("error", foreground=COLOR_ERROR)
+        self.log.tag_configure("dim", foreground=COLOR_DIM)
 
         self.status_var = tk.StringVar(value="Готов к работе.")
-        ttk.Label(root, textvariable=self.status_var, anchor="w").pack(fill="x", padx=8, pady=(0, 6))
+        ttk.Label(root, textvariable=self.status_var, style="Dim.TLabel", anchor="w").pack(
+            fill="x", padx=12, pady=(0, 8))
 
         self.root.after(100, self._poll_queue)
 
@@ -96,6 +146,37 @@ class NanoDecompilerGUI:
             self.out_var.set(os.path.join(os.path.dirname(initial_jar), base + "_decompiled"))
             # небольшая задержка, чтобы окно успело отрисоваться до старта
             self.root.after(300, self._start)
+
+    def _setup_style(self):
+        style = ttk.Style(self.root)
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass
+
+        style.configure("Root.TFrame", background=BG_ROOT)
+        style.configure("Panel.TFrame", background=BG_PANEL)
+        style.configure("Dim.TLabel", background=BG_ROOT, foreground=FG_DIM,
+                         font=("Segoe UI", 9))
+        style.configure("TLabel", background=BG_PANEL, foreground=FG_TEXT)
+
+        style.configure("Dark.TEntry", fieldbackground=BG_ENTRY, background=BG_ENTRY,
+                         foreground=FG_TEXT, insertcolor=FG_TEXT, borderwidth=1,
+                         relief="flat")
+        style.map("Dark.TEntry", fieldbackground=[("focus", BG_ENTRY)])
+
+        style.configure("Accent.TButton", background=ACCENT_DARK, foreground=FG_TEXT,
+                         borderwidth=0, focusthickness=0, padding=(10, 6))
+        style.map("Accent.TButton",
+                  background=[("active", ACCENT), ("disabled", BG_PANEL)],
+                  foreground=[("disabled", FG_DIM)])
+
+        style.configure("Primary.TButton", background=ACCENT, foreground="#04121f",
+                         borderwidth=0, focusthickness=0, padding=(14, 8),
+                         font=("Segoe UI", 9, "bold"))
+        style.map("Primary.TButton",
+                  background=[("active", ACCENT_HOVER), ("disabled", BG_PANEL)],
+                  foreground=[("disabled", FG_DIM)])
 
     def _pick_jar(self):
         path = filedialog.askopenfilename(title="Выберите .jar плагина",
@@ -112,8 +193,9 @@ class NanoDecompilerGUI:
             self.out_var.set(path)
 
     def _append_log(self, line):
+        tag = _classify_line(line)
         self.log.configure(state="normal")
-        self.log.insert("end", line + "\n")
+        self.log.insert("end", line + "\n", tag)
         self.log.see("end")
         self.log.configure(state="disabled")
 

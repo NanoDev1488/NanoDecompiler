@@ -44,6 +44,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import zipfile
 
 sys.setrecursionlimit(20000)
@@ -73,6 +74,93 @@ def _supports_color():
     return bool(getattr(sys.stdout, "isatty", lambda: False)())
 
 
+# ---- цвета консоли (тёмно-голубая палитра, в тон GUI) ----
+_ANSI = {
+    "banner": "38;2;127;212;255",
+    "info": "38;2;79;184;255",
+    "ok": "38;2;79;227;139",
+    "warn": "38;2;232;179;57",
+    "error": "38;2;255;107;107",
+    "dim": "38;2;111;147;179",
+}
+_ANSI_RESET = "\x1b[0m"
+
+
+def classify_line(line):
+    """Определяет смысловую категорию строки лога (для цвета - и в консоли
+    через ANSI, и в GUI через теги Tkinter, см. gui.py::_classify_line)."""
+    s = line.strip()
+    if not s:
+        return "dim"
+    if s[:1] in "╭╰│─" or "NanoDecompiler" in s or "Java-декомпилятор" in s:
+        return "banner"
+    if s.startswith("[!]") or "ОШИБКА" in s or "ошибка" in s.lower():
+        return "error"
+    if s.startswith("[*] Не хватает") or "НЕ НАЙДЕН" in s or "НЕ НАЙДЕНА" in s or s.startswith("ВНИМАНИЕ"):
+        return "warn"
+    if s.startswith("[+]") or "Всё готово к работе" in s or "Готово" in s:
+        return "ok"
+    if s.startswith("[*]") or s.startswith("   "):
+        return "info"
+    return "dim"
+
+
+def cprint(msg=""):
+    """print(), но с цветом по смыслу строки - только если реально пишем в
+    терминал (в GUI-логе sys.stdout подменён на очередь без isatty()==True,
+    там цвет красится отдельно тегами Tkinter - см. gui.py)."""
+    global _progress_active
+    if _progress_active:
+        sys.stdout.write("\n")
+        _progress_active = False
+    if not _supports_color():
+        print(msg)
+        return
+    for line in str(msg).split("\n"):
+        code = _ANSI.get(classify_line(line))
+        print(f"\x1b[{code}m{line}{_ANSI_RESET}" if code else line)
+
+
+def section(title):
+    """Цветной заголовок-разделитель этапа (только в реальном терминале -
+    в GUI-логе это просто обычная info-строка, см. classify_line)."""
+    if _supports_color():
+        code = _ANSI["banner"]
+        print(f"\n\x1b[{code}m▸ {title}{_ANSI_RESET}")
+    else:
+        print(f"\n[*] {title}")
+
+
+_progress_active = False
+
+
+def progress(current, total, label):
+    """Живой прогресс-бар в реальном терминале (перерисовывается на месте
+    через \\r, как в Claude Code CLI) - в GUI/не-tty вместо этого печатает
+    редкие дискретные вехи (каждые ~10%), чтобы не заспамить лог, но и не
+    молчать всю дорогу на больших jar."""
+    global _progress_active
+    width = 28
+    frac = (current / total) if total else 1.0
+    filled = int(width * frac)
+    bar = "█" * filled + "░" * (width - filled)
+    pct = int(frac * 100)
+    msg = f"[*] {label}: [{bar}] {current}/{total} ({pct}%)"
+    if _supports_color():
+        code = _ANSI["info"]
+        sys.stdout.write(f"\r\x1b[K\x1b[{code}m{msg}{_ANSI_RESET}")
+        sys.stdout.flush()
+        _progress_active = True
+        if current >= total:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            _progress_active = False
+    else:
+        step = max(1, total // 10)
+        if current >= total or current % step == 0:
+            print(msg)
+
+
 def banner_text():
     """Аккуратная рамка в духе Claude Code CLI (ширина считается автоматически
     по тексту - не хардкодим отступы вручную, чтобы не поехало при правках).
@@ -89,8 +177,8 @@ def banner_text():
     mid = [f"│ {l.ljust(width)} │" for l in lines]
     plain = "\n".join([top, *mid, bot])
     if _supports_color():
-        orange, reset = "\x1b[38;2;217;119;87m", "\x1b[0m"
-        return "\n".join(orange + ln + reset for ln in plain.splitlines())
+        blue = f"\x1b[{_ANSI['banner']}m"
+        return "\n".join(blue + ln + _ANSI_RESET for ln in plain.splitlines())
     return plain
 
 
@@ -99,7 +187,7 @@ def check_java_maven():
     mvn clean package) и печатает понятный статус + ссылки на скачивание,
     если чего-то не хватает. Ничего не устанавливает сама, только смотрит
     PATH через shutil.which - никаких внешних зависимостей не требуется."""
-    print("[*] Проверка окружения (java / maven)...")
+    section("Проверка окружения (java / maven)")
     missing = []
     _subprocess_kwargs = {}
     if platform.system() == "Windows":
@@ -115,11 +203,11 @@ def check_java_maven():
             ver_line = (r.stderr or r.stdout or "").splitlines()[0] if (r.stderr or r.stdout) else "версия неизвестна"
         except Exception:
             ver_line = "версия неизвестна"
-        print(f"    java:  найдена ({ver_line})")
+        cprint(f"    java:  найдена ({ver_line})")
     else:
         missing.append("java")
-        print("    java:  НЕ НАЙДЕНА в PATH.")
-        print("           Скачать (Eclipse Temurin JDK, бесплатно): https://adoptium.net/")
+        cprint("    java:  НЕ НАЙДЕНА в PATH.")
+        cprint("           Скачать (Eclipse Temurin JDK, бесплатно): https://adoptium.net/")
 
     mvn_path = shutil.which("mvn") or shutil.which("mvn.cmd")
     if mvn_path:
@@ -129,17 +217,17 @@ def check_java_maven():
             ver_line = (r.stdout or r.stderr or "").splitlines()[0] if (r.stdout or r.stderr) else "версия неизвестна"
         except Exception:
             ver_line = "версия неизвестна"
-        print(f"    maven: найден ({ver_line})")
+        cprint(f"    maven: найден ({ver_line})")
     else:
         missing.append("maven")
-        print("    maven: НЕ НАЙДЕН в PATH.")
-        print("           Скачать: https://maven.apache.org/download.cgi")
-        print("           (после распаковки папку bin/ нужно добавить в PATH)")
+        cprint("    maven: НЕ НАЙДЕН в PATH.")
+        cprint("           Скачать: https://maven.apache.org/download.cgi")
+        cprint("           (после распаковки папку bin/ нужно добавить в PATH)")
 
     if not missing:
-        print("[*] Всё готово к работе - можете делать с восстановленным плагином всё, что хотите.")
+        cprint("[*] Всё готово к работе - можете делать с восстановленным плагином всё, что хотите.")
     else:
-        print(f"[*] Не хватает: {', '.join(missing)}. Без этого не получится собрать проект "
+        cprint(f"[*] Не хватает: {', '.join(missing)}. Без этого не получится собрать проект "
               f"(mvn clean package) после декомпиляции - сама декомпиляция от этого не зависит "
               f"и пройдёт нормально.")
     return missing
@@ -151,7 +239,7 @@ from javatypes import (
     field_descriptor_to_java, method_descriptor_to_java, looks_obfuscated, dotted_from_internal,
     mark_type, resolve_type_markers,
 )
-from pom_builder import build_pom, KNOWN_LIBS
+from pom_builder import build_pom, KNOWN_LIBS, find_pom_properties_and_xml, parse_shade_relocations
 from engine import decompile_method_body, fallback_bytecode_listing
 from verify import ProjectStats, check_brackets, check_import_collisions
 from switchmap import detect_switchmaps
@@ -171,14 +259,39 @@ from emit import emit_expr, emit_stmts
 # pom.xml как <dependency> через ту же таблицу KNOWN_LIBS (build_pom).
 
 
-def _known_library_coords(internal):
+def _known_library_coords(internal, extra_prefixes=None):
     """Если internal-имя класса подпадает под известную библиотеку - вернуть
-    (dotted_prefix, groupId, artifactId), иначе None."""
+    (dotted_prefix, groupId, artifactId), иначе None.
+    extra_prefixes: доп. список (dotted_prefix, (groupId, artifactId)) -
+    релоцированные (shaded) префиксы, обнаруженные в <relocations> самого
+    pom.xml плагина (см. _relocated_library_prefixes ниже) - проверяются
+    ПЕРЕД основной таблицей KNOWN_LIBS, т.к. они точнее (взяты из
+    официального конфига сборки именно ЭТОГО jar'а, а не общего списка)."""
     dotted = internal_to_dotted(internal)
+    for prefix, coords in (extra_prefixes or []):
+        if dotted == prefix or dotted.startswith(prefix + "."):
+            return prefix, coords[0], coords[1]
     for prefix, coords in KNOWN_LIBS:
         if dotted == prefix or dotted.startswith(prefix + "."):
             return prefix, coords[0], coords[1]
     return None
+
+
+def _relocated_library_prefixes(original_pom_xml):
+    """По <relocations> из pom.xml плагина (maven-shade-plugin) строит список
+    (shaded_dotted_prefix, (groupId, artifactId)) для тех relocation-записей,
+    чей ОРИГИНАЛЬНЫЙ pattern совпадает с известной нам библиотекой из
+    KNOWN_LIBS - т.е. "эта известная библиотека здесь лежит под таким-то
+    неожиданным именем пакета, декомпилировать её не нужно, она уже есть в
+    pom.xml как <dependency>". Пример из реального плагина пользователя
+    (DeathUtils): pattern org.sqlite -> shadedPattern com.agent1k.libs.sqlite."""
+    out = []
+    for pattern, shaded in parse_shade_relocations(original_pom_xml):
+        for prefix, coords in KNOWN_LIBS:
+            if pattern == prefix or pattern.startswith(prefix + ".") or prefix.startswith(pattern + "."):
+                out.append((shaded, coords))
+                break
+    return out
 
 
 class Renamer:
@@ -279,6 +392,7 @@ def format_type_dotted(java_type, renamer, known_internal_by_dotted, all_imports
 
 
 def process_jar(jar_path, out_dir):
+    _t0 = time.time()
     _enable_windows_ansi()
     print()
     print(banner_text())
@@ -293,11 +407,12 @@ def process_jar(jar_path, out_dir):
     parse_errors = []
     plugin_yml_text = None
 
+    section("Разбор .class файлов")
     with zipfile.ZipFile(jar_path) as z:
         all_names = z.namelist()
         names = [n for n in all_names if n.endswith(".class") and "module-info" not in n]
         stats.classes_total = len(names)
-        print(f"[*] Найдено {len(names)} .class файлов")
+        cprint(f"[*] Найдено {len(names)} .class файлов")
         for n in names:
             try:
                 data = z.read(n)
@@ -307,6 +422,20 @@ def process_jar(jar_path, out_dir):
                 parse_errors.append((n, str(e)))
         stats.classes_parsed = len(class_files)
         stats.parse_errors = parse_errors
+
+        # Смотрим pom.xml плагина (если он реально внутри jar'а) ЗАРАНЕЕ, до
+        # решения какие классы пропускать - нужно для _relocated_library_prefixes
+        # ниже (maven-shade-plugin мог переименовать пакет бандленной
+        # библиотеки во что угодно, см. DeathUtils: org.sqlite ->
+        # com.agent1k.libs.sqlite - без этого такую библиотеку не узнать по
+        # одному только префиксу пакета). build_pom() ниже сама ещё раз найдёт
+        # этот же pom.xml - здесь читаем его только для relocations, дублирующий
+        # проход по just-in-memory списку имён недорогой.
+        _pom_props_early, _pom_xml_early = find_pom_properties_and_xml(all_names, z)
+        relocated_prefixes = _relocated_library_prefixes(_pom_xml_early)
+        if relocated_prefixes:
+            cprint(f"[*] В pom.xml плагина найден релоцированный (shaded) пакет известной "
+                   f"библиотеки: {', '.join(f'{p} -> {c[0]}:{c[1]}' for p, c in relocated_prefixes)}")
 
         # Известные крупные сторонние библиотеки (см. pom_builder.KNOWN_LIBS) -
         # НЕ декомпилируем и НЕ копируем байткод внутрь проекта: maven и так
@@ -319,7 +448,7 @@ def process_jar(jar_path, out_dir):
         library_internal_names = []
         library_hit_labels = set()
         for k in list(class_files):
-            hit = _known_library_coords(k)
+            hit = _known_library_coords(k, relocated_prefixes)
             if hit:
                 _prefix, g, a = hit
                 library_internal_names.append(k)
@@ -328,7 +457,7 @@ def process_jar(jar_path, out_dir):
         if library_internal_names:
             stats.library_classes_skipped = len(library_internal_names)
             stats.library_names_hit = library_hit_labels
-            print(f"[*] Известных библиотечных классов пропущено (не декомпилируются, "
+            cprint(f"[*] Известных библиотечных классов пропущено (не декомпилируются, "
                   f"будут подтянуты maven'ом как зависимость): "
                   f"{len(library_internal_names)} ({', '.join(sorted(library_hit_labels))})")
 
@@ -350,7 +479,7 @@ def process_jar(jar_path, out_dir):
                 except Exception:
                     plugin_yml_text = None
 
-        print(f"[*] Успешно распарсено классов: {len(class_files)}; ошибок парсинга: {len(parse_errors)}")
+        cprint(f"[*] Успешно распарсено классов: {len(class_files)}; ошибок парсинга: {len(parse_errors)}")
 
         known_internal_by_dotted = {internal_to_dotted(k): k for k in class_files}
 
@@ -367,7 +496,7 @@ def process_jar(jar_path, out_dir):
         pom_dest = os.path.join(out_dir, "pom.xml")
         with open(pom_dest, "w", encoding="utf-8") as f:
             f.write(pom_text)
-        print(f"[*] pom.xml ({'найден оригинал' if pom_kind == 'original' else 'сгенерирован по эвристике'}): {pom_dest}")
+        cprint(f"[*] pom.xml ({'найден оригинал' if pom_kind == 'original' else 'сгенерирован по эвристике'}): {pom_dest}")
 
     renamer = Renamer()
 
@@ -403,14 +532,13 @@ def process_jar(jar_path, out_dir):
             table[val] = renamer.field_map.get((enum_owner_internal, const_orig_name, const_desc), const_orig_name)
         switchmap_tables[(new_owner_dotted, new_field_name)] = table
     if synthetic_switchmap_classes:
-        print(f"[*] Найдено и свёрнуто synthetic switch-map классов (switch-on-enum): {len(synthetic_switchmap_classes)}")
+        cprint(f"[*] Найдено и свёрнуто synthetic switch-map классов (switch-on-enum): {len(synthetic_switchmap_classes)}")
 
     all_imports = {}
-    for internal, cf in class_files.items():
-        if internal in synthetic_switchmap_classes:
-            # чисто компиляторский артефакт switch-on-enum - в исходнике его
-            # никогда не было, use-места уже восстановлены в нормальный switch
-            continue
+    section("Декомпиляция классов")
+    to_render = [(i, cf) for i, cf in class_files.items() if i not in synthetic_switchmap_classes]
+    total_to_render = len(to_render)
+    for done_count, (internal, cf) in enumerate(to_render, 1):
         try:
             text, cls_imports = render_class(cf, renamer, known_internal_by_dotted, stats,
                                               enum_ordinals, switchmap_tables)
@@ -425,12 +553,14 @@ def process_jar(jar_path, out_dir):
         with open(dest, "w", encoding="utf-8") as f:
             f.write(text)
         stats.bracket_issues.extend(check_brackets(text, rel_path))
+        progress(done_count, total_to_render, "Декомпиляция классов")
 
     stats.import_conflicts = check_import_collisions(all_imports)
     stats.synthetic_switchmap_classes_hidden = len(synthetic_switchmap_classes)
 
     write_mapping_report(out_dir, renamer)
     write_readme(out_dir, jar_path, len(class_files), parse_errors, class_files, renamer, stats)
+    cprint(f"[*] Заняло: {time.time() - _t0:.1f} сек.")
     return out_dir
 
 
@@ -682,13 +812,40 @@ def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, sw
                 params_disp = params_disp[2:]
                 arg_offset = 2
         renamed_note = "" if mname == m.name else f"  // было: {m.name}"
-        param_str = ", ".join(f"{_simple_type(p)} arg{i + arg_offset}" for i, p in enumerate(params_disp))
-        sig = f"    {mmods} {_simple_type(ret_disp)} {mname}({param_str}) {{{renamed_note}".replace("  ", " ")
-        body_lines.append(sig)
 
+        result = None
         if m.code is not None:
             stats.total_methods += 1
             result = decompile_method_body(cf, m, renamer, known_internal_by_dotted, internal, indent=2, enum_ordinals=enum_ordinals, switchmap_tables=switchmap_tables)
+
+        # Имена параметров в сигнатуре ДОЛЖНЫ совпадать с именами, которые тело
+        # метода реально использует (ctx.locals - argN по умолчанию, либо
+        # настоящее имя из LocalVariableTable, если jar собран с отладочной
+        # информацией - см. stackvm.py::MethodCtx._build_lvt_names). Раньше
+        # сигнатура строилась ДО декомпиляции тела и всегда печатала "argN" -
+        # с появлением LVT-имён это стало реальным багом рассинхронизации
+        # (сигнатура "arg0", а тело внутри уже ссылалось на "player" - код не
+        # компилировался). Поэтому сигнатура строится ПОСЛЕ декомпиляции тела,
+        # из тех же result.ctx.locals, а не заново с нуля.
+        param_names = None
+        if result is not None and result.ok and result.ctx is not None:
+            param_entries = sorted(
+                ((slot, info) for slot, info in result.ctx.locals.items() if info.get("is_param")),
+                key=lambda si: si[0],
+            )
+            names = [info["name"] for _, info in param_entries]
+            if is_enum_ctor:
+                names = names[2:]
+            if len(names) == len(params_disp):
+                param_names = names
+        if param_names is None:
+            param_names = [f"arg{i + arg_offset}" for i in range(len(params_disp))]
+
+        param_str = ", ".join(f"{_simple_type(p)} {n}" for p, n in zip(params_disp, param_names))
+        sig = f"    {mmods} {_simple_type(ret_disp)} {mname}({param_str}) {{{renamed_note}".replace("  ", " ")
+        body_lines.append(sig)
+
+        if result is not None:
             if result.ok:
                 stats.decompiled_methods += 1
                 out_stmts = result.stmts
@@ -824,7 +981,7 @@ def write_mapping_report(out_dir, renamer):
         for (owner, name, desc), new_name in renamer.field_map.items():
             if new_name != name:
                 f.write(f"  {internal_to_dotted(owner)}.{name}:{desc}  ->  {new_name}\n")
-    print(f"[*] Отчёт деобфускации: {path}")
+    cprint(f"[*] Отчёт деобфускации: {path}")
 
 
 def write_readme(out_dir, jar_path, n_classes, parse_errors, class_files, renamer, stats):
@@ -881,14 +1038,16 @@ def write_readme(out_dir, jar_path, n_classes, parse_errors, class_files, rename
             "    что покажет реальный компилятор (в первую очередь - конфликты коротких\n"
             "    имён импортов, если они указаны выше).\n"
             "  - synchronized-блоки не сворачиваются в `synchronized (x) { ... }` -\n"
-            "    monitorenter/monitorexit оставлены как явные комментарии с полным\n"
-            "    сохранением семантики (просто без Java-сахара).\n"
+            "    вместо этого метод честно откатывается на дизассемблированный листинг\n"
+            "    байткода (см. `synchronized-блок не свёрнут` в причинах ниже, если есть) -\n"
+            "    компилировать такой листинг всё равно нельзя, зато семантика не теряется\n"
+            "    молча.\n"
             "  - try/finally, скомпилированный через дублирование кода finally-блока\n"
             "    (стандартно для javac 7+), восстанавливается как несколько отдельных\n"
             "    catch(Throwable)-блоков с повторяющимся кодом, а не как единый\n"
             "    красивый `finally {}` - семантика верна, но не свёрнута.\n"
         )
-    print(f"[*] README: {path}")
+    cprint(f"[*] README: {path}")
 
 
 def main():
@@ -910,12 +1069,12 @@ def main():
         return
 
     if len(sys.argv) < 2:
-        print("Использование: python3 main.py plugin.jar [output_dir]")
+        cprint("Использование: python3 main.py plugin.jar [output_dir]")
         sys.exit(1)
     jar_path = sys.argv[1]
     out_dir = sys.argv[2] if len(sys.argv) > 2 else os.path.splitext(os.path.basename(jar_path))[0] + "_decompiled"
     process_jar(jar_path, out_dir)
-    print(f"[+] Готово. Результат в: {out_dir}")
+    cprint(f"[+] Готово. Результат в: {out_dir}")
 
 
 if __name__ == "__main__":

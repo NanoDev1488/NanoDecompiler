@@ -94,6 +94,10 @@ class Method:
         self.max_locals = 0
         self.exceptions = []        # list[ExceptionEntry]
         self.instructions = []      # filled in by disassembler
+        self.local_var_table = []   # list of (start_pc, length, name, descriptor, slot) - из
+                                     # LocalVariableTable, если jar скомпилирован с отладочной
+                                     # информацией (javac -g / maven по умолчанию часто её включает).
+                                     # Пусто, если атрибута нет - тогда используются argN/varN.
 
 
 class ClassFile:
@@ -352,9 +356,26 @@ class ClassFile:
             method.exceptions.append(ExceptionEntry(start_pc, end_pc, handler_pc, catch_type))
         code_attr_count = cr.u2()
         for _ in range(code_attr_count):
-            cr.u2()  # name idx (не используем — LineNumberTable/LocalVariableTable/StackMapTable пропускаем)
+            a_name_idx = cr.u2()
             sub_len = cr.u4()
-            cr.skip(sub_len)
+            a_name = self.utf8(a_name_idx)
+            if a_name == "LocalVariableTable":
+                sub_data = cr.bytes(sub_len)
+                sr = Reader(sub_data)
+                n = sr.u2()
+                for _ in range(n):
+                    start_pc = sr.u2()
+                    length = sr.u2()
+                    name_idx = sr.u2()
+                    desc_idx = sr.u2()
+                    slot = sr.u2()
+                    name = self.utf8(name_idx)
+                    desc = self.utf8(desc_idx)
+                    if name and name != "this":
+                        method.local_var_table.append((start_pc, length, name, desc, slot))
+            else:
+                # LineNumberTable/LocalVariableTypeTable/StackMapTable и т.п. - не нужны
+                cr.skip(sub_len)
 
 
 def access_str(flags, kind="class"):

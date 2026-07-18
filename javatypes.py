@@ -109,6 +109,27 @@ def method_descriptor_to_java(desc):
 
 VOWELS = set("aeiou")
 
+JAVA_KEYWORDS = {
+    "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char",
+    "class", "const", "continue", "default", "do", "double", "else", "enum",
+    "extends", "final", "finally", "float", "for", "goto", "if", "implements",
+    "import", "instanceof", "int", "interface", "long", "native", "new",
+    "package", "private", "protected", "public", "return", "short", "static",
+    "strictfp", "super", "switch", "synchronized", "this", "throw", "throws",
+    "transient", "try", "void", "volatile", "while", "true", "false", "null",
+    "var", "record", "yield", "sealed", "permits",
+}
+
+_IDENT_RE = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*$")
+
+
+def is_safe_local_name(name):
+    """Годится ли имя локальной переменной/параметра из LocalVariableTable для
+    прямой подстановки в Java-текст: валидный идентификатор и не
+    зарезервированное слово (обфускатор иногда генерирует отладочную таблицу
+    с мусорными/невалидными именами - подстраховываемся)."""
+    return bool(name) and bool(_IDENT_RE.match(name)) and name not in JAVA_KEYWORDS
+
 
 def _consonant_run(name_lower):
     run = 0

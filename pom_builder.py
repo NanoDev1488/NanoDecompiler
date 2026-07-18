@@ -85,6 +85,27 @@ def _detect_lib(dotted_name):
     return None
 
 
+def parse_shade_relocations(pom_xml_text):
+    """Разбирает конфиг maven-shade-plugin <relocations> из текста pom.xml:
+    список (pattern, shadedPattern) - т.е. "оригинальный пакет библиотеки"
+    -> "во что его переименовали при шейдинге внутрь плагина". Нужно, чтобы
+    узнавать бандленные библиотеки, даже если их пакет релоцирован (напр.
+    org.sqlite -> com.agent1k.libs.sqlite) - простое сравнение префикса
+    пакета с KNOWN_LIBS в этом случае не сработало бы (см. main.py -
+    _known_library_coords). Регулярка, а не полноценный XML-парсер - в духе
+    остального кода этого файла (find_pom_properties_and_xml тоже так же
+    вытаскивает artifactId)."""
+    if not pom_xml_text:
+        return []
+    result = []
+    for block in re.findall(r"<relocation>(.*?)</relocation>", pom_xml_text, re.S):
+        m_pat = re.search(r"<pattern>([^<]+)</pattern>", block)
+        m_shaded = re.search(r"<shadedPattern>([^<]+)</shadedPattern>", block)
+        if m_pat and m_shaded:
+            result.append((m_pat.group(1).strip(), m_shaded.group(1).strip()))
+    return result
+
+
 def find_pom_properties_and_xml(uploads_zip_names, zip_reader):
     """Ищем META-INF/maven/<group>/<artifact>/{pom.properties,pom.xml} внутри jar.
 

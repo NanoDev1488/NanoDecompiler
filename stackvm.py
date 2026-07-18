@@ -16,7 +16,10 @@ from ast_nodes import (
     NewArray, Cast, InstanceOf, BinOp, UnOp, Ternary, Assign, Raw,
     ClassLiteral, Lambda, ExprStmt, LocalDecl, ReturnStmt, ThrowStmt, Expr,
 )
-from javatypes import field_descriptor_to_java, method_descriptor_to_java, dotted_from_internal
+from javatypes import (
+    field_descriptor_to_java, method_descriptor_to_java, dotted_from_internal,
+    is_safe_local_name, looks_obfuscated,
+)
 
 
 class DecompileAbort(Exception):
@@ -152,7 +155,38 @@ class MethodCtx:
         self.crossing_temp_types = {}
         self.warnings = []
         self.imports = {}       # dotted -> simple  (для сбора import-ов вызывающим кодом)
+        self._lvt_by_slot = self._build_lvt_names()
+        self._used_local_names = {"this"}
         self._init_params()
+
+    def _build_lvt_names(self):
+        """Разбирает LocalVariableTable (если jar скомпилирован с отладочной
+        информацией - см. classfile.py) в словарь slot -> имя. Один слот JVM
+        может переиспользоваться под разные (непересекающиеся по области
+        видимости) переменные - берём запись с наименьшим start_pc (как
+        правило, самая "внешняя"/основная), остальные записи того же слота
+        игнорируем: движок и так печатает одно имя на слот на весь метод (см.
+        engine.py::_redeclare_first_assign - переиспользование слота под
+        разные типы уже обрабатывается на уровне ТИПА, а не имени)."""
+        by_slot = {}
+        for start_pc, length, name, desc, slot in sorted(self.method.local_var_table, key=lambda e: e[0]):
+            if not is_safe_local_name(name):
+                continue
+            if looks_obfuscated(name, "field"):
+                continue
+            if slot not in by_slot:
+                by_slot[slot] = name
+        return by_slot
+
+    def _lvt_name_for(self, slot):
+        """LVT-имя для слота, если оно есть, валидно и ещё не занято другим
+        слотом в этом же методе (иначе - коллизия имён, откатываемся на
+        родовое имя argN/varN)."""
+        name = self._lvt_by_slot.get(slot)
+        if name and name not in self._used_local_names:
+            self._used_local_names.add(name)
+            return name
+        return None
 
     def _init_params(self):
         is_static = bool(self.method.access & 0x0008)
@@ -168,7 +202,8 @@ class MethodCtx:
         for i, p in enumerate(params):
             is_array = p.endswith("[]")
             cat = "A" if is_array else cat_of(p)
-            self.locals[slot] = {"name": f"arg{i}", "type": self.map_type(p), "category": cat, "is_param": True}
+            name = self._lvt_name_for(slot) or f"arg{i}"
+            self.locals[slot] = {"name": name, "type": self.map_type(p), "category": cat, "is_param": True}
             slot += (1 if is_array else width_of(p))
 
     def map_type(self, java_type):
@@ -238,7 +273,8 @@ class MethodCtx:
     def local(self, idx, category, is_store=False):
         info = self.locals.get(idx)
         if info is None:
-            info = {"name": f"var{idx}", "type": default_type_for_cat(category), "category": category, "seen_categories": {category}}
+            name = self._lvt_name_for(idx) or f"var{idx}"
+            info = {"name": name, "type": default_type_for_cat(category), "category": category, "seen_categories": {category}}
             self.locals[idx] = info
         else:
             info.setdefault("seen_categories", {info["category"]}).add(category)
