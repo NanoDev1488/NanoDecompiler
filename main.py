@@ -168,7 +168,7 @@ def banner_text():
     на очередь без isatty()==True - там банер печатается обычным текстом,
     без escape-мусора)."""
     lines = [
-        "✻  NanoDecompiler v1.1",
+        "✻ NanoDecompiler v1.1",
         "   Java-декомпилятор/деобфускатор для Bukkit-плагинов",
     ]
     width = max(len(l) for l in lines)
@@ -245,7 +245,7 @@ from verify import ProjectStats, check_brackets, check_import_collisions
 from switchmap import detect_switchmaps
 from stackvm import java_string_literal, java_float_literal
 from ast_nodes import ExprStmt, Assign, FieldAccess, NewObject, ReturnStmt
-from emit import emit_expr, emit_stmts
+from emit import emit_expr, emit_stmts, set_shadow_context
 
 # Известные крупные сторонние библиотеки (таблица - pom_builder.KNOWN_LIBS),
 # которые Java/Bukkit-плагины часто тащат внутри jar'а целиком
@@ -461,9 +461,26 @@ def process_jar(jar_path, out_dir):
                   f"будут подтянуты maven'ом как зависимость): "
                   f"{len(library_internal_names)} ({', '.join(sorted(library_hit_labels))})")
 
+        # Префиксы путей ресурсов, которые нужно пропустить вместе с классами
+        # известных/релоцированных библиотек (см. выше) - иначе в проект всё
+        # равно попадали бы нативные .so/.dll/.dylib и .properties библиотеки
+        # (напр. sqlite-jdbc бандлит нативные бинарники под тем же путём, что
+        # и свои .class - libraryInternalNames их не ловит, т.к. это не .class).
+        _skip_res_prefixes = tuple(
+            p.replace(".", "/") + "/" for p, _c in KNOWN_LIBS
+        ) + tuple(
+            p.replace(".", "/") + "/" for p, _c in relocated_prefixes
+        )
+        _skip_res_ga = {label for label in library_hit_labels}  # "groupId:artifactId"
+
         res_dir = os.path.join(out_dir, "src", "main", "resources")
         for n in all_names:
             if n.endswith(".class") or n.endswith("/"):
+                continue
+            if n.startswith(_skip_res_prefixes):
+                continue
+            m_maven = re.match(r"META-INF/maven/([^/]+)/([^/]+)/", n)
+            if m_maven and f"{m_maven.group(1)}:{m_maven.group(2)}" in _skip_res_ga:
                 continue
             try:
                 data = z.read(n)
@@ -638,6 +655,7 @@ def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, sw
         if clinit is not None and clinit.code is not None:
             cres = decompile_method_body(cf, clinit, renamer, known_internal_by_dotted, internal, indent=2, enum_ordinals=enum_ordinals, switchmap_tables=switchmap_tables)
             if cres.ok and cres.stmts is not None:
+                set_shadow_context(cres.ctx)
                 const_names = {renamer.field_map.get((internal, f.name, f.descriptor), f.name): f
                                 for f in enum_const_fields}
                 remaining = []
@@ -685,6 +703,7 @@ def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, sw
             _cres = decompile_method_body(cf, _iface_clinit, renamer, known_internal_by_dotted, internal,
                                            indent=2, enum_ordinals=enum_ordinals, switchmap_tables=switchmap_tables)
             if _cres.ok and _cres.stmts is not None:
+                set_shadow_context(_cres.ctx)
                 _stmts = _cres.stmts
                 if _stmts and isinstance(_stmts[-1], ReturnStmt) and _stmts[-1].expr is None:
                     _stmts = _stmts[:-1]
@@ -767,6 +786,7 @@ def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, sw
                     static_stmts = static_stmts[:-1]
                 all_imports.update(static_ctx_imports)
                 if static_stmts:
+                    set_shadow_context(cres.ctx if (is_enum and enum_const_fields) else cres2.ctx)
                     body_lines.append("    static {")
                     body_lines.extend(emit_stmts(static_stmts, 2))
                     body_lines.append("    }")

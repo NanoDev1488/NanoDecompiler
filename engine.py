@@ -14,7 +14,7 @@ from ast_nodes import (
     FieldAccess, This, MethodCall, BlockStmt,
 )
 from structure import Structurer, simplify_stmts
-from emit import emit_stmts
+from emit import emit_stmts, set_shadow_context
 import disassembler
 
 
@@ -169,6 +169,7 @@ def decompile_method_body(cf, method, renamer, known_internal_by_dotted, class_i
         for name, typ in ctx.crossing_temp_types.items():
             pre_lines.append(f"{'    ' * indent}{_simple_type(typ)} {name};")
 
+        set_shadow_context(ctx)
         body_lines = emit_stmts(stmts, indent)
         result.ok = True
         result.stmts = stmts

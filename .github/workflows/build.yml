@@ -8,6 +8,6 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - run: pip install pyinstaller
-      - run: pyinstaller --onefile --windowed --name NanoDecompiler build/main.py
+      - run: pyinstaller --onefile --windowed --icon=icon.ico --name NanoDecompiler main.py
       - uses: actions/upload-artifact@v4
         with: { name: NanoDecompiler-exe, path: dist/NanoDecompiler.exe }

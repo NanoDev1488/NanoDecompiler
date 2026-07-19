@@ -15,6 +15,22 @@ from javatypes import mark_type
 
 IND = "    "
 
+_shadowed_names = frozenset()
+
+
+def set_shadow_context(ctx):
+    """Вызывается перед печатью тела метода (см. engine.py/main.py) - задаёт
+    множество имён локальных переменных/параметров ЭТОГО метода. Нужно, чтобы
+    решить, можно ли убрать лишний `this.` перед полем: если в методе нет
+    локальной переменной с таким же именем - `this.` не нужен (в реальном
+    Java-коде unqualified field access - норма, `this.` пишут только когда
+    имя перекрыто локальной переменной/параметром)."""
+    global _shadowed_names
+    if ctx is None:
+        _shadowed_names = frozenset()
+        return
+    _shadowed_names = frozenset(info["name"] for info in ctx.locals.values())
+
 
 def emit_expr(e):
     if isinstance(e, Const):
@@ -26,6 +42,8 @@ def emit_expr(e):
     if isinstance(e, FieldAccess):
         if e.static:
             return f"{_simple(e.owner)}.{e.name}"
+        if isinstance(e.target, This) and e.name not in _shadowed_names:
+            return e.name
         return f"{_paren(e.target, e)}.{e.name}"
     if isinstance(e, ArrayAccess):
         return f"{_paren(e.array, e)}[{emit_expr(e.index)}]"
@@ -37,6 +55,8 @@ def emit_expr(e):
             return f"{_simple(e.owner)}.{e.name}({args})"
         if e.is_super:
             return f"super.{e.name}({args})"
+        if isinstance(e.target, This):
+            return f"{e.name}({args})"
         return f"{_paren(e.target, e)}.{e.name}({args})"
     if isinstance(e, NewObject):
         args = ", ".join(emit_expr(a) for a in e.args)
