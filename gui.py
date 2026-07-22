@@ -58,16 +58,43 @@ _INSTALL_HINT = {
 }
 
 
+def _notify_user(message):
+    """Диспетчер собирается на Windows как `--windowed` .exe (см. HANDOFF_3,
+    раздел "СБОРКА В .exe") - там НЕТ консоли вообще, значит print() из
+    _resolve_theme просто улетает в никуда, и пользователь видит "тема не
+    меняется" без единой подсказки почему. Дублируем важные сообщения через
+    messagebox (tkinter - stdlib, доступен всегда, даже если недоступны
+    customtkinter/flet - см. _deps_ok: raw гарантированно работает)."""
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showwarning("NanoDecompiler - тема оформления", message)
+        root.destroy()
+    except Exception:
+        pass  # если совсем ничего нет (маловероятно) - хотя бы print() выше уже был
+
+
 def _resolve_theme(requested):
     chain = _FALLBACK_CHAIN.get(requested, ["raw"])
     for theme in chain:
         ok, reason = _deps_ok(theme)
         if ok:
             if theme != requested:
-                print(f"[*] Тема '{requested}' недоступна: {reason}")
+                msg_lines = [f"Тема '{requested}' недоступна: {reason}"]
                 if requested in _INSTALL_HINT:
-                    print(f"[*] Чтобы включить её: {_INSTALL_HINT[requested]}")
-                print(f"[*] Запускаю тему '{theme}' вместо неё...")
+                    msg_lines.append(f"Чтобы включить её: {_INSTALL_HINT[requested]}")
+                msg_lines.append(f"Запускаю тему '{theme}' вместо неё.")
+                if requested == "md3":
+                    msg_lines.append(
+                        "\nЕсли вы собирали .exe через PyInstaller - зависимости темы "
+                        "нужно явно включить в сборку (--hidden-import / --collect-all), "
+                        "простой pip install после сборки .exe уже не поможет - см. "
+                        "комментарий к команде сборки в HANDOFF_3_TODO.md.")
+                for line in msg_lines:
+                    print(f"[*] {line}")
+                _notify_user("\n".join(msg_lines))
             return theme
         print(f"[*] Тема '{theme}' недоступна: {reason}")
     return "raw"  # недостижимо на практике (raw всегда ok), но на всякий случай

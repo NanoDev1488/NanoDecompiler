@@ -185,8 +185,10 @@ def banner_text():
 def check_java_maven():
     """Проверяет, установлены ли java и mvn (нужны для следующего шага -
     mvn clean package) и печатает понятный статус + ссылки на скачивание,
-    если чего-то не хватает. Ничего не устанавливает сама, только смотрит
-    PATH через shutil.which - никаких внешних зависимостей не требуется."""
+    если чего-то не хватает. Сама НИЧЕГО не устанавливает - только смотрит
+    PATH (shutil.which) И локальную portable-папку toolinstaller.get_tools_dir()
+    (куда мог поставить `--install-tools` в прошлый раз, см. HANDOFF_3 п.3) -
+    никаких внешних зависимостей для самой проверки не требуется."""
     section("Проверка окружения (java / maven)")
     missing = []
     _subprocess_kwargs = {}
@@ -195,34 +197,69 @@ def check_java_maven():
         # мелькало бы консольное окно дочернего процесса java/mvn.
         _subprocess_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
 
-    java_path = shutil.which("java")
+    try:
+        import toolinstaller
+        local_java = toolinstaller.find_local_java()
+        local_mvn = toolinstaller.find_local_maven()
+        java_path = toolinstaller.resolve_tool_path(["java", "java.exe"], "java") or local_java
+        mvn_path = toolinstaller.resolve_tool_path(["mvn", "mvn.cmd"], "maven") or local_mvn
+    except Exception:
+        # toolinstaller недоступен по какой-то причине - откатываемся на
+        # голый shutil.which(), как было раньше, чем совсем ничего не найти.
+        local_java = local_mvn = None
+        java_path = shutil.which("java")
+        mvn_path = shutil.which("mvn") or shutil.which("mvn.cmd")
+
+    on_path_java = bool(shutil.which("java"))
     if java_path:
         try:
-            r = subprocess.run(["java", "-version"], capture_output=True, text=True, timeout=10,
+            r = subprocess.run([java_path, "-version"], capture_output=True, text=True, timeout=10,
                                 **_subprocess_kwargs)
             ver_line = (r.stderr or r.stdout or "").splitlines()[0] if (r.stderr or r.stdout) else "версия неизвестна"
         except Exception:
             ver_line = "версия неизвестна"
-        cprint(f"    java:  найдена ({ver_line})")
+        if on_path_java:
+            source = "PATH"
+        elif java_path == local_java:
+            source = "локальная portable-установка"
+        else:
+            source = "найдена вне PATH (реестр/типичный путь установки - см. ниже)"
+        cprint(f"    java:  найдена, {source} ({ver_line})")
+        if source.startswith("найдена вне PATH"):
+            cprint(f"           путь: {java_path}")
+            cprint("           PATH не обновился в этом процессе - обычно достаточно перезайти "
+                   "в систему/перезагрузиться, чтобы это заработало и без такой подсказки.")
     else:
         missing.append("java")
-        cprint("    java:  НЕ НАЙДЕНА в PATH.")
+        cprint("    java:  НЕ НАЙДЕНА (ни в PATH, ни в реестре/типичных путях, ни в portable-папке).")
         cprint("           Скачать (Eclipse Temurin JDK, бесплатно): https://adoptium.net/")
+        cprint("           Либо запустить: python3 main.py --install-tools")
 
-    mvn_path = shutil.which("mvn") or shutil.which("mvn.cmd")
+    on_path_mvn = bool(shutil.which("mvn") or shutil.which("mvn.cmd"))
     if mvn_path:
         try:
-            r = subprocess.run(["mvn", "-version"], capture_output=True, text=True, timeout=15,
+            r = subprocess.run([mvn_path, "-version"], capture_output=True, text=True, timeout=15,
                                 **_subprocess_kwargs)
             ver_line = (r.stdout or r.stderr or "").splitlines()[0] if (r.stdout or r.stderr) else "версия неизвестна"
         except Exception:
             ver_line = "версия неизвестна"
-        cprint(f"    maven: найден ({ver_line})")
+        if on_path_mvn:
+            source = "PATH"
+        elif mvn_path == local_mvn:
+            source = "локальная portable-установка"
+        else:
+            source = "найден вне PATH (реестр/типичный путь установки - см. ниже)"
+        cprint(f"    maven: найден, {source} ({ver_line})")
+        if source.startswith("найден вне PATH"):
+            cprint(f"           путь: {mvn_path}")
+            cprint("           PATH не обновился в этом процессе - обычно достаточно перезайти "
+                   "в систему/перезагрузиться, чтобы это заработало и без такой подсказки.")
     else:
         missing.append("maven")
-        cprint("    maven: НЕ НАЙДЕН в PATH.")
+        cprint("    maven: НЕ НАЙДЕН (ни в PATH, ни в реестре/типичных путях, ни в portable-папке).")
         cprint("           Скачать: https://maven.apache.org/download.cgi")
         cprint("           (после распаковки папку bin/ нужно добавить в PATH)")
+        cprint("           Либо запустить: python3 main.py --install-tools")
 
     if not missing:
         cprint("[*] Всё готово к работе - можете делать с восстановленным плагином всё, что хотите.")
@@ -231,6 +268,64 @@ def check_java_maven():
               f"(mvn clean package) после декомпиляции - сама декомпиляция от этого не зависит "
               f"и пройдёт нормально.")
     return missing
+
+
+def _try_handle_install_tools(argv):
+    """`--install-tools` (CLI, HANDOFF_3 п.3) - portable-закачка недостающих
+    java/mvn БЕЗ прав администратора, в локальную папку
+    toolinstaller.get_tools_dir(). Только по явному запросу (вариант Б -
+    ничего не ставится молча при обычном запуске). Возвращает True, если
+    аргументы относились к этому режиму (main() должен выйти)."""
+    if not any(a == "--install-tools" or a.startswith("--install-tools=") for a in argv):
+        return False
+    import toolinstaller
+
+    only = None
+    for a in argv:
+        if a.startswith("--install-tools="):
+            only = a.split("=", 1)[1].strip().lower()
+
+    missing = check_java_maven()
+    if only in ("jdk", "java"):
+        need_java, need_maven = "java" in missing, False
+    elif only == "maven":
+        need_java, need_maven = False, "maven" in missing
+    else:
+        need_java, need_maven = "java" in missing, "maven" in missing
+
+    if not need_java and not need_maven:
+        cprint("[*] Устанавливать нечего - всё уже найдено (см. проверку выше).")
+        return True
+
+    cprint("")
+    section("Установка недостающих инструментов (portable, без прав администратора, "
+            f"в {toolinstaller.get_tools_dir()})")
+
+    last_pct = {}
+
+    def progress_cb(label, downloaded, total):
+        if total:
+            pct = int(downloaded * 100 / total)
+            if last_pct.get(label) == pct:
+                return
+            last_pct[label] = pct
+            sys.stdout.write(f"\r    {label}: {pct:3d}% ({downloaded // 1024 // 1024} МБ / {total // 1024 // 1024} МБ)")
+            sys.stdout.flush()
+        else:
+            sys.stdout.write(f"\r    {label}: {downloaded // 1024 // 1024} МБ")
+            sys.stdout.flush()
+
+    result = toolinstaller.install_missing(need_java, need_maven, progress_cb=progress_cb)
+    print()  # завершить строку прогресса
+    if result["java"]:
+        cprint(f"[+] JDK установлена: {result['java']}")
+    if result["maven"]:
+        cprint(f"[+] Maven установлен: {result['maven']}")
+    for err in result["errors"]:
+        cprint(f"[!] Ошибка установки - {err}")
+    if result["errors"]:
+        cprint("[*] Что-то не встало - см. ошибки выше, можно поставить вручную по ссылкам из проверки окружения.")
+    return True
 
 
 from classfile import ClassFile, access_str
@@ -1203,6 +1298,9 @@ def main():
     if _try_handle_api_mode():
         return
 
+    if _try_handle_install_tools(sys.argv[1:]):
+        return
+
     if platform.system() == "Windows":
         # На Windows GUI - ЕДИНСТВЕННЫЙ путь (проще для сборки в один .exe
         # через PyInstaller - не нужно поддерживать отдельно консольный
@@ -1222,6 +1320,9 @@ def main():
 
     if len(sys.argv) < 2:
         cprint("Использование: python3 main.py plugin.jar [output_dir]")
+        cprint("       python3 main.py plugin.jar [out_dir] --json-output   (разовый вызов, JSON в stdout)")
+        cprint("       python3 main.py --api-server [--host H] [--port 8791]   (HTTP-сервер)")
+        cprint("       python3 main.py --install-tools[=jdk|maven]   (portable JDK/Maven по требованию)")
         sys.exit(1)
     jar_path = sys.argv[1]
     out_dir = sys.argv[2] if len(sys.argv) > 2 else os.path.splitext(os.path.basename(jar_path))[0] + "_decompiled"
