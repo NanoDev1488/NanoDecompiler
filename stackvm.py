@@ -800,6 +800,12 @@ def _refine_type(current, value_expr):
     return current
 
 
+_PRIMITIVE_WRAPPERS = {
+    "int": "Integer", "long": "Long", "float": "Float", "double": "Double",
+    "boolean": "Boolean", "char": "Character", "byte": "Byte", "short": "Short",
+}
+
+
 def _coerce_arg(expr, expected_type):
     if isinstance(expr, Const) and expr.type == "int":
         if expected_type == "boolean" and expr.literal in ("0", "1"):
@@ -810,6 +816,22 @@ def _coerce_arg(expr, expected_type):
             except ValueError:
                 return expr
             return Const(_char_literal(v), "char")
+    # Мы не парсим generic Signature-атрибут, поэтому значения из "сырых"
+    # (erasure) generic-контекстов (Map.get, лямбда-параметры BiFunction/
+    # Predicate без известных type-параметров и т.п.) размечены нашим общим
+    # типом-заглушкой "Object". Если КОНКРЕТНЫЙ (из дескриптора реального
+    # вызываемого метода) ожидаемый тип параметра - что-то более узкое,
+    # безопасно вставить явный каст: раз исходный байткод скомпилировался,
+    # рантайм-тип там гарантированно совпадает - каст просто восстанавливает
+    # то, что стёрла эрозия дженериков (в точности как делает javac сам
+    # через checkcast при работе с generic-кодом). Без этого - каскад
+    # "incompatible types: Object cannot be converted to X" / "cannot find
+    # symbol" на вызовах через стёртые generic-параметры (см. HANDOFF/чат:
+    # реальный пример - Map.merge()/removeIf()/entrySet() на сырых коллекциях).
+    expr_type = getattr(expr, "type", None)
+    if expr_type in ("Object", "java.lang.Object") and expected_type not in (None, "Object", "java.lang.Object", "void"):
+        target = _PRIMITIVE_WRAPPERS.get(expected_type, expected_type)
+        return Cast(target, expr)
     return expr
 
 
@@ -1018,11 +1040,25 @@ def _build_lambda(cf, bsm_args, captured, indy_name, functional_type_desc, ctx):
 
     impl_owner_disp = ctx.owner_display(impl_owner)
     impl_mname = ctx.method_name(impl_owner, impl_name, impl_desc)
+    try:
+        _impl_ret, impl_params = method_descriptor_to_java(impl_desc)
+    except Exception:
+        impl_params = None
+
+    def _coerce_seq(seq, param_types):
+        # См. _coerce_arg выше: SAM-erasure типизирует lam_params как Object,
+        # а РЕАЛЬНЫЙ синтетический метод лямбды (impl_desc) знает точные типы -
+        # используем их, чтобы не потерять точность на границе вызова (иначе
+        # каскад "incompatible types"/"cannot find symbol" на месте вызова).
+        if param_types is None or len(param_types) != len(seq):
+            return seq
+        return [_coerce_arg(a, ctx.map_type(p)) for a, p in zip(seq, param_types)]
 
     if kind in _MH_KIND_NEW:
-        call = NewObject(impl_owner_disp, list(captured) + lam_params)
+        call = NewObject(impl_owner_disp, _coerce_seq(list(captured) + lam_params, impl_params))
     elif kind in _MH_KIND_STATIC:
-        call = MethodCall(None, impl_mname, list(captured) + lam_params, static=True, owner=impl_owner_disp)
+        call = MethodCall(None, impl_mname, _coerce_seq(list(captured) + lam_params, impl_params),
+                           static=True, owner=impl_owner_disp)
     elif kind in _MH_KIND_VIRTUAL or kind in _MH_KIND_SPECIAL:
         if captured:
             recv = captured[0]
@@ -1032,7 +1068,9 @@ def _build_lambda(cf, bsm_args, captured, indy_name, functional_type_desc, ctx):
             rest = lam_params[1:]
         else:
             raise DecompileAbort("не удалось определить получателя для лямбды")
-        call = MethodCall(recv, impl_mname, rest, owner=impl_owner_disp)
+        if getattr(recv, "type", None) in ("Object", "java.lang.Object") and impl_owner_disp not in (None, "Object", "java.lang.Object"):
+            recv = Cast(impl_owner_disp, recv)
+        call = MethodCall(recv, impl_mname, _coerce_seq(rest, impl_params), owner=impl_owner_disp)
     else:
         raise DecompileAbort(f"неизвестный kind method handle: {kind}")
 

@@ -9,7 +9,7 @@ from ir import decode_method
 from cfg import CFG
 from stackvm import simulate_block, MethodCtx, DecompileAbort, CAUGHT_SENTINEL, _PSEUDO_TYPES, _MonitorMarker
 from ast_nodes import (
-    Local, Assign, ExprStmt, LocalDecl, ReturnStmt, IfStmt, WhileStmt,
+    Local, Assign, ExprStmt, LocalDecl, ReturnStmt, ThrowStmt, IfStmt, WhileStmt,
     DoWhileStmt, ForStmt, SyncStmt, SwitchStmt, TryStmt, ArrayAccess, Const,
     FieldAccess, This, MethodCall, BlockStmt,
 )
@@ -28,6 +28,273 @@ class MethodDecompileResult:
         self.n_blocks = 0
         self.stmts = None
         self.pre_lines = []
+
+
+def _collect_declared_names(stmts):
+    """Имена всех LocalDecl где-либо внутри (рекурсивно во вложенные тела)."""
+    names = set()
+
+    def walk(lst):
+        for s in (lst or []):
+            if isinstance(s, LocalDecl):
+                names.add(s.name)
+            if isinstance(s, IfStmt):
+                walk(s.then_body); walk(s.else_body)
+            elif isinstance(s, (WhileStmt, DoWhileStmt, ForStmt, SyncStmt)):
+                walk(s.body)
+            elif isinstance(s, BlockStmt):
+                walk(s.stmts)
+            elif isinstance(s, SwitchStmt):
+                for c in s.cases:
+                    walk(c.body)
+            elif isinstance(s, TryStmt):
+                walk(s.body)
+                for _, _, cb in s.catches:
+                    walk(cb)
+                walk(s.finally_body)
+    walk(stmts)
+    return names
+
+
+def _collect_referenced_names(stmts):
+    """Все имена локальных переменных, на которые где-либо внутри есть
+    ссылка (Local) - и в выражениях, и как цель присваивания."""
+    names = set()
+
+    def walk_expr(e):
+        if e is None:
+            return
+        if isinstance(e, Local):
+            names.add(e.name)
+            return
+        for attr in ("left", "right", "expr", "target", "value", "array", "index",
+                     "cond", "tval", "fval"):
+            walk_expr(getattr(e, attr, None))
+        for a in getattr(e, "args", None) or []:
+            walk_expr(a)
+
+    def walk(lst):
+        for s in (lst or []):
+            if isinstance(s, LocalDecl):
+                walk_expr(s.init)
+            elif isinstance(s, (ExprStmt, ReturnStmt, ThrowStmt)):
+                walk_expr(getattr(s, "expr", None))
+            elif isinstance(s, IfStmt):
+                walk_expr(s.cond); walk(s.then_body); walk(s.else_body)
+            elif isinstance(s, (WhileStmt, DoWhileStmt)):
+                walk_expr(s.cond); walk(s.body)
+            elif isinstance(s, ForStmt):
+                walk_expr(getattr(s, "cond", None)); walk(s.body)
+            elif isinstance(s, SyncStmt):
+                walk_expr(s.expr); walk(s.body)
+            elif isinstance(s, BlockStmt):
+                walk(s.stmts)
+            elif isinstance(s, SwitchStmt):
+                walk_expr(s.expr)
+                for c in s.cases:
+                    walk(c.body)
+            elif isinstance(s, TryStmt):
+                walk(s.body)
+                for _, _, cb in s.catches:
+                    walk(cb)
+                walk(s.finally_body)
+    walk(stmts)
+    return names
+
+
+def _collect_shallow_referenced_names(stmts):
+    """Как _collect_referenced_names, но НЕ спускается во вложенные
+    АЛЬТЕРНАТИВНЫЕ ветки исполнения (then/else, тела циклов, тела case'ов,
+    catch/finally) - только "условия входа" (if/while/switch-дискриминант)
+    и одноходовые конструкции (обычный {} блок, тело try - там нет
+    альтернативных путей, они всегда выполняются). Это и есть ключевое
+    отличие настоящей утечки области видимости (типично - switch(String):
+    int-селектор объявлен в if, использован в switch() СРАЗУ после, без
+    альтернативных веток между ними) от безобидного повторного использования
+    того же имени/JVM-слота в НЕЗАВИСИМОЙ более поздней ветке if/else -
+    именно на этой путанице раньше ловилось много ложных срабатываний
+    (см. комментарий у _has_escaping_local_decl)."""
+    names = set()
+
+    def walk_expr(e):
+        if e is None:
+            return
+        if isinstance(e, Local):
+            names.add(e.name)
+            return
+        for attr in ("left", "right", "expr", "target", "value", "array", "index",
+                     "cond", "tval", "fval"):
+            walk_expr(getattr(e, attr, None))
+        for a in getattr(e, "args", None) or []:
+            walk_expr(a)
+
+    for s in (stmts or []):
+        if isinstance(s, LocalDecl):
+            walk_expr(s.init)
+        elif isinstance(s, (ExprStmt, ReturnStmt, ThrowStmt)):
+            walk_expr(getattr(s, "expr", None))
+        elif isinstance(s, IfStmt):
+            walk_expr(s.cond)
+        elif isinstance(s, (WhileStmt, DoWhileStmt)):
+            walk_expr(s.cond)
+        elif isinstance(s, ForStmt):
+            walk_expr(getattr(s, "cond", None))
+        elif isinstance(s, SyncStmt):
+            walk_expr(s.expr)
+        elif isinstance(s, SwitchStmt):
+            walk_expr(s.expr)
+        elif isinstance(s, BlockStmt):
+            names |= _collect_shallow_referenced_names(s.stmts)
+        elif isinstance(s, TryStmt):
+            names |= _collect_shallow_referenced_names(s.body)
+    return names
+
+
+def _inner_body_of(s):
+    """Список statement'ов ВНУТРИ блокового оператора (все ветки разом -
+    для целей поиска "что там объявлено", не для порядка выполнения)."""
+    if isinstance(s, IfStmt):
+        return (s.then_body or []) + (s.else_body or [])
+    if isinstance(s, (WhileStmt, DoWhileStmt, ForStmt, SyncStmt)):
+        return s.body or []
+    if isinstance(s, BlockStmt):
+        return s.stmts or []
+    if isinstance(s, SwitchStmt):
+        return [st for c in s.cases for st in (c.body or [])]
+    if isinstance(s, TryStmt):
+        return ((s.body or []) + [st for _, _, cb in s.catches for st in (cb or [])] +
+                (s.finally_body or []))
+    return None
+
+
+def _strip_decl_to_assign(lst, names, types):
+    """Рекурсивно заменяет LocalDecl(name in names) на обычное присваивание
+    (объявление теперь будет НАД блоком - см. _hoist_escaping_locals) - во
+    всех вложенных телах, попутно запоминая исходный тип для внешнего
+    объявления."""
+    new = []
+    for st in (lst or []):
+        if isinstance(st, LocalDecl) and st.name in names:
+            types.setdefault(st.name, st.type)
+            new.append(ExprStmt(Assign(Local(st.name, st.type), st.init)))
+            continue
+        if isinstance(st, IfStmt):
+            st.then_body = _strip_decl_to_assign(st.then_body, names, types)
+            st.else_body = _strip_decl_to_assign(st.else_body, names, types) if st.else_body else st.else_body
+        elif isinstance(st, (WhileStmt, DoWhileStmt, ForStmt, SyncStmt)):
+            st.body = _strip_decl_to_assign(st.body, names, types)
+        elif isinstance(st, BlockStmt):
+            st.stmts = _strip_decl_to_assign(st.stmts, names, types)
+        elif isinstance(st, SwitchStmt):
+            for c in st.cases:
+                c.body = _strip_decl_to_assign(c.body, names, types)
+        elif isinstance(st, TryStmt):
+            st.body = _strip_decl_to_assign(st.body, names, types)
+            st.catches = [(t, v, _strip_decl_to_assign(cb, names, types)) for t, v, cb in st.catches]
+            if st.finally_body:
+                st.finally_body = _strip_decl_to_assign(st.finally_body, names, types)
+        new.append(st)
+    return new
+
+
+def _hoist_escaping_locals(stmts):
+    """Настоящее исправление (не просто детект-и-откат): если внутри
+    if/while/for/try(body)/switch объявлена (LocalDecl) переменная, а
+    используется она и ПОСЛЕ этого блока (см. _collect_shallow_referenced_names -
+    только "тот же уровень", не заглядывая в альтернативные ветки) -
+    поднимаем голое объявление `Type name;` НАД блоком, а исходный LocalDecl
+    внутри превращаем в обычное присваивание. Схлопывает и javac-идиому
+    switch(String) через hashCode-селектор (int объявлен в if, используется в
+    switch() после), и паттерн guard-clause вида `if (cond) {setup...} else
+    {return;} <используем setup...>` (одна из веток всегда завершается -
+    поток исполнения корректен, но лексическая область видимости - нет).
+    Рекурсивно чинит все вложенные тела, снизу вверх."""
+    fixed = []
+    for s in (stmts or []):
+        if isinstance(s, IfStmt):
+            s.then_body = _hoist_escaping_locals(s.then_body)
+            s.else_body = _hoist_escaping_locals(s.else_body) if s.else_body else s.else_body
+        elif isinstance(s, (WhileStmt, DoWhileStmt, ForStmt, SyncStmt)):
+            s.body = _hoist_escaping_locals(s.body)
+        elif isinstance(s, BlockStmt):
+            s.stmts = _hoist_escaping_locals(s.stmts)
+        elif isinstance(s, SwitchStmt):
+            for c in s.cases:
+                c.body = _hoist_escaping_locals(c.body)
+        elif isinstance(s, TryStmt):
+            s.body = _hoist_escaping_locals(s.body)
+            s.catches = [(t, v, _hoist_escaping_locals(cb)) for t, v, cb in s.catches]
+            if s.finally_body:
+                s.finally_body = _hoist_escaping_locals(s.finally_body)
+        fixed.append(s)
+
+    out = []
+    n = len(fixed)
+    for i, s in enumerate(fixed):
+        inner = _inner_body_of(s)
+        if inner:
+            declared = _collect_declared_names(inner)
+            escaping = (declared & _collect_shallow_referenced_names(fixed[i + 1:])) if declared else set()
+            if escaping:
+                types = {}
+                if isinstance(s, IfStmt):
+                    s.then_body = _strip_decl_to_assign(s.then_body, escaping, types)
+                    s.else_body = _strip_decl_to_assign(s.else_body, escaping, types) if s.else_body else s.else_body
+                elif isinstance(s, (WhileStmt, DoWhileStmt, ForStmt, SyncStmt)):
+                    s.body = _strip_decl_to_assign(s.body, escaping, types)
+                elif isinstance(s, BlockStmt):
+                    s.stmts = _strip_decl_to_assign(s.stmts, escaping, types)
+                elif isinstance(s, SwitchStmt):
+                    for c in s.cases:
+                        c.body = _strip_decl_to_assign(c.body, escaping, types)
+                elif isinstance(s, TryStmt):
+                    s.body = _strip_decl_to_assign(s.body, escaping, types)
+                    s.catches = [(t, v, _strip_decl_to_assign(cb, escaping, types)) for t, v, cb in s.catches]
+                    if s.finally_body:
+                        s.finally_body = _strip_decl_to_assign(s.finally_body, escaping, types)
+                for name in sorted(escaping):
+                    out.append(LocalDecl(types.get(name, "Object"), name, None))
+        out.append(s)
+    return out
+
+
+def _has_escaping_local_decl(stmts):
+    """True, если где-то объявленная (LocalDecl) переменная используется
+    ПОСЛЕ блока, в котором она объявлена (в одном из следующих sibling-
+    операторов того же списка) - типичный случай: javac компилирует
+    switch(String) через вспомогательный int-селектор, объявленный внутри
+    if, но используемый в switch() уже после него. Структуризация тут
+    ненадёжна (переменная физически не будет видна в Java-коде за пределами
+    блока) - честно откатываемся на байткод вместо гарантированной ошибки
+    компиляции "cannot find symbol".
+
+    ВАЖНО: "используется позже" проверяется через _collect_shallow_referenced_names
+    (не полный _collect_referenced_names) - иначе ловится масса ложных
+    срабатываний на безобидном переиспользовании одного имени/слота в
+    независимой более поздней ветке if/else (см. её докстринг - на этом уже
+    один раз наступили: -8..-14 п.п. успешности на реальных jar)."""
+    def check(lst):
+        for i, s in enumerate(lst):
+            inner = None
+            if isinstance(s, IfStmt):
+                inner = (s.then_body or []) + (s.else_body or [])
+            elif isinstance(s, (WhileStmt, DoWhileStmt, ForStmt, SyncStmt)):
+                inner = s.body or []
+            elif isinstance(s, BlockStmt):
+                inner = s.stmts or []
+            elif isinstance(s, SwitchStmt):
+                inner = [st for c in s.cases for st in (c.body or [])]
+            elif isinstance(s, TryStmt):
+                inner = ((s.body or []) + [st for _, _, cb in s.catches for st in (cb or [])] +
+                         (s.finally_body or []))
+            if inner:
+                declared = _collect_declared_names(inner)
+                if declared and (declared & _collect_shallow_referenced_names(lst[i + 1:])):
+                    return True
+                if check(inner):
+                    return True
+        return False
+    return check(stmts)
 
 
 def _contains_unfolded_monitor(stmts):
@@ -160,10 +427,16 @@ def decompile_method_body(cf, method, renamer, known_internal_by_dotted, class_i
         if stmts and isinstance(stmts[-1], ReturnStmt) and stmts[-1].expr is None:
             stmts = stmts[:-1]
         _refresh_crossing_temp_types(stmts, ctx)
-        stmts = _ensure_local_declarations(stmts, dict(ctx.crossing_temp_types))
+        _declared_seed = {info["name"]: info["type"] for info in ctx.locals.values() if info.get("is_param")}
+        _declared_seed.update(ctx.crossing_temp_types)
+        stmts = _ensure_local_declarations(stmts, _declared_seed)
+        stmts = _hoist_escaping_locals(stmts)
         _prune_unused_imports(stmts, ctx)
         if _contains_unfolded_monitor(stmts):
             raise DecompileAbort("synchronized-блок не свёрнут (monitorenter/monitorexit)")
+        if _has_escaping_local_decl(stmts):
+            raise DecompileAbort("переменная объявлена в блоке, но используется за его пределами "
+                                  "(типично для switch(String) через hashCode) - структуризация ненадёжна")
 
         pre_lines = []
         for name, typ in ctx.crossing_temp_types.items():

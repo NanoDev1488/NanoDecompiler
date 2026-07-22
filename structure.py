@@ -37,6 +37,13 @@ class Structurer:
         self.label_ctr = 0
         self._guard = 0
         self._terminates_cache = {}
+        # Счётчик catch-переменных (e1, e2...) - ОБЩИЙ на весь метод, а не
+        # обнуляемый на каждый try/catch (см. _build_try) - иначе два
+        # независимых (или, того хуже, вложенных) try/catch в одном методе
+        # оба называли бы свою первую catch-переменную "e1", что для
+        # вложенного случая - реальная ошибка компиляции ("variable e1 is
+        # already defined"), а для соседних - просто путаница при чтении.
+        self._catch_var_ctr = 0
 
     # ---------------- loop discovery ----------------
 
@@ -347,17 +354,16 @@ class Structurer:
         body = self.region(start, stop_addrs | {end})
         catches = []
         seen_handlers = set()
-        idx = 0
         for catch_type, handler_pc in entries:
             if handler_pc in seen_handlers:
                 continue
             seen_handlers.add(handler_pc)
-            idx += 1
+            self._catch_var_ctr += 1
             disp_type = self.ctx.owner_display(catch_type) if catch_type else "Throwable"
             merge2 = self.ipdom.get(handler_pc)
             local_stop = stop_addrs | ({merge2} if merge2 is not None else set())
             cbody = self.region(handler_pc, local_stop)
-            var_name = f"e{idx}"
+            var_name = f"e{self._catch_var_ctr}"
             if cbody and isinstance(cbody[0], LocalDecl) and _is_sentinel(cbody[0].init):
                 var_name = cbody[0].name
                 cbody = cbody[1:]

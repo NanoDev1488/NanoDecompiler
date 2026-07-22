@@ -157,12 +157,15 @@ class ProjectStats:
                 lines.append(f"    - {n}: {err}")
         lines.append("")
         lines.append(f"Методов с телом (есть байткод): {self.total_methods}")
+        _pct = self.pct(self.decompiled_methods, self.total_methods)
         lines.append(f"  - Полностью восстановлены в структурированный Java "
                       f"(if/else, while/for, switch, try/catch, выражения): "
-                      f"{self.decompiled_methods} ({self.pct(self.decompiled_methods, self.total_methods):.1f}%)")
+                      f"{self.decompiled_methods} ({_pct:.1f}%)")
         lines.append(f"  - Не удалось безопасно восстановить -> честный дизассемблированный "
                       f"листинг байткода (см. комментарий в самом методе): "
                       f"{self.fallback_methods} ({self.pct(self.fallback_methods, self.total_methods):.1f}%)")
+        lines.append("")
+        lines.append(f"  Крутизна декомпиляции: {_quality_rating(_pct)}")
         if self.fallback_reasons:
             lines.append("")
             lines.append("  Причины отката на байткод (сгруппировано):")
@@ -207,6 +210,27 @@ class ProjectStats:
             "  вместо того, чтобы 'угадывать' и рисковать неверной логикой.\n"
         )
         return "\n".join(lines)
+
+
+def _quality_rating(pct):
+    """Шкала 'крутизны' декомпиляции по проценту методов, полностью
+    восстановленных в структурированный Java. Ниже 50% - это уже не
+    особенность конкретного плагина, а скорее всего баг движка (см.
+    сообщение с просьбой написать разработчику)."""
+    if pct < 50:
+        return (
+            "БАГ ⚠️ Меньше половины методов восстановлено - это уже не похоже на "
+            "особенности плагина, скорее всего где-то реальный баг в самом движке. "
+            "Напишите разработчику в Telegram: @ERROR_92 - приложите исходный .jar "
+            "и этот README_RU.txt целиком, так баг найдётся и починится быстрее."
+        )
+    if pct >= 96.9:
+        return "🔥 Идеально! Практически весь код восстановлен в чистый структурированный Java."
+    if pct >= 90:
+        return "Отлично - почти всё восстановлено, местами придётся чуть подчистить руками."
+    if pct >= 75:
+        return "Неплохо - основная часть восстановлена, но заметная доля ушла в байткод-фоллбэк."
+    return "Так себе - многовато байткод-фоллбэков, плагин явно с нестандартными конструкциями."
 
 
 def _group_reason(reason):

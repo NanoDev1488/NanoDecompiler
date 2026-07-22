@@ -74,6 +74,7 @@ class Field:
         self.name = ""
         self.descriptor = ""
         self.constant_value = None
+        self.annotations = []       # list[{"type": field_descriptor_str, "args": {name: value}}]
 
 
 class ExceptionEntry:
@@ -98,6 +99,9 @@ class Method:
                                      # LocalVariableTable, если jar скомпилирован с отладочной
                                      # информацией (javac -g / maven по умолчанию часто её включает).
                                      # Пусто, если атрибута нет - тогда используются argN/varN.
+        self.annotations = []       # list[{"type": ..., "args": {...}}] - на сам метод (напр. @NotNull
+                                     # на возвращаемом значении - так его пишут аннотаторы IntelliJ/JetBrains)
+        self.param_annotations = [] # list[list[annotation]] - по одному списку на параметр
 
 
 class ClassFile:
@@ -114,6 +118,7 @@ class ClassFile:
         self.methods = []
         self.access = 0
         self.source_file = None
+        self.annotations = []   # class-level @Аннотации (RuntimeVisible/InvisibleAnnotations)
         self.bootstrap_methods = []   # list[(method_handle_cp_index, [arg_cp_index,...])]
         self.inner_classes = []       # list of dict(inner, outer, inner_name, access)
         self._parse(data)
@@ -294,6 +299,8 @@ class ClassFile:
                 if a_name == "ConstantValue" and len(a_data) >= 2:
                     cv_idx = struct.unpack_from(">H", a_data, 0)[0]
                     f.constant_value = self.pool.get(cv_idx)
+                elif a_name in ("RuntimeVisibleAnnotations", "RuntimeInvisibleAnnotations"):
+                    f.annotations.extend(self._parse_annotations_attr(a_data))
             self.fields.append(f)
 
         method_count = r.u2()
@@ -309,6 +316,16 @@ class ClassFile:
                 a_data = r.bytes(a_len)
                 if a_name == "Code":
                     self._parse_code(m, a_data)
+                elif a_name in ("RuntimeVisibleAnnotations", "RuntimeInvisibleAnnotations"):
+                    m.annotations.extend(self._parse_annotations_attr(a_data))
+                elif a_name in ("RuntimeVisibleParameterAnnotations", "RuntimeInvisibleParameterAnnotations"):
+                    parsed = self._parse_param_annotations_attr(a_data)
+                    if not m.param_annotations:
+                        m.param_annotations = parsed
+                    else:
+                        for i, lst in enumerate(parsed):
+                            if i < len(m.param_annotations):
+                                m.param_annotations[i].extend(lst)
             self.methods.append(m)
 
         # class attributes (SourceFile и т.д.)
@@ -320,6 +337,8 @@ class ClassFile:
             if a_name == "SourceFile" and len(a_data) >= 2:
                 sf_idx = struct.unpack_from(">H", a_data, 0)[0]
                 self.source_file = self.utf8(sf_idx)
+            elif a_name in ("RuntimeVisibleAnnotations", "RuntimeInvisibleAnnotations"):
+                self.annotations.extend(self._parse_annotations_attr(a_data))
             elif a_name == "BootstrapMethods":
                 ar = Reader(a_data)
                 n = ar.u2()
@@ -342,6 +361,64 @@ class ClassFile:
                         "inner_name": self.utf8(name_idx) if name_idx else None,
                         "access": iacc,
                     })
+
+    def _parse_element_value(self, r):
+        """element_value (JVM spec 4.7.16.1) - возвращает Python-значение
+        (примитив/строка/имя enum-константы/вложенная аннотация/список)."""
+        tag = chr(r.u1())
+        if tag in "BCDFIJSZ":
+            idx = r.u2()
+            e = self.pool.get(idx)
+            val = e[1] if e and len(e) > 1 else None
+            if tag == "Z":
+                return bool(val)
+            if tag == "C" and isinstance(val, int):
+                return chr(val)
+            return val
+        if tag == "s":
+            return self.utf8(r.u2())
+        if tag == "e":
+            r.u2()  # type_name_index - не нужен, нам достаточно имени константы
+            const_name_idx = r.u2()
+            return self.utf8(const_name_idx)
+        if tag == "c":
+            return self.utf8(r.u2())
+        if tag == "@":
+            return self._parse_annotation(r)
+        if tag == "[":
+            n = r.u2()
+            return [self._parse_element_value(r) for _ in range(n)]
+        return None
+
+    def _parse_annotation(self, r):
+        """annotation (JVM spec 4.7.16) -> {"type": "Lpkg/Name;", "args": {...}}."""
+        type_idx = r.u2()
+        type_desc = self.utf8(type_idx)
+        num_pairs = r.u2()
+        args = {}
+        for _ in range(num_pairs):
+            name_idx = r.u2()
+            name = self.utf8(name_idx)
+            args[name] = self._parse_element_value(r)
+        return {"type": type_desc, "args": args}
+
+    def _parse_annotations_attr(self, a_data):
+        """RuntimeVisibleAnnotations/RuntimeInvisibleAnnotations attribute payload
+        -> list of annotation dicts."""
+        ar = Reader(a_data)
+        n = ar.u2()
+        return [self._parse_annotation(ar) for _ in range(n)]
+
+    def _parse_param_annotations_attr(self, a_data):
+        """RuntimeVisible/InvisibleParameterAnnotations attribute payload ->
+        list (по параметру) of list of annotation dicts."""
+        ar = Reader(a_data)
+        num_params = ar.u1()
+        result = []
+        for _ in range(num_params):
+            n = ar.u2()
+            result.append([self._parse_annotation(ar) for _ in range(n)])
+        return result
 
     def _parse_code(self, method: Method, a_data: bytes):
         cr = Reader(a_data)

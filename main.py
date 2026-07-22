@@ -245,7 +245,7 @@ from verify import ProjectStats, check_brackets, check_import_collisions
 from switchmap import detect_switchmaps
 from stackvm import java_string_literal, java_float_literal
 from ast_nodes import ExprStmt, Assign, FieldAccess, NewObject, ReturnStmt
-from emit import emit_expr, emit_stmts, set_shadow_context
+from emit import emit_expr, emit_stmts, set_shadow_context, set_current_class
 
 # Известные крупные сторонние библиотеки (таблица - pom_builder.KNOWN_LIBS),
 # которые Java/Bukkit-плагины часто тащат внутри jar'а целиком
@@ -391,7 +391,57 @@ def format_type_dotted(java_type, renamer, known_internal_by_dotted, all_imports
     return base + arr
 
 
+def _format_annotation_value(v):
+    """Простое (безопасное для инлайна) значение аргумента аннотации, или
+    None если значение сложное (enum-константа/вложенная аннотация/массив) -
+    в этом случае аргументы аннотации лучше не печатать вообще, чем
+    напечатать что-то невалидное (см. _format_annotation)."""
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (int, float)):
+        return str(v)
+    if isinstance(v, str):
+        return java_string_literal(v)
+    return None
+
+
+def _format_annotation(ann, renamer, known_internal_by_dotted, all_imports):
+    """@NotNull / @Foo(key = "val") - см. classfile.py::_parse_annotation.
+    Тип печатается через mark_type() (тот же отложенный резолв simple-имя/
+    FQN, что и везде - см. javatypes.mark_type), поэтому коллизии импортов
+    между аннотациями и обычными типами обрабатываются автоматически."""
+    type_desc = ann.get("type", "")
+    try:
+        java_type = field_descriptor_to_java(type_desc)
+    except Exception:
+        java_type = type_desc.strip("L;").replace("/", ".")
+    dotted = format_type_dotted(java_type, renamer, known_internal_by_dotted, all_imports)
+    name_marker = mark_type(dotted)
+    args = ann.get("args") or {}
+    if not args:
+        return f"@{name_marker}"
+    parts = []
+    for k, v in args.items():
+        rendered = _format_annotation_value(v)
+        if rendered is None:
+            return f"@{name_marker}"  # сложное значение - печатаем маркер без аргументов, не гадаем
+        parts.append(rendered if (k == "value" and len(args) == 1) else f"{k} = {rendered}")
+    return f"@{name_marker}({', '.join(parts)})"
+
+
 def process_jar(jar_path, out_dir):
+    """Обратно-совместимая обёртка (см. gui_raw.py/gui_neon.py/gui_md3.py и
+    CLI-ветку main() ниже) - возвращает только out_dir, как и раньше.
+    Для программного доступа к статистике (режим API - см. api.py) см.
+    process_jar_with_stats()."""
+    out_dir, _stats = process_jar_with_stats(jar_path, out_dir)
+    return out_dir
+
+
+def process_jar_with_stats(jar_path, out_dir):
+    """То же самое, что process_jar(), но возвращает (out_dir, ProjectStats) -
+    нужно режиму API (api.py), чтобы отдать статистику как JSON без
+    перепарсивания README_RU.txt."""
     _t0 = time.time()
     _enable_windows_ansi()
     print()
@@ -578,7 +628,7 @@ def process_jar(jar_path, out_dir):
     write_mapping_report(out_dir, renamer)
     write_readme(out_dir, jar_path, len(class_files), parse_errors, class_files, renamer, stats)
     cprint(f"[*] Заняло: {time.time() - _t0:.1f} сек.")
-    return out_dir
+    return out_dir, stats
 
 
 def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, switchmap_tables=None):
@@ -592,18 +642,23 @@ def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, sw
         # класс/интерфейс - `interface package-info {}` невалиден как Java-код
         # (найдено на реальном плагине пользователя: "<identifier> expected").
         # В исходнике package-info.java состоит ТОЛЬКО из (опционально)
-        # package-level аннотаций + `package x.y.z;`. RuntimeVisibleAnnotations
-        # этот парсер не читает (см. HANDOFF - Signature/аннотации вне scope),
-        # поэтому аннотации теряются, но это безопаснее компиляционной ошибки.
+        # package-level аннотаций + `package x.y.z;`.
+        all_imports = {}
+        ann_lines = [_format_annotation(a, renamer, known_internal_by_dotted, all_imports)
+                     for a in cf.annotations]
         lines = [f"// исходный (обфусцированный) внутренний класс: {internal_to_dotted(internal)}"]
+        lines.extend(ann_lines)
         if pkg:
             lines.append(f"package {pkg.replace('/', '.')};")
-        return "\n".join(lines) + "\n", {}
+        text = resolve_type_markers("\n".join(lines), set())
+        return text + "\n", all_imports
 
     lines = []
     lines.append(f"// исходный (обфусцированный) внутренний класс: {internal_to_dotted(internal)}")
     if pkg:
         lines.append(f"package {pkg.replace('/', '.')};")
+
+    set_current_class(internal_to_dotted(new_internal))
 
     is_interface = bool(cf.access & 0x0200)
     is_enum = bool(cf.access & 0x4000)
@@ -623,6 +678,8 @@ def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, sw
     mods = " ".join(mod_bits)
 
     all_imports = {}
+    class_annotation_lines = [_format_annotation(a, renamer, known_internal_by_dotted, all_imports)
+                               for a in cf.annotations]
 
     header = f"{mods} {kind} {simple}".replace("  ", " ").strip()
     if cf.super_class_name and cf.super_class_name != "java/lang/Object" and \
@@ -745,6 +802,8 @@ def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, sw
         else:
             literal = format_field_constant(cf, f.constant_value, f.descriptor)
             cv = f" = {literal}" if literal is not None else ""
+        for _ann in f.annotations:
+            body_lines.append(f"    {_format_annotation(_ann, renamer, known_internal_by_dotted, all_imports)}")
         body_lines.append(f"    {fmods} {_simple_type(jtype)} {fname}{cv};{renamed_note}".replace("  ", " "))
         if "." in jtype:
             all_imports.setdefault(jtype.rstrip("[]"), jtype.rstrip("[]").rsplit(".", 1)[-1])
@@ -786,8 +845,11 @@ def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, sw
                     static_stmts = static_stmts[:-1]
                 all_imports.update(static_ctx_imports)
                 if static_stmts:
-                    set_shadow_context(cres.ctx if (is_enum and enum_const_fields) else cres2.ctx)
+                    _static_ctx = cres.ctx if (is_enum and enum_const_fields) else cres2.ctx
+                    _static_pre = (cres.pre_lines if (is_enum and enum_const_fields) else cres2.pre_lines) or []
+                    set_shadow_context(_static_ctx)
                     body_lines.append("    static {")
+                    body_lines.extend(_static_pre)
                     body_lines.extend(emit_stmts(static_stmts, 2))
                     body_lines.append("    }")
                     body_lines.append("")
@@ -861,8 +923,22 @@ def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, sw
         if param_names is None:
             param_names = [f"arg{i + arg_offset}" for i in range(len(params_disp))]
 
-        param_str = ", ".join(f"{_simple_type(p)} {n}" for p, n in zip(params_disp, param_names))
-        sig = f"    {mmods} {_simple_type(ret_disp)} {mname}({param_str}) {{{renamed_note}".replace("  ", " ")
+        param_anns = list(m.param_annotations) if m.param_annotations else []
+        if is_enum_ctor and param_anns:
+            param_anns = param_anns[2:]
+        param_parts = []
+        for i, (p, n) in enumerate(zip(params_disp, param_names)):
+            prefix = ""
+            if i < len(param_anns) and param_anns[i]:
+                prefix = " ".join(_format_annotation(a, renamer, known_internal_by_dotted, all_imports)
+                                   for a in param_anns[i]) + " "
+            param_parts.append(f"{prefix}{_simple_type(p)} {n}")
+        param_str = ", ".join(param_parts)
+        has_body = result is not None
+        sig_end = " {" if has_body else ";"
+        for _ann in m.annotations:
+            body_lines.append(f"    {_format_annotation(_ann, renamer, known_internal_by_dotted, all_imports)}")
+        sig = f"    {mmods} {_simple_type(ret_disp)} {mname}({param_str}){sig_end}{renamed_note}".replace("  ", " ")
         body_lines.append(sig)
 
         if result is not None:
@@ -885,9 +961,7 @@ def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, sw
                 stats.fallback_methods += 1
                 stats.fallback_reasons[result.reason] = stats.fallback_reasons.get(result.reason, 0) + 1
                 body_lines.extend(fallback_bytecode_listing(cf, m, indent=2))
-        else:
-            body_lines.append("        // abstract / native - тела нет")
-        body_lines.append("    }")
+            body_lines.append("    }")
         body_lines.append("")
 
     own_dotted = internal_to_dotted(new_internal)
@@ -925,6 +999,8 @@ def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, sw
     if import_lines:
         lines.extend(import_lines)
         lines.append("")
+    for _ann_line in class_annotation_lines:
+        lines.append(_ann_line)
     lines.append(header)
     lines.append("")
     lines.extend(body_lines)
@@ -1070,7 +1146,63 @@ def write_readme(out_dir, jar_path, n_classes, parse_errors, class_files, rename
     cprint(f"[*] README: {path}")
 
 
+def _try_handle_api_mode():
+    """ПРОВЕРЯЕТСЯ ПЕРВЫМ ДЕЛОМ в main() - до ветки 'Windows -> GUI'. Это
+    ключевое требование из HANDOFF_3, п.2: режим API должен ЯВНО отличаться
+    от обычного запуска и НИКОГДА не импортировать gui.py / не открывать
+    окно, даже на Windows без аргументов. Возвращает True, если аргументы
+    относились к API-режиму - в этом случае main() должен просто выйти,
+    вся работа уже сделана здесь (см. api.py)."""
+    argv = list(sys.argv[1:])
+
+    if "--api-server" in argv:
+        import api
+        host = "127.0.0.1"
+        port = 8791
+        if "--host" in argv:
+            host = argv[argv.index("--host") + 1]
+        if "--port" in argv:
+            port = int(argv[argv.index("--port") + 1])
+        api.run_api_server(host=host, port=port)
+        return True
+
+    if "--json-output" in argv or "--api" in argv:
+        import api
+        import json
+        # Убираем флаги (и их значения для --host/--port, на случай если их
+        # тоже передали здесь) - остаётся только позиционные jar/out_dir.
+        skip_next = False
+        positional = []
+        for a in argv:
+            if skip_next:
+                skip_next = False
+                continue
+            if a in ("--json-output", "--api", "--api-server"):
+                continue
+            if a in ("--host", "--port"):
+                skip_next = True
+                continue
+            positional.append(a)
+        jar_path = positional[0] if positional else None
+        out_dir = positional[1] if len(positional) > 1 else None
+        if not jar_path:
+            print(json.dumps({
+                "status": "error",
+                "error": "использование: main.py plugin.jar [out_dir] --json-output",
+            }, ensure_ascii=False))
+            sys.exit(1)
+        if not out_dir:
+            out_dir = os.path.splitext(os.path.basename(jar_path))[0] + "_decompiled"
+        api.run_json_output(jar_path, out_dir)  # печатает JSON и делает sys.exit сама
+        return True
+
+    return False
+
+
 def main():
+    if _try_handle_api_mode():
+        return
+
     if platform.system() == "Windows":
         # На Windows GUI - ЕДИНСТВЕННЫЙ путь (проще для сборки в один .exe
         # через PyInstaller - не нужно поддерживать отдельно консольный

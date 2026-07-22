@@ -16,6 +16,20 @@ from javatypes import mark_type
 IND = "    "
 
 _shadowed_names = frozenset()
+_current_class_dotted = None
+
+
+def set_current_class(dotted):
+    """Класс, чьё тело сейчас печатается (см. main.py::render_class - вызывается
+    один раз на класс). Нужно, чтобы обращения к СВОИМ static-полям/методам
+    печатались без лишней самоквалификации (`HEX_AMPERSAND`, а не
+    `HexUtils.HEX_AMPERSAND`) - для static-полей это не просто красота: для
+    blank final static-поля присваивание `ClassName.FIELD = x;` ВНУТРИ static-
+    инициализатора ЭТОГО ЖЕ класса - реальная ошибка компиляции ("cannot
+    assign a value to final variable") - javac считает "определённо
+    присвоенным" только simple-name присваивание, не квалифицированное."""
+    global _current_class_dotted
+    _current_class_dotted = dotted
 
 
 def set_shadow_context(ctx):
@@ -41,6 +55,8 @@ def emit_expr(e):
         return "this"
     if isinstance(e, FieldAccess):
         if e.static:
+            if e.owner == _current_class_dotted:
+                return e.name
             return f"{_simple(e.owner)}.{e.name}"
         if isinstance(e.target, This) and e.name not in _shadowed_names:
             return e.name
@@ -52,6 +68,8 @@ def emit_expr(e):
         if e.is_ctor:
             return f"{e.name}({args})"
         if e.static:
+            if e.owner == _current_class_dotted:
+                return f"{e.name}({args})"
             return f"{_simple(e.owner)}.{e.name}({args})"
         if e.is_super:
             return f"super.{e.name}({args})"
