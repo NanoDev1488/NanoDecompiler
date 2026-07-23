@@ -1,0 +1,156 @@
+name: build-and-release
+
+# Автоматический запуск НА КАЖДЫЙ push в main - ничего руками включать не
+# нужно. workflow_dispatch оставлен ДОПОЛНИТЕЛЬНО - просто кнопка "запустить
+# вручную" из вкладки Actions, если что-то упало и нужно повторить без
+# нового push.
+#
+# ОДИН общий релиз (не два раздельных, как было раньше) - собирает и клиент,
+# и оба API-exe, публикует всё разом с текстовым описанием в теле релиза.
+# Механика: build-client и build-api ТОЛЬКО собирают и складывают свои файлы
+# в build-артефакты (actions/upload-artifact) - релиз не публикуют. Третий
+# job (publish-release) ждёт оба (`needs:`), скачивает оба набора файлов
+# (actions/download-artifact) и публикует их ОДНИМ релизом через
+# softprops/action-gh-release. Если один из двух build-job'ов упадёт -
+# publish-release не запустится вообще (весь релиз атомарный: либо оба
+# продукта собрались и опубликовались, либо не публикуется ничего).
+#
+# Тег релиза - статический (RELEASE_TAG ниже). При повторном push
+# softprops/action-gh-release сам обновит существующий релиз новыми
+# файлами вместо создания дубликата - когда версию нужно поднять,
+# меняешь RELEASE_TAG/CLIENT_VERSION/API_VERSION в env.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # нужно softprops/action-gh-release, чтобы создавать/обновлять релиз
+
+env:
+  RELEASE_TAG: v1.2
+  CLIENT_VERSION: v1.2
+  API_VERSION: v1.0
+
+jobs:
+  build-client:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Собрать Electron-инсталлятор (npm run dist)
+        run: npm run dist
+
+      - name: Найти собранный .exe (electron-builder кладёт в dist/, ищем
+          явно вместо жёсткого имени - оно зависит от productName+version)
+        id: find_installer
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Path "dist" -Filter "*.exe" -File |
+                 Where-Object { $_.Name -match "Setup" } |
+                 Select-Object -First 1
+          if (-not $exe) {
+            # запасной вариант - ИСКЛЮЧАЕМ win-unpacked/ (сырой распакованный
+            # .exe приложения, не инсталлятор) и elevate.exe (хелпер NSIS)
+            $exe = Get-ChildItem -Path "dist" -Recurse -Filter "*.exe" -File |
+                   Where-Object { $_.FullName -notmatch "win-unpacked" -and $_.Name -ne "elevate.exe" } |
+                   Select-Object -First 1
+          }
+          if (-not $exe) { throw "Собранный .exe инсталлятора не найден - смотри логи electron-builder выше" }
+          Copy-Item $exe.FullName -Destination "NanoDecompiler-Client-Setup.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-artifact
+          path: NanoDecompiler-Client-Setup.exe
+          if-no-files-found: error
+
+  build-api:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Установить PyInstaller
+        run: pip install pyinstaller
+
+      # PyInstaller всё равно потянет gui*.py/toolinstaller.py транзитивно
+      # через main.py (см. main.py::main() - импорт gui спрятан внутри
+      # функции, но статический анализ его всё равно видит) - не мешает
+      # работе, чуть увеличивает размер файла.
+      - name: Собрать NanoDecompilerCLI.exe (полный движок, main.py)
+        working-directory: resources/engine
+        run: pyinstaller --onefile --name NanoDecompilerCLI --icon=icon.ico main.py
+
+      # api_cli.py нигде не упоминает gui.py даже транзитивно - PyInstaller
+      # не включит tkinter/customtkinter/flet вообще, собранный exe
+      # физически не способен открыть окно.
+      - name: Собрать NanoDecompilerAPI.exe (голый API, api_cli.py)
+        working-directory: resources/engine
+        run: pyinstaller --onefile --name NanoDecompilerAPI --icon=icon.ico api_cli.py
+
+      - name: Проверка - оба exe реально работают
+        shell: pwsh
+        run: |
+          resources/engine/dist/NanoDecompilerCLI.exe test_jars/EryBuyer-v1.jar out_check_cli --api
+          if (-not (Test-Path "out_check_cli")) { throw "CLI: out_dir не создан" }
+          resources/engine/dist/NanoDecompilerAPI.exe test_jars/EryBuyer-v1.jar out_check_api
+          if (-not (Test-Path "out_check_api")) { throw "API: out_dir не создан" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-artifacts
+          path: |
+            resources/engine/dist/NanoDecompilerCLI.exe
+            resources/engine/dist/NanoDecompilerAPI.exe
+          if-no-files-found: error
+
+  publish-release:
+    needs: [build-client, build-api]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: client-artifact
+          path: release-files
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: api-artifacts
+          path: release-files
+
+      - name: Публикация ОДНОГО релиза со всеми файлами и текстом
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "NanoDecompiler ${{ env.RELEASE_TAG }}"
+          files: release-files/*
+          body: |
+            ## NanoDecompiler ${{ env.RELEASE_TAG }}
+
+            Сборка от коммита `${{ github.sha }}`.
+
+            ### Что внутри
+
+            | Файл | Что это | Версия |
+            |------|---------|--------|
+            | `NanoDecompiler-Client-Setup.exe` | Клиентское приложение (Electron+React, полноценный GUI) - обычный инсталлятор, поставить и пользоваться | ${{ env.CLIENT_VERSION }} |
+            | `NanoDecompilerAPI.exe` | Голый API, без GUI и без консоли - для встраивания в другие проекты: `NanoDecompilerAPI.exe plugin.jar [out_dir]`, ответ - JSON в stdout | ${{ env.API_VERSION }} |
+            | `NanoDecompilerCLI.exe` | Тот же движок, что и в клиенте, но как отдельный консольный инструмент (флаги `--api`/`--json-output`/`--api-server`/`--install-tools`) | ${{ env.API_VERSION }} |
+
+            ### Как проверялось
+
+            Оба API/CLI-exe перед публикацией прогонялись на тестовом
+            `.jar`-плагине прямо в этом workflow - если декомпиляция не
+            создавала папку с результатом, релиз не публикуется вообще.

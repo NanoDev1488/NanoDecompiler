@@ -1,0 +1,257 @@
+/* Слияние двух языков в один (по запросу): терминальная айдентика
+   NanoDecompiler (true-black, кислотно-зелёный акцент, статус-точки ●/◯ -
+   уже узнаваемый брендинг проекта) + структурные приёмы Material Design 3
+   (elevation, скруглённые surface-контейнеры, tonal-кнопки, chip-компонент).
+   Не "перекрасили в MD3", а взяли форму MD3 и заполнили её тем же
+   содержанием/цветом, что уже был. Сигнатурный элемент - статус-чип внизу
+   слева: MD3 assist-chip, внутри которого живёт та же самая зелёная точка
+   ●/◯, что была в терминальной версии - буквально точка пересечения обоих
+   языков в одном маленьком элементе. */
+:root {
+  /* --- цвет: MD3-именование токенов (surface/on-surface/primary/...),
+     значения - из уже утверждённой терминальной палитры проекта --- */
+  --surface: #0a0d0b;
+  --surface-container: #121714;
+  --surface-container-high: #1a221c;
+  --surface-sunken: #000000;
+  --outline: #222b25;
+  --outline-strong: #2ba15c;
+
+  --primary: #39ff6a;
+  --on-primary: #04150a;
+  --primary-container: #123322;
+  --on-primary-container: #8effc0;
+
+  --on-surface: #e9fff1;
+  --on-surface-variant: #6f9a80;
+  --on-surface-subtle: #3d5346;
+
+  --error: #ff4d5e;
+  --warn: #ffb000;
+  --info: #39d3ff;
+
+  /* --- тип: гарнитура для интерфейса (не Roboto по умолчанию из MD3 - это
+     было бы шаблонным выбором) + моно для лога/путей (функционально
+     оправдано - это буквально консольный вывод) --- */
+  --font-ui: "Inter", "Segoe UI Variable", "Segoe UI", -apple-system, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace;
+
+  /* --- форма: шкала скруглений MD3 (small/medium/large) --- */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+
+  /* --- elevation: MD3-уровни, но тень тонированная в сторону surface,
+     а не нейтрально-чёрная - иначе на true-black фоне тень попросту не видна --- */
+  --elev-1: 0 1px 2px rgba(0,0,0,0.6), 0 1px 3px 1px rgba(0,0,0,0.4);
+  --elev-2: 0 2px 6px rgba(0,0,0,0.55), 0 4px 12px rgba(0,0,0,0.35);
+  --glow-accent: 0 0 0 1px rgba(57,255,106,0.18), 0 4px 20px rgba(57,255,106,0.12);
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  background: var(--surface);
+  color: var(--on-surface);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 10px;
+  padding: 10px;
+}
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 14px;
+  -webkit-app-region: drag;
+}
+
+.brand {
+  font-family: var(--font-mono);
+  color: var(--primary);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-size: 14px;
+}
+
+.brand-version {
+  color: var(--on-surface-subtle);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+.main {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 10px;
+  min-height: 0;
+}
+
+/* --- surface-контейнер MD3: приподнятая карточка со скруглением и тенью,
+   вместо плоской панели с одной линией-разделителем --- */
+.panel {
+  background: var(--surface-container);
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elev-1);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  -webkit-app-region: no-drag;
+  overflow-y: auto;
+}
+
+.field-label {
+  color: var(--on-surface-variant);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.dropzone {
+  border: 1.5px dashed var(--outline-strong);
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: 20px 14px;
+  cursor: pointer;
+  color: var(--on-surface-variant);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  word-break: break-all;
+}
+.dropzone:hover { background: var(--primary-container); color: var(--on-surface); }
+.dropzone.has-file {
+  color: var(--on-surface);
+  border-style: solid;
+  border-color: var(--outline-strong);
+}
+.dropzone.drag-over {
+  background: var(--primary-container);
+  border-color: var(--primary);
+  box-shadow: var(--glow-accent);
+}
+
+.path-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* --- MD3 tonal-кнопка: заполненная приглушённым тоном primary-container,
+   а не прозрачная плашка с обводкой --- */
+.btn {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-sm);
+  padding: 9px 14px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 120ms ease, border-color 120ms ease, transform 80ms ease;
+}
+.btn:hover:not(:disabled) {
+  background: var(--primary-container);
+  border-color: var(--outline-strong);
+  color: var(--on-primary-container);
+}
+.btn:active:not(:disabled) { transform: scale(0.98); }
+.btn:disabled { opacity: 0.4; cursor: default; }
+
+/* --- MD3 filled-кнопка (высшая точка акцента - primary, полностью
+   залитая) - главное CTA, единственное место, где цвет акцента используется
+   как fill, а не как обводка/подсветка --- */
+.btn-cta {
+  font-family: var(--font-ui);
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: var(--on-primary);
+  border: none;
+  font-weight: 700;
+  padding: 14px;
+  font-size: 13px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  box-shadow: var(--glow-accent);
+  transition: filter 120ms ease, transform 80ms ease;
+}
+.btn-cta:hover:not(:disabled) { filter: brightness(1.08); }
+.btn-cta:active:not(:disabled) { transform: scale(0.98); }
+.btn-cta:disabled { opacity: 0.35; cursor: default; box-shadow: none; }
+
+/* --- сигнатурный элемент: MD3 assist-chip (форма/elevation - Material),
+   внутри - та же зелёная точка ●/◯, что была в терминальной версии --- */
+.status-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--surface-container-high);
+  border: 1px solid var(--outline);
+  border-radius: 999px;
+  padding: 7px 14px 7px 10px;
+  width: fit-content;
+}
+
+.dot { font-size: 10px; font-family: var(--font-mono); }
+.dot.idle { color: var(--on-surface-subtle); }
+.dot.running { color: var(--primary); animation: pulse 1.1s ease-in-out infinite; }
+.dot.ok { color: var(--primary); }
+.dot.error { color: var(--error); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* --- лог остаётся "утопленным" (sunken surface) и моношрифтным - это
+   зона контента (консольный вывод), а не хром интерфейса --- */
+.terminal {
+  background: var(--surface-sunken);
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.line-banner { color: var(--primary); }
+.line-error { color: var(--error); }
+.line-warn { color: var(--warn); }
+.line-ok { color: var(--primary); }
+.line-info { color: var(--on-surface); }
+.line-dim { color: var(--on-surface-subtle); }
+
+.empty-terminal { color: var(--on-surface-subtle); }
+
+.footer {
+  padding: 6px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--on-surface-subtle);
+}
