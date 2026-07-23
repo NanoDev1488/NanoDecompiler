@@ -9,7 +9,7 @@
     "build:electron": "tsc -p electron/tsconfig.json",
     "build": "npm run build:renderer && npm run build:electron",
     "start": "npm run build && electron .",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder --publish=never"
   },
   "devDependencies": {
     "@types/node": "^20.14.9",
@@ -28,11 +28,23 @@
   "build": {
     "appId": "com.nanodecompiler.app",
     "productName": "NanoDecompiler",
-    "files": ["dist/**", "dist-electron/**"],
-    "extraResources": [
-      { "from": "resources/engine", "to": "engine" }
+    "publish": null,
+    "files": [
+      "dist/**",
+      "dist-electron/**"
     ],
-    "win": { "target": "nsis", "icon": "resources/engine/icon.ico" },
-    "linux": { "target": "AppImage" }
+    "extraResources": [
+      {
+        "from": "resources/engine",
+        "to": "engine"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "resources/engine/icon.ico"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
 }
