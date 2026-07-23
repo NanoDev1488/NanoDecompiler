@@ -35,6 +35,19 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
+# На Windows с не-UTF8 консолью (напр. английская локаль - именно так
+# настроены раннеры GitHub Actions windows-latest) sys.stdout по умолчанию
+# кодируется в cp1252/cp437 и т.п., которые физически не умеют кириллицу -
+# print() падает с UnicodeEncodeError на первой же русской букве в JSON
+# (статистика, тексты ошибок, пути). Принудительно переключаем на UTF-8
+# ДО того, как что-либо напечатано - это чинит и --api/--json-output (этот
+# файл), и обычный консольный вывод main.py (та же правка стоит и там).
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except AttributeError:
+        pass  # Python <3.7 или поток без reconfigure() - маловероятно, но не падать из-за этого
+
 import main as _main  # process_jar_with_stats, NANO_DECOMPILER_VERSION
 
 

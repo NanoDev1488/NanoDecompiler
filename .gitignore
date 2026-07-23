@@ -1,0 +1,21 @@
+# Node / Electron
+node_modules/
+dist/
+dist-electron/
+release/
+
+# PyInstaller (движок в resources/engine/)
+resources/engine/build/
+resources/engine/dist/
+resources/engine/*.spec
+resources/engine/__pycache__/
+**/__pycache__/
+*.pyc
+
+# CI-мусор, который иногда остаётся после локального прогона проверок
+out_check_cli/
+out_check_api/
+
+# OS
+.DS_Store
+Thumbs.db

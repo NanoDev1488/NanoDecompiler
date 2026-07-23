@@ -20,6 +20,14 @@ name: build-and-release
 # файлами вместо создания дубликата - когда версию нужно поднять,
 # меняешь RELEASE_TAG/CLIENT_VERSION/API_VERSION в env.
 
+# ПРИМЕЧАНИЕ про npm install vs npm ci: в проекте нет package-lock.json
+# (собирался package.json вручную, без сети для реального npm install) -
+# поэтому сборка использует `npm install`, а не `npm ci`. Как только у
+# кого-то локально с интернетом получится один раз выполнить `npm install`
+# и закоммитить получившийся package-lock.json в репозиторий - можно (и
+# стоит) вернуть здесь `npm ci` обратно: она детерминированная (ставит
+# ровно то, что в локе, без пересчёта дерева зависимостей) и быстрее.
+
 on:
   push:
     branches: [main]
@@ -44,6 +52,11 @@ jobs:
           node-version: "20"
 
       - name: npm install
+        # npm ci требует уже существующий package-lock.json - у нас его нет
+        # (собирался package.json руками, без доступа в сеть, чтобы сгенерировать
+        # настоящий lock-файл). npm install подходит и без лока, но НЕ
+        # детерминирован между запусками так же строго - см. заметку в конце
+        # workflow про то, как закрепить package-lock.json на будущее.
         run: npm install
 
       - name: Собрать Electron-инсталлятор (npm run dist)

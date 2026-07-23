@@ -49,6 +49,19 @@ import zipfile
 
 sys.setrecursionlimit(20000)
 
+# На Windows с не-UTF8 консолью (напр. английская локаль - так настроены
+# раннеры GitHub Actions windows-latest) sys.stdout по умолчанию кодируется
+# в cp1252/cp437 и т.п., которые физически не умеют кириллицу - любой
+# cprint() с русским текстом (а тут их сотни) падает с UnicodeEncodeError
+# на первой же русской букве. Принудительно переключаем на UTF-8 здесь же,
+# самым первым делом - до ЛЮБОГО print()/cprint() ниже по файлу. Та же
+# правка стоит в api.py (для --api/--json-output пути).
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except AttributeError:
+        pass  # Python <3.7 или поток без reconfigure() - маловероятно, но не падать из-за этого
+
 NANO_DECOMPILER_VERSION = "NanoDecompiler v1.1"
 
 
