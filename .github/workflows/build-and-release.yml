@@ -43,8 +43,8 @@ jobs:
         with:
           node-version: "20"
 
-      - name: npm ci
-        run: npm ci
+      - name: npm install
+        run: npm install
 
       - name: Собрать Electron-инсталлятор (npm run dist)
         run: npm run dist
