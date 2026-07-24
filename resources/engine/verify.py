@@ -126,6 +126,7 @@ class ProjectStats:
         self.synthetic_switchmap_classes_hidden = 0
         self.library_classes_skipped = 0
         self.library_names_hit = set()
+        self.malware_findings = []  # см. malware_scan.py - список находок эвристики
 
     def record_method(self, ok, reason=None):
         self.total_methods += 1

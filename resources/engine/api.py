@@ -70,6 +70,7 @@ def stats_to_dict(stats):
         "bracket_issues": list(stats.bracket_issues),
         "import_conflicts": {k: v for k, v in stats.import_conflicts.items()},
         "synthetic_switchmap_classes_hidden": stats.synthetic_switchmap_classes_hidden,
+        "malware_findings": list(stats.malware_findings),
     }
 
 

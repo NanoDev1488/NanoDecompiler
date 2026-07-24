@@ -90,7 +90,7 @@ def _collect_referenced_names(stmts):
             elif isinstance(s, BlockStmt):
                 walk(s.stmts)
             elif isinstance(s, SwitchStmt):
-                walk_expr(s.expr)
+                walk_expr(s.selector)
                 for c in s.cases:
                     walk(c.body)
             elif isinstance(s, TryStmt):
@@ -142,7 +142,7 @@ def _collect_shallow_referenced_names(stmts):
         elif isinstance(s, SyncStmt):
             walk_expr(s.expr)
         elif isinstance(s, SwitchStmt):
-            walk_expr(s.expr)
+            walk_expr(s.selector)
         elif isinstance(s, BlockStmt):
             names |= _collect_shallow_referenced_names(s.stmts)
         elif isinstance(s, TryStmt):

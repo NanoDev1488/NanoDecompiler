@@ -650,11 +650,24 @@ def process_jar_with_stats(jar_path, out_dir):
     print(banner_text())
     print()
     check_java_maven()
+
+    section("Проверка на подозрительное содержимое")
+    import malware_scan
+    malware_findings = malware_scan.scan_jar(jar_path)
+    stats_findings_holder = malware_findings  # прокидываем в stats чуть ниже, после создания ProjectStats
+    warning_text = malware_scan.format_findings_for_console(malware_findings)
+    if warning_text:
+        for line in warning_text.split("\n"):
+            cprint(f"[!] {line}" if not line.startswith("  [") else line)
+    else:
+        cprint("[*] Признаков вредоносного кода не обнаружено (эвристика, не гарантия - см. README_RU.txt).")
+
     os.makedirs(out_dir, exist_ok=True)
     src_dir = os.path.join(out_dir, "src", "main", "java")
     os.makedirs(src_dir, exist_ok=True)
 
     stats = ProjectStats()
+    stats.malware_findings = stats_findings_holder
     class_files = {}
     parse_errors = []
     plugin_yml_text = None

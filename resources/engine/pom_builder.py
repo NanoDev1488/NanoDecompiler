@@ -68,6 +68,13 @@ KNOWN_LIBS = [
     ("org.mariadb",             ("org.mariadb.jdbc", "mariadb-java-client", None)),
     ("com.google.protobuf",     ("com.google.protobuf", "protobuf-java", None)),
     ("com.google.errorprone.annotations", ("com.google.errorprone", "error_prone_annotations", None)),
+    ("javassist",                ("org.javassist", "javassist", None)),
+    ("com.github.benmanes.caffeine", ("com.github.ben-manes.caffeine", "caffeine", None)),
+    ("org.apache.commons.math3", ("org.apache.commons", "commons-math3", None)),
+    ("org.reflections",          ("org.reflections", "reflections", None)),
+    ("com.cryptomorin.xseries",  ("com.github.cryptomorin", "XSeries",
+                                   "обычно шейдится напрямую из исходников (JitPack), не из Maven Central - "
+                                   "проверить актуальный groupId/repository перед использованием pom.xml")),
 ]
 
 # artifactId'ы известных БИБЛИОТЕК (не самого плагина) - используется, чтобы НЕ

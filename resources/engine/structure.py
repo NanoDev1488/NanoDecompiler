@@ -36,6 +36,7 @@ class Structurer:
         self.breakable_stack = []
         self.label_ctr = 0
         self._guard = 0
+        self._if_chain_depth = 0
         self._terminates_cache = {}
         # Счётчик catch-переменных (e1, e2...) - ОБЩИЙ на весь метод, а не
         # обнуляемый на каждый try/catch (см. _build_try) - иначе два
@@ -255,6 +256,27 @@ class Structurer:
         return result
 
     def _build_if(self, pc, cond, true_t, false_t, stop_addrs):
+        # Явный лимит глубины if/else-цепочки (region <-> _build_if
+        # взаимно рекурсивны - каждое звено "else if" добавляет уровень).
+        # Встречается в реальности на огромных сгенерированных
+        # диспетчер-методах (напр. javassist, найдено на реальном тесте -
+        # см. HANDOFF_4) - вместо невнятного RecursionError (который к тому
+        # же зависит от ОБЩЕГО лимита рекурсии Python, разделяемого со всеми
+        # остальными вызовами в этом же стеке - emit_expr/_is_terminating и
+        # т.п.) - явный, предсказуемый и безопасный откат с понятной причиной.
+        self._if_chain_depth += 1
+        if self._if_chain_depth > 800:
+            self._if_chain_depth -= 1
+            raise DecompileAbort(
+                f"if/else-цепочка длиннее {800} уровней подряд - похоже на "
+                f"сгенерированную таблицу диспетчеризации, рекурсивный "
+                f"построитель для такого не годится")
+        try:
+            return self._build_if_inner(pc, cond, true_t, false_t, stop_addrs)
+        finally:
+            self._if_chain_depth -= 1
+
+    def _build_if_inner(self, pc, cond, true_t, false_t, stop_addrs):
         sp_true = self._try_resolve_special_target(true_t)
         sp_false = self._try_resolve_special_target(false_t)
 
