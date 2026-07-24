@@ -283,6 +283,65 @@ def check_java_maven():
     return missing
 
 
+def _try_handle_install_tools_json(argv):
+    """`--install-tools-json[=jdk|maven]` - то же самое, что --install-tools,
+    но вывод - NDJSON (по одной JSON-строке на событие) вместо текста с
+    прогресс-баром через \\r. Используется ТОЛЬКО Electron-клиентом (см.
+    electron/main.ts) - там нужно показать реальный процент в UI, а не
+    парсить текстовый \\r-прогресс. CLI-версия (--install-tools) остаётся
+    для людей, работающих в терминале - там текст читается глазами удобнее.
+
+    Формат событий (каждая строка - отдельный valid JSON):
+        {"type": "progress", "label": "JDK", "pct": 42, "downloaded_mb": 12, "total_mb": 28}
+        {"type": "done", "java": "путь/или null", "maven": "путь/или null", "errors": ["..."]}
+        {"type": "error", "message": "..."}  - если что-то пошло не так до начала установки
+    """
+    if not any(a == "--install-tools-json" or a.startswith("--install-tools-json=") for a in argv):
+        return False
+    import json as _json
+    import toolinstaller
+
+    only = None
+    for a in argv:
+        if a.startswith("--install-tools-json="):
+            only = a.split("=", 1)[1].strip().lower()
+
+    # ВАЖНО: тут НЕ вызываем check_java_maven() - она печатает читаемый текст
+    # с баннером, это не нужно вызывающей стороне (Electron уже решил, что
+    # нужно ставить, по своей собственной проверке лога) - только тихо
+    # смотрим, чего не хватает.
+    java_path = toolinstaller.resolve_tool_path(["java", "java.exe"], "java") or toolinstaller.find_local_java()
+    mvn_path = toolinstaller.resolve_tool_path(["mvn", "mvn.cmd"], "maven") or toolinstaller.find_local_maven()
+    missing = ([] if java_path else ["java"]) + ([] if mvn_path else ["maven"])
+
+    if only in ("jdk", "java"):
+        need_java, need_maven = "java" in missing, False
+    elif only == "maven":
+        need_java, need_maven = False, "maven" in missing
+    else:
+        need_java, need_maven = "java" in missing, "maven" in missing
+
+    if not need_java and not need_maven:
+        print(_json.dumps({"type": "done", "java": java_path, "maven": mvn_path, "errors": []}, ensure_ascii=False))
+        return True
+
+    def progress_cb(label, downloaded, total):
+        if total:
+            pct = int(downloaded * 100 / total)
+            evt = {"type": "progress", "label": label, "pct": pct,
+                   "downloaded_mb": downloaded // 1024 // 1024, "total_mb": total // 1024 // 1024}
+        else:
+            evt = {"type": "progress", "label": label, "pct": None,
+                   "downloaded_mb": downloaded // 1024 // 1024, "total_mb": None}
+        print(_json.dumps(evt, ensure_ascii=False))
+        sys.stdout.flush()
+
+    result = toolinstaller.install_missing(need_java, need_maven, progress_cb=progress_cb)
+    print(_json.dumps({"type": "done", "java": result["java"], "maven": result["maven"],
+                        "errors": result["errors"]}, ensure_ascii=False))
+    return True
+
+
 def _try_handle_install_tools(argv):
     """`--install-tools` (CLI, HANDOFF_3 п.3) - portable-закачка недостающих
     java/mvn БЕЗ прав администратора, в локальную папку
@@ -399,6 +458,41 @@ def _relocated_library_prefixes(original_pom_xml):
             if pattern == prefix or pattern.startswith(prefix + ".") or prefix.startswith(pattern + "."):
                 out.append((shaded, coords))
                 break
+    return out
+
+
+# Сигнатуры для случаев, когда pom.xml САМОГО плагина не забандлен внутри jar'а
+# вообще (частый реальный кейс - см. MLSAC-1.0, где _relocated_library_prefixes
+# выше не срабатывает, т.к. парсить нечего: <relocations> просто негде взять) -
+# тогда релокацию ловим по характерным путям РЕСУРСОВ, которые известная
+# библиотека всегда кладёт по одному и тому же относительному шаблону
+# независимо от того, куда её пакет релоцировали (maven-shade-plugin
+# переименовывает и путь ресурса вместе с пакетом классов, если ресурс лежит
+# внутри релоцированного пакета - значит "хвост" пути после релоцированного
+# префикса остаётся ПОСТОЯННЫМ, и по нему можно восстановить префикс).
+_SIGNATURE_PATTERNS = [
+    # sqlite-jdbc: org/sqlite/native/{OS}/{arch}/(lib)?sqlitejdbc.{so,dll,dylib}
+    (re.compile(r"^(.*)/native/[^/]+/[^/]+/(?:lib)?sqlitejdbc\.(?:so|dll|dylib)$"),
+     ("org.xerial", "sqlite-jdbc")),
+]
+
+
+def _signature_relocated_prefixes(all_names):
+    """Fallback-детект релокации по сигнатурным путям ресурсов - см. комментарий
+    к _SIGNATURE_PATTERNS. Не заменяет _relocated_library_prefixes (тот точнее,
+    т.к. берёт данные из официального конфига сборки), а дополняет его для
+    случаев, когда pom.xml плагина не бандлится вообще."""
+    out = []
+    seen_coords = set()
+    for name in all_names:
+        for pattern, coords in _SIGNATURE_PATTERNS:
+            if coords in seen_coords:
+                continue
+            m = pattern.match(name)
+            if m:
+                dotted_prefix = m.group(1).replace("/", ".")
+                out.append((dotted_prefix, coords))
+                seen_coords.add(coords)
     return out
 
 
@@ -591,6 +685,7 @@ def process_jar_with_stats(jar_path, out_dir):
         # проход по just-in-memory списку имён недорогой.
         _pom_props_early, _pom_xml_early = find_pom_properties_and_xml(all_names, z)
         relocated_prefixes = _relocated_library_prefixes(_pom_xml_early)
+        relocated_prefixes += _signature_relocated_prefixes(all_names)
         if relocated_prefixes:
             cprint(f"[*] В pom.xml плагина найден релоцированный (shaded) пакет известной "
                    f"библиотеки: {', '.join(f'{p} -> {c[0]}:{c[1]}' for p, c in relocated_prefixes)}")
@@ -1307,39 +1402,61 @@ def _try_handle_api_mode():
     return False
 
 
+def _try_handle_jar_summary(argv):
+    """`--jar-summary plugin.jar` - печатает JSON со сводкой по jar'у (имя,
+    размер, версия Java, число классов/пакетов, имя плагина из plugin.yml) -
+    для карточки "выбрал файл -> вот что внутри" в Electron-клиенте (см.
+    src/App.tsx). Переиспользует gui_common.jar_summary() - та же функция,
+    что рисовала карточку в старом GUI (см. gui_common.py - там же явно
+    сказано, что этот модуль безопасно импортировать из CLI, никаких
+    tkinter/customtkinter/flet зависимостей не тянет)."""
+    if "--jar-summary" not in argv:
+        return False
+    import json as _json
+    import gui_common
+
+    idx = argv.index("--jar-summary")
+    jar_path = argv[idx + 1] if idx + 1 < len(argv) else None
+    if not jar_path:
+        print(_json.dumps({"error": "использование: main.py --jar-summary plugin.jar"}, ensure_ascii=False))
+        return True
+    if not os.path.isfile(jar_path):
+        print(_json.dumps({"error": f"файл не найден: {jar_path}"}, ensure_ascii=False))
+        return True
+    print(_json.dumps(gui_common.jar_summary(jar_path), ensure_ascii=False))
+    return True
+
+
 def main():
     if _try_handle_api_mode():
+        return
+
+    if _try_handle_jar_summary(sys.argv[1:]):
+        return
+
+    if _try_handle_install_tools_json(sys.argv[1:]):
         return
 
     if _try_handle_install_tools(sys.argv[1:]):
         return
 
-    if platform.system() == "Windows" and "--headless" not in sys.argv[1:]:
-        # На Windows GUI - путь по умолчанию для запуска БЕЗ явных флагов
-        # (проще для сборки в один .exe через PyInstaller - не нужно
-        # поддерживать отдельно консольный сценарий без окна). Если jar
-        # подсунут аргументом (напр. перетащили файл на .exe) - подставляем
-        # его в GUI и сразу стартуем декомпиляцию.
-        #
-        # ИСКЛЮЧЕНИЕ - `--headless`: используется новым Electron-фронтендом
-        # (см. electron/main.ts::pythonBin/run:decompile в v2.0) - он сам
-        # стримит цветной консольный вывод (через classify_line/classifyLine.ts)
-        # в свою терминал-панель, tkinter-окно ему не нужно и НЕ ДОЛЖНО
-        # открываться поверх/вместо него. Без этой проверки на Windows
-        # `python main.py plugin.jar out_dir --headless` из Electron ловил бы
-        # СТАРУЮ ветку ниже и пытался открыть gui.py - критический баг,
-        # найден при ревью первой версии electron-фронтенда.
-        try:
-            from gui import run_gui
-        except Exception as e:
-            try:
-                print(f"Не удалось загрузить GUI (gui.py): {type(e).__name__}: {e}")
-            except Exception:
-                pass
-            sys.exit(1)
-        initial_jar = sys.argv[1] if len(sys.argv) > 1 else None
-        run_gui(initial_jar)
-        return
+    if platform.system() == "Windows" and "--headless" not in sys.argv[1:] and len(sys.argv) < 2:
+        # Раньше здесь запускался старый tkinter/customtkinter/flet GUI
+        # (gui.py + gui_raw.py/gui_neon.py/gui_md3.py) при запуске БЕЗ
+        # аргументов на Windows. Эти файлы физически удалены из движка -
+        # GUI теперь только Electron-клиент (NanoDecompiler-Client-Setup.exe,
+        # отдельный продукт, см. README.md) - этот exe (CLI/API) для него
+        # не более чем дочерний процесс, вызываемый с аргументами. Если
+        # запустили без аргументов (напр. случайным двойным кликом) - просто
+        # печатаем usage вместо попытки открыть несуществующий GUI.
+        cprint("Это консольный движок NanoDecompiler - для графического интерфейса используйте")
+        cprint("клиентское приложение (NanoDecompiler-Client-Setup.exe).")
+        cprint("")
+        cprint("Использование: NanoDecompilerCLI.exe plugin.jar [output_dir]")
+        cprint("       NanoDecompilerCLI.exe plugin.jar [out_dir] --api   (разовый вызов, JSON в stdout)")
+        cprint("       NanoDecompilerCLI.exe --api-server [--host H] [--port 8791]   (HTTP-сервер)")
+        cprint("       NanoDecompilerCLI.exe --install-tools[=jdk|maven]   (portable JDK/Maven по требованию)")
+        sys.exit(1)
 
     if len(sys.argv) < 2:
         cprint("Использование: python3 main.py plugin.jar [output_dir]")

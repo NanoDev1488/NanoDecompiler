@@ -28,6 +28,8 @@ KNOWN_LIBS = [
     ("net.md_5.bungee",         ("net.md-5", "bungeecord-chat", None)),
     ("net.kyori.adventure",     ("net.kyori", "adventure-api", None)),
     ("com.google.common",       ("com.google.guava", "guava", None)),
+    ("com.google.thirdparty",   ("com.google.guava", "guava", "вспомогательные классы внутри guava (напр. publicsuffix)")),
+    ("io.reactivex.rxjava3",    ("io.reactivex.rxjava3", "rxjava", None)),
     ("com.google.gson",         ("com.google.code.gson", "gson", None)),
     ("com.google.inject",       ("com.google.inject", "guice", "shaded DI framework")),
     ("com.fasterxml.jackson",   ("com.fasterxml.jackson.core", "jackson-databind", None)),
@@ -65,6 +67,7 @@ KNOWN_LIBS = [
     ("it.unimi.dsi.fastutil",   ("it.unimi.dsi", "fastutil", None)),
     ("org.mariadb",             ("org.mariadb.jdbc", "mariadb-java-client", None)),
     ("com.google.protobuf",     ("com.google.protobuf", "protobuf-java", None)),
+    ("com.google.errorprone.annotations", ("com.google.errorprone", "error_prone_annotations", None)),
 ]
 
 # artifactId'ы известных БИБЛИОТЕК (не самого плагина) - используется, чтобы НЕ

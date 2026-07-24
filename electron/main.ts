@@ -72,9 +72,17 @@ ipcMain.handle("dialog:selectJar", async () => {
   return res.filePaths[0];
 });
 
-ipcMain.handle("dialog:selectOutDir", async () => {
+ipcMain.handle("dialog:selectOutDir", async (_e, defaultPath?: string) => {
   const res = await dialog.showOpenDialog(mainWindow!, {
     title: "Папка для результата",
+    // defaultPath может указывать на ЕЩЁ НЕ существующую папку (напр.
+    // ".../MyPlugin_decompiled") - Windows-диалог всё равно откроется в
+    // родительской директории с уже подставленным именем в поле ввода;
+    // если пользователь просто нажмёт "Выбрать папку" не глядя - получит
+    // осмысленное имя, а не "Новая папка" (баг, найденный на реальном тесте:
+    // пустой диалог -> пользователь жмёт "Новая папка" в Проводнike -> имя
+    // остаётся дефолтным, т.к. переименовать не догадался).
+    defaultPath,
     properties: ["openDirectory", "createDirectory"],
   });
   if (res.canceled || res.filePaths.length === 0) return null;
@@ -83,6 +91,27 @@ ipcMain.handle("dialog:selectOutDir", async () => {
 
 ipcMain.handle("shell:openPath", async (_e, target: string) => {
   await shell.openPath(target);
+});
+
+ipcMain.handle("shell:openInVSCode", async (_e, target: string) => {
+  // `code` - это shell-команда, которую сам VS Code добавляет в PATH при
+  // установке (опция "Add to PATH" в инсталляторе, включена по умолчанию
+  // на Windows) - если её нет, значит VS Code либо не установлен, либо
+  // ставился без этой опции. shell:true нужен именно для .cmd-обёртки VS
+  // Code на Windows (сам `code` там - это code.cmd, как и `mvn.cmd` в
+  // toolinstaller.py - subprocess без shell не умеет их запускать напрямую).
+  return new Promise((resolve) => {
+    const proc = spawn("code", [target], { shell: true, windowsHide: true });
+    let errored = false;
+    proc.on("error", () => {
+      errored = true;
+      resolve({ ok: false, error: "VS Code не найден в PATH (команда `code`) - убедись, что VS Code установлен и при установке была отмечена опция \"Add to PATH\"." });
+    });
+    proc.on("close", (code) => {
+      if (errored) return;
+      resolve(code === 0 ? { ok: true } : { ok: false, error: `code завершился с кодом ${code}` });
+    });
+  });
 });
 
 ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) => {
@@ -139,6 +168,26 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
   });
 });
 
+ipcMain.handle("jar:summary", async (_e, jarPath: string) => {
+  const mainPy = path.join(engineDir(), "main.py");
+  return new Promise((resolve) => {
+    let out = "";
+    const proc = spawn(pythonBin(), [mainPy, "--jar-summary", jarPath], {
+      cwd: engineDir(),
+      env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+    });
+    proc.stdout.on("data", (d) => (out += d.toString("utf-8")));
+    proc.on("close", () => {
+      try {
+        resolve(JSON.parse(out.trim().split(/\r?\n/).pop() ?? "{}"));
+      } catch {
+        resolve({ error: "не удалось получить сводку по jar" });
+      }
+    });
+    proc.on("error", (err) => resolve({ error: String(err) }));
+  });
+});
+
 ipcMain.handle("run:cancel", async () => {
   if (runningProc) {
     runningProc.kill();
@@ -146,4 +195,65 @@ ipcMain.handle("run:cancel", async () => {
     return true;
   }
   return false;
+});
+
+let installingProc: ChildProcessWithoutNullStreams | null = null;
+
+ipcMain.handle("tools:install", async (_event, only?: "jdk" | "java" | "maven") => {
+  if (installingProc) {
+    return { ok: false, error: "Установка уже идёт" };
+  }
+  const mainPy = path.join(engineDir(), "main.py");
+  const flag = only ? `--install-tools-json=${only}` : "--install-tools-json";
+  const args = [mainPy, flag];
+
+  return new Promise((resolve) => {
+    const proc = spawn(pythonBin(), args, {
+      cwd: engineDir(),
+      env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1" },
+    });
+    installingProc = proc;
+
+    const send = (channel: string, payload: unknown) => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+    };
+
+    let buf = "";
+    let finalResult: { java: string | null; maven: string | null; errors: string[] } | null = null;
+
+    const handleChunk = (chunk: Buffer) => {
+      buf += chunk.toString("utf-8");
+      const lines = buf.split(/\r?\n/);
+      buf = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        // --install-tools-json печатает ТОЛЬКО валидный NDJSON (см.
+        // main.py::_try_handle_install_tools_json) - но на случай, если
+        // что-то постороннее (напр. предупреждение интерпретатора) попадёт
+        // в тот же stdout, не даём одной кривой строке уронить весь парсинг.
+        try {
+          const evt = JSON.parse(line);
+          if (evt.type === "progress") send("tools:progress", evt);
+          else if (evt.type === "done") finalResult = evt;
+          else if (evt.type === "error") finalResult = { java: null, maven: null, errors: [evt.message] };
+        } catch {
+          /* игнорируем нераспарсенные строки */
+        }
+      }
+    };
+
+    proc.stdout.on("data", handleChunk);
+    proc.stderr.on("data", handleChunk);
+
+    proc.on("close", () => {
+      installingProc = null;
+      if (finalResult) resolve({ ok: true, ...finalResult });
+      else resolve({ ok: false, error: "Установщик завершился без ответа - см. вывод декомпиляции для деталей" });
+    });
+
+    proc.on("error", (err) => {
+      installingProc = null;
+      resolve({ ok: false, error: String(err) });
+    });
+  });
 });

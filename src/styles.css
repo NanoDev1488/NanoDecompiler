@@ -255,3 +255,75 @@ body {
   font-family: var(--font-mono);
   color: var(--on-surface-subtle);
 }
+
+/* --- карточка сводки по jar (имя, размер, java, классы, пакеты) - тот же
+   surface-container стиль, что и главная панель, но компактнее и без
+   собственной elevation (вложенный контейнер внутри панели, а не
+   параллельный ей) --- */
+.jar-card {
+  background: var(--surface);
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+.jar-card-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--primary);
+  margin-bottom: 10px;
+  word-break: break-word;
+}
+.jar-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.jar-card-label {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--on-surface-subtle);
+  margin-bottom: 2px;
+}
+.jar-card-value {
+  display: block;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  color: var(--on-surface);
+}
+
+/* --- инлайн-подсказка "Установить недостающее?" прямо на строке лога,
+   где написано "Не хватает: ..." - MD3 mini-кнопки, а не отдельный попап --- */
+.install-prompt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 10px;
+  padding: 2px 8px 2px 10px;
+  background: var(--primary-container);
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--on-primary-container);
+}
+.btn-mini {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 11px;
+  border: none;
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.btn-mini-yes {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+.btn-mini-yes:hover { filter: brightness(1.08); }
+.btn-mini-no {
+  background: transparent;
+  color: var(--on-surface-variant);
+  border: 1px solid var(--outline-strong);
+}
+.btn-mini-no:hover { color: var(--on-surface); }

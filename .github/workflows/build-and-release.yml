@@ -98,10 +98,10 @@ jobs:
       - name: Установить PyInstaller
         run: pip install pyinstaller
 
-      # PyInstaller всё равно потянет gui*.py/toolinstaller.py транзитивно
-      # через main.py (см. main.py::main() - импорт gui спрятан внутри
-      # функции, но статический анализ его всё равно видит) - не мешает
-      # работе, чуть увеличивает размер файла.
+      # gui.py/gui_raw.py/gui_neon.py/gui_md3.py удалены из движка совсем -
+      # Electron-клиент теперь единственный GUI, эти файлы были мёртвым
+      # весом (см. main.py::main() - там теперь просто usage-сообщение
+      # вместо попытки их импортировать).
       - name: Собрать NanoDecompilerCLI.exe (полный движок, main.py)
         working-directory: resources/engine
         run: pyinstaller --onefile --name NanoDecompilerCLI --icon=icon.ico main.py
