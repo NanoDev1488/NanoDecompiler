@@ -1,0 +1,19 @@
+// исходный (обфусцированный) внутренний класс: com.kenai.jnr.x86asm.LinkData
+package com.kenai.jnr.x86asm;
+
+@Deprecated
+final class LinkData {
+
+    // ---- поля ----
+  final int offset;
+   long displacement;
+   int relocId;
+
+  public LinkData(int arg0, long arg1, int arg2) { // было: <init>
+        super();
+        offset = arg0;
+        displacement = arg1;
+        relocId = arg2;
+    }
+
+}

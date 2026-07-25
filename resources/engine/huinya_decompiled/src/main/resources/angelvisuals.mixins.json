@@ -1,0 +1,55 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.angelvisuals.utility.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "accessors.ItemStackAccessor",
+    "client.ClientWorldMixin",
+    "client.PlayerEntityMixin",
+    "client.ScoreboarMixin",
+    "minecraft.entity.LimbAnimatorMixin",
+    "minecraft.entity.LivingEntityMixin",
+    "minecraft.entity.PlayerEntityMixin",
+    "minecraft.network.ClientConnectionMixin"
+  ],
+  "client": [
+    "accessors.ScreenAccessor",
+    "accessors.CameraAccessor",
+    "accessors.DrawContextAccessor",
+    "accessors.HandledScreenAccessor",
+    "accessors.InGameHudAccessor",
+    "accessors.ShaderProgramAccessor",
+    "client.BackGroundRendererMixin",
+    "client.CameraMixin",
+    "client.ChatInputSuggestorMixin",
+    "client.HandledScreenMixin",
+    "client.HeldItemRendererMixin",
+    "client.KeyboardMixin",
+    "client.LightmapTextureManagerMixin",
+    "client.MinecraftClientMixin",
+    "client.MouseMixin",
+    "client.WorldRendererMixin",
+    "client.render.LivingEntityRendererMixin",
+    "client.render.RenderSystemMixin",
+    "client.render.ScreenMixin",
+    "client.render.WindowMixin",
+    "client.render.gui.hud.GameOverlayRendererMixin",
+    "client.render.gui.hud.InGameHudMixin",
+    "client.render.gui.screen.ChatScreenMixin",
+    "client.sound.SoundSystemMixin",
+    "minecraft.network.ClientPlayNetworkHandlerMixin",
+    "minecraft.render.FeatureRendererMixin",
+    "minecraft.render.HeldItemFeatureRendererMixin",
+    "minecraft.render.MixinGameRenderer",
+    "minecraft.render.PlayerEntityRendererMixin",
+    "client.TitleScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  },
+  "refmap": "angelvisuals-refmap.json"
+}

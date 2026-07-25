@@ -1,0 +1,47 @@
+// исходный (обфусцированный) внутренний класс: jnr.constants.platform.linux.aarch64.Sock
+package jnr.constants.platform.linux.aarch64;
+
+import java.util.Map;
+import jnr.constants.Constant;
+import jnr.constants.platform.linux.aarch64.Sock_StringTable;
+
+public enum Sock implements Constant {
+
+    SOCK_STREAM(1L),
+    SOCK_DGRAM(2L),
+    SOCK_RAW(3L),
+    SOCK_RDM(4L),
+    SOCK_SEQPACKET(5L),
+    SOCK_NONBLOCK(2048L),
+    SOCK_CLOEXEC(524288L);
+
+    // ---- поля ----
+  private final long value;
+  public static final long MIN_VALUE = 1L;
+  public static final long MAX_VALUE = 524288L;
+
+  private Sock(long arg2) { // было: <init>
+        value = arg2;
+    }
+
+  public final String toString() {
+        return ((String) Sock_StringTable.descriptions.get(this));
+    }
+
+  public final int value() {
+        return ((int) value);
+    }
+
+  public final int intValue() {
+        return ((int) value);
+    }
+
+  public final long longValue() {
+        return value;
+    }
+
+  public final boolean defined() {
+        return true;
+    }
+
+}

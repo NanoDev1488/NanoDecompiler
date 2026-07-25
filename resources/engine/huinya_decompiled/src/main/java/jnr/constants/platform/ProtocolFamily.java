@@ -1,0 +1,102 @@
+// исходный (обфусцированный) внутренний класс: jnr.constants.platform.ProtocolFamily
+package jnr.constants.platform;
+
+import jnr.constants.Constant;
+import jnr.constants.platform.ConstantResolver;
+
+public enum ProtocolFamily implements Constant {
+
+    PF_UNSPEC,
+    PF_LOCAL,
+    PF_UNIX,
+    PF_INET,
+    PF_IMPLINK,
+    PF_PUP,
+    PF_CHAOS,
+    PF_NS,
+    PF_ISO,
+    PF_OSI,
+    PF_ECMA,
+    PF_DATAKIT,
+    PF_CCITT,
+    PF_SNA,
+    PF_DECnet,
+    PF_DLI,
+    PF_LAT,
+    PF_HYLINK,
+    PF_APPLETALK,
+    PF_ROUTE,
+    PF_LINK,
+    PF_XTP,
+    PF_COIP,
+    PF_CNT,
+    PF_SIP,
+    PF_IPX,
+    PF_RTIP,
+    PF_PIP,
+    PF_NDRV,
+    PF_ISDN,
+    PF_KEY,
+    PF_INET6,
+    PF_NATM,
+    PF_SYSTEM,
+    PF_NETBIOS,
+    PF_PPP,
+    PF_ATM,
+    PF_NETGRAPH,
+    PF_NETLINK,
+    PF_RDS,
+    PF_PPPOX,
+    PF_LLC,
+    PF_IB,
+    PF_MPLS,
+    PF_CAN,
+    PF_TIPC,
+    PF_BLUETOOTH,
+    PF_ALG,
+    PF_VSOCK,
+    PF_KCM,
+    PF_XDP,
+    PF_MAX,
+    __UNKNOWN_CONSTANT__;
+
+    // ---- поля ----
+  private static final ConstantResolver resolver;
+
+    static {
+        resolver = ConstantResolver.getResolver(ProtocolFamily.class, 20000, 29999);
+    }
+
+  private ProtocolFamily() { // было: <init>
+        // (пустое тело)
+    }
+
+  public final int value() {
+        return ((int) resolver.longValue(this));
+    }
+
+  public final int intValue() {
+        return ((int) resolver.longValue(this));
+    }
+
+  public final long longValue() {
+        return resolver.longValue(this);
+    }
+
+  public final String description() {
+        return resolver.description(this);
+    }
+
+  public final boolean defined() {
+        return resolver.defined(this);
+    }
+
+  public final String toString() {
+        return description();
+    }
+
+  public static ProtocolFamily valueOf(long arg0) {
+        return ((ProtocolFamily) resolver.valueOf(arg0));
+    }
+
+}

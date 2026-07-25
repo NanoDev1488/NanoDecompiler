@@ -1,0 +1,111 @@
+// исходный (обфусцированный) внутренний класс: com.kenai.jnr.x86asm.REG
+package com.kenai.jnr.x86asm;
+
+@Deprecated
+public class REG {
+
+    // ---- поля ----
+  public static final int REGTYPE_MASK = 240;
+  public static final int REGCODE_MASK = 15;
+  public static final int REG_GPB = 0;
+  public static final int REG_GPW = 16;
+  public static final int REG_GPD = 32;
+  public static final int REG_GPQ = 48;
+  public static final int REG_X87 = 80;
+  public static final int REG_MM = 96;
+  public static final int REG_XMM = 112;
+  public static final int REG_AL = 0;
+  public static final int REG_CL = 1;
+  public static final int REG_DL = 2;
+  public static final int REG_BL = 3;
+  public static final int REG_AH = 4;
+  public static final int REG_CH = 5;
+  public static final int REG_DH = 6;
+  public static final int REG_BH = 7;
+  public static final int REG_R8B = 8;
+  public static final int REG_R9B = 9;
+  public static final int REG_R10B = 10;
+  public static final int REG_R11B = 11;
+  public static final int REG_R12B = 12;
+  public static final int REG_R13B = 13;
+  public static final int REG_R14B = 14;
+  public static final int REG_R15B = 15;
+  public static final int REG_AX = 16;
+  public static final int REG_CX = 17;
+  public static final int REG_DX = 18;
+  public static final int REG_BX = 19;
+  public static final int REG_SP = 20;
+  public static final int REG_BP = 21;
+  public static final int REG_SI = 22;
+  public static final int REG_DI = 23;
+  public static final int REG_R8W = 24;
+  public static final int REG_R9W = 25;
+  public static final int REG_R10W = 26;
+  public static final int REG_R11W = 27;
+  public static final int REG_R12W = 28;
+  public static final int REG_R13W = 29;
+  public static final int REG_R14W = 30;
+  public static final int REG_R15W = 31;
+  public static final int REG_EAX = 32;
+  public static final int REG_ECX = 33;
+  public static final int REG_EDX = 34;
+  public static final int REG_EBX = 35;
+  public static final int REG_ESP = 36;
+  public static final int REG_EBP = 37;
+  public static final int REG_ESI = 38;
+  public static final int REG_EDI = 39;
+  public static final int REG_R8D = 40;
+  public static final int REG_R9D = 41;
+  public static final int REG_R10D = 42;
+  public static final int REG_R11D = 43;
+  public static final int REG_R12D = 44;
+  public static final int REG_R13D = 45;
+  public static final int REG_R14D = 46;
+  public static final int REG_R15D = 47;
+  public static final int REG_RAX = 48;
+  public static final int REG_RCX = 49;
+  public static final int REG_RDX = 50;
+  public static final int REG_RBX = 51;
+  public static final int REG_RSP = 52;
+  public static final int REG_RBP = 53;
+  public static final int REG_RSI = 54;
+  public static final int REG_RDI = 55;
+  public static final int REG_R8 = 56;
+  public static final int REG_R9 = 57;
+  public static final int REG_R10 = 58;
+  public static final int REG_R11 = 59;
+  public static final int REG_R12 = 60;
+  public static final int REG_R13 = 61;
+  public static final int REG_R14 = 62;
+  public static final int REG_R15 = 63;
+  public static final int REG_MM0 = 96;
+  public static final int REG_MM1 = 97;
+  public static final int REG_MM2 = 98;
+  public static final int REG_MM3 = 99;
+  public static final int REG_MM4 = 100;
+  public static final int REG_MM5 = 101;
+  public static final int REG_MM6 = 102;
+  public static final int REG_MM7 = 103;
+  public static final int REG_XMM0 = 112;
+  public static final int REG_XMM1 = 113;
+  public static final int REG_XMM2 = 114;
+  public static final int REG_XMM3 = 115;
+  public static final int REG_XMM4 = 116;
+  public static final int REG_XMM5 = 117;
+  public static final int REG_XMM6 = 118;
+  public static final int REG_XMM7 = 119;
+  public static final int REG_XMM8 = 120;
+  public static final int REG_XMM9 = 121;
+  public static final int REG_XMM10 = 122;
+  public static final int REG_XMM11 = 123;
+  public static final int REG_XMM12 = 124;
+  public static final int REG_XMM13 = 125;
+  public static final int REG_XMM14 = 126;
+  public static final int REG_XMM15 = 127;
+  public static final int NO_REG = 255;
+
+  private REG() { // было: <init>
+        super();
+    }
+
+}

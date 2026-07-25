@@ -1,0 +1,12 @@
+{
+  "enable": {
+    "sounds": [
+      "angelvisuals:enable"
+    ]
+  },
+  "disable": {
+    "sounds": [
+      "angelvisuals:disable"
+    ]
+  }
+}

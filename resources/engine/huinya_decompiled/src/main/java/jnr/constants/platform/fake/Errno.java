@@ -1,0 +1,182 @@
+// исходный (обфусцированный) внутренний класс: jnr.constants.platform.fake.Errno
+package jnr.constants.platform.fake;
+
+import jnr.constants.Constant;
+
+public enum Errno implements Constant {
+
+    EPERM(1L),
+    ENOENT(2L),
+    ESRCH(3L),
+    EINTR(4L),
+    EIO(5L),
+    ENXIO(6L),
+    E2BIG(7L),
+    ENOEXEC(8L),
+    EBADF(9L),
+    ECHILD(10L),
+    EDEADLK(11L),
+    ENOMEM(12L),
+    EACCES(13L),
+    EFAULT(14L),
+    ENOTBLK(15L),
+    EBUSY(16L),
+    EEXIST(17L),
+    EXDEV(18L),
+    ENODEV(19L),
+    ENOTDIR(20L),
+    EISDIR(21L),
+    EINVAL(22L),
+    ENFILE(23L),
+    EMFILE(24L),
+    ENOTTY(25L),
+    ETXTBSY(26L),
+    EFBIG(27L),
+    ENOSPC(28L),
+    ESPIPE(29L),
+    EROFS(30L),
+    EMLINK(31L),
+    EPIPE(32L),
+    EDOM(33L),
+    ERANGE(34L),
+    EWOULDBLOCK(35L),
+    EAGAIN(36L),
+    EINPROGRESS(37L),
+    EALREADY(38L),
+    ENOTSOCK(39L),
+    EDESTADDRREQ(40L),
+    EMSGSIZE(41L),
+    EPROTOTYPE(42L),
+    ENOPROTOOPT(43L),
+    EPROTONOSUPPORT(44L),
+    ESOCKTNOSUPPORT(45L),
+    EOPNOTSUPP(46L),
+    EPFNOSUPPORT(47L),
+    EAFNOSUPPORT(48L),
+    EADDRINUSE(49L),
+    EADDRNOTAVAIL(50L),
+    ENETDOWN(51L),
+    ENETUNREACH(52L),
+    ENETRESET(53L),
+    ECONNABORTED(54L),
+    ECONNRESET(55L),
+    ENOBUFS(56L),
+    EISCONN(57L),
+    ENOTCONN(58L),
+    ESHUTDOWN(59L),
+    ETOOMANYREFS(60L),
+    ETIMEDOUT(61L),
+    ECONNREFUSED(62L),
+    ELOOP(63L),
+    ENAMETOOLONG(64L),
+    EHOSTDOWN(65L),
+    EHOSTUNREACH(66L),
+    ENOTEMPTY(67L),
+    EUSERS(68L),
+    EDQUOT(69L),
+    ESTALE(70L),
+    EREMOTE(71L),
+    ENOLCK(72L),
+    ENOSYS(73L),
+    EOVERFLOW(74L),
+    EIDRM(75L),
+    ENOMSG(76L),
+    EILSEQ(77L),
+    EBADMSG(78L),
+    EMULTIHOP(79L),
+    ENODATA(80L),
+    ENOLINK(81L),
+    ENOSR(82L),
+    ENOSTR(83L),
+    EPROTO(84L),
+    ETIME(85L),
+    ECHRNG(86L),
+    EL2NSYNC(87L),
+    EL3HLT(88L),
+    EL3RST(89L),
+    ELNRNG(90L),
+    EUNATCH(91L),
+    ENOCSI(92L),
+    EL2HLT(93L),
+    EBADE(94L),
+    EBADR(95L),
+    EXFULL(96L),
+    ENOANO(97L),
+    EBADRQC(98L),
+    EBADSLT(99L),
+    EDEADLOCK(100L),
+    EBFONT(101L),
+    ENONET(102L),
+    ENOPKG(103L),
+    EADV(104L),
+    ESRMNT(105L),
+    ECOMM(106L),
+    EDOTDOT(107L),
+    ENOTUNIQ(108L),
+    EBADFD(109L),
+    EREMCHG(110L),
+    ELIBACC(111L),
+    ELIBBAD(112L),
+    ELIBSCN(113L),
+    ELIBMAX(114L),
+    ELIBEXEC(115L),
+    ERESTART(116L),
+    ESTRPIPE(117L),
+    EUCLEAN(118L),
+    ENOTNAM(119L),
+    ENAVAIL(120L),
+    EISNAM(121L),
+    EREMOTEIO(122L),
+    ECANCELED(123L),
+    EKEYEXPIRED(124L),
+    EKEYREJECTED(125L),
+    EKEYREVOKED(126L),
+    EMEDIUMTYPE(127L),
+    ENOKEY(128L),
+    ENOMEDIUM(129L),
+    ENOTRECOVERABLE(130L),
+    EOWNERDEAD(131L),
+    ERFKILL(132L),
+    EAUTH(133L),
+    EBADRPC(134L),
+    EDOOFUS(135L),
+    EFTYPE(136L),
+    ENEEDAUTH(137L),
+    ENOATTR(138L),
+    ENOTSUP(139L),
+    EPROCLIM(140L),
+    EPROCUNAVAIL(141L),
+    EPROGMISMATCH(142L),
+    EPROGUNAVAIL(143L),
+    ERPCMISMATCH(144L),
+    EIPSEC(145L),
+    EHWPOISON(146L),
+    ECAPMODE(147L),
+    ENOTCAPABLE(148L);
+
+    // ---- поля ----
+  private final long value;
+  public static final long MIN_VALUE = 1L;
+  public static final long MAX_VALUE = 148L;
+
+  private Errno(long arg2) { // было: <init>
+        value = arg2;
+    }
+
+  public final int value() {
+        return ((int) value);
+    }
+
+  public final int intValue() {
+        return ((int) value);
+    }
+
+  public final long longValue() {
+        return value;
+    }
+
+  public final boolean defined() {
+        return true;
+    }
+
+}

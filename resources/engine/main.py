@@ -646,6 +646,8 @@ def process_jar_with_stats(jar_path, out_dir):
     перепарсивания README_RU.txt."""
     _t0 = time.time()
     _enable_windows_ansi()
+    import constfold
+    constfold.reset_stats()  # per-jar счётчик убранных opaque predicates (см. write_readme)
     print()
     print(banner_text())
     print()
@@ -1324,6 +1326,20 @@ def write_readme(out_dir, jar_path, n_classes, parse_errors, class_files, rename
                 f"({renamed_fields/max(total_fields,1)*100:.1f}%)\n")
 
         f.write("\n" + stats.summary_text() + "\n")
+
+        import constfold
+        dead_removed = constfold.get_dead_branches_removed()
+        if dead_removed:
+            f.write("\n" + "=" * 60 + "\n")
+            f.write("СВЁРТКА OPAQUE PREDICATES (см. constfold.py)\n")
+            f.write(
+                "Убрано заведомо мёртвых веток (if с условием, вычислимым уже на\n"
+                "этапе компиляции - типичный приём обфускаторов для запутывания\n"
+                f"control flow): {dead_removed}\n"
+                "Свёртка строго формальная (JLS constant folding), не эвристика -\n"
+                "убираются только ветки, чьё условие построено ИСКЛЮЧИТЕЛЬНО из\n"
+                "литеральных констант без переменных/полей/вызовов.\n"
+            )
 
         f.write("\n" + "=" * 60 + "\n")
         f.write(

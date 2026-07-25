@@ -1,0 +1,16 @@
+{
+  "vertex": "angelvisuals:core/skyshader/sky_fullscreen",
+  "fragment": "angelvisuals:core/skyshader/sky_plasma",
+  "uniforms": [
+    {"name": "ModelViewMat", "type": "matrix4x4", "count": 16, "values": [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]},
+    {"name": "ProjMat", "type": "matrix4x4", "count": 16, "values": [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]},
+    {"name": "ColorModulator", "type": "float", "count": 4, "values": [1,1,1,1]},
+    {"name": "u_Color", "type": "float", "count": 4, "values": [1,1,1,1]},
+    {"name": "u_Color2", "type": "float", "count": 4, "values": [1,1,1,1]},
+    {"name": "u_Resolution", "type": "float", "count": 2, "values": [1,1]},
+    {"name": "u_Scale", "type": "float", "count": 1, "values": [1]},
+    {"name": "u_Time", "type": "float", "count": 1, "values": [0]},
+    {"name": "u_Fov", "type": "float", "count": 1, "values": [70]},
+    {"name": "u_CameraDir", "type": "float", "count": 2, "values": [0,0]}
+  ]
+}

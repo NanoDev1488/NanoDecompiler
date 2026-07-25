@@ -1,0 +1,14 @@
+{
+  "vertex": "angelvisuals:core/kawase_down/vertex",
+  "fragment": "angelvisuals:core/hands/hands_overlay",
+  "samplers": [
+    { "name": "Sampler0" }
+  ],
+  "uniforms": [
+    { "name": "ModelViewMat", "type": "matrix4x4", "count": 16, "values": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0] },
+    { "name": "ProjMat", "type": "matrix4x4", "count": 16, "values": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0] },
+    { "name": "color", "type": "float", "count": 3, "values": [0.54, 0.60, 1.0] },
+    { "name": "fill", "type": "float", "count": 1, "values": [0.6] },
+    { "name": "alpha", "type": "float", "count": 1, "values": [1.0] }
+  ]
+}

@@ -468,6 +468,14 @@ def simplify_stmts(stmts):
     out = []
     for s in stmts:
         out.append(simplify_stmt(s))
+    # Убираем гарантированно мёртвые ветки (opaque predicates - см.
+    # constfold.py). Гоняем до стабилизации (обычно 1 итерация) - на случай
+    # редких вложенных случаев в рамках одного уровня списка.
+    from constfold import fold_dead_branches
+    for _ in range(8):
+        out, changed = fold_dead_branches(out)
+        if not changed:
+            break
     return _fold_boolean_materialization(out)
 
 
