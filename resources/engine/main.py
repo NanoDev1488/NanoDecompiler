@@ -306,39 +306,48 @@ def _try_handle_install_tools_json(argv):
         if a.startswith("--install-tools-json="):
             only = a.split("=", 1)[1].strip().lower()
 
-    # ВАЖНО: тут НЕ вызываем check_java_maven() - она печатает читаемый текст
-    # с баннером, это не нужно вызывающей стороне (Electron уже решил, что
-    # нужно ставить, по своей собственной проверке лога) - только тихо
-    # смотрим, чего не хватает.
-    java_path = toolinstaller.resolve_tool_path(["java", "java.exe"], "java") or toolinstaller.find_local_java()
-    mvn_path = toolinstaller.resolve_tool_path(["mvn", "mvn.cmd"], "maven") or toolinstaller.find_local_maven()
-    missing = ([] if java_path else ["java"]) + ([] if mvn_path else ["maven"])
+    try:
+        # ВАЖНО: тут НЕ вызываем check_java_maven() - она печатает читаемый
+        # текст с баннером, это не нужно вызывающей стороне (Electron уже
+        # решил, что нужно ставить, по своей собственной проверке лога) -
+        # только тихо смотрим, чего не хватает.
+        java_path = toolinstaller.resolve_tool_path(["java", "java.exe"], "java") or toolinstaller.find_local_java()
+        mvn_path = toolinstaller.resolve_tool_path(["mvn", "mvn.cmd"], "maven") or toolinstaller.find_local_maven()
+        missing = ([] if java_path else ["java"]) + ([] if mvn_path else ["maven"])
 
-    if only in ("jdk", "java"):
-        need_java, need_maven = "java" in missing, False
-    elif only == "maven":
-        need_java, need_maven = False, "maven" in missing
-    else:
-        need_java, need_maven = "java" in missing, "maven" in missing
-
-    if not need_java and not need_maven:
-        print(_json.dumps({"type": "done", "java": java_path, "maven": mvn_path, "errors": []}, ensure_ascii=False))
-        return True
-
-    def progress_cb(label, downloaded, total):
-        if total:
-            pct = int(downloaded * 100 / total)
-            evt = {"type": "progress", "label": label, "pct": pct,
-                   "downloaded_mb": downloaded // 1024 // 1024, "total_mb": total // 1024 // 1024}
+        if only in ("jdk", "java"):
+            need_java, need_maven = "java" in missing, False
+        elif only == "maven":
+            need_java, need_maven = False, "maven" in missing
         else:
-            evt = {"type": "progress", "label": label, "pct": None,
-                   "downloaded_mb": downloaded // 1024 // 1024, "total_mb": None}
-        print(_json.dumps(evt, ensure_ascii=False))
-        sys.stdout.flush()
+            need_java, need_maven = "java" in missing, "maven" in missing
 
-    result = toolinstaller.install_missing(need_java, need_maven, progress_cb=progress_cb)
-    print(_json.dumps({"type": "done", "java": result["java"], "maven": result["maven"],
-                        "errors": result["errors"]}, ensure_ascii=False))
+        if not need_java and not need_maven:
+            print(_json.dumps({"type": "done", "java": java_path, "maven": mvn_path, "errors": []}, ensure_ascii=False))
+            return True
+
+        def progress_cb(label, downloaded, total):
+            if total:
+                pct = int(downloaded * 100 / total)
+                evt = {"type": "progress", "label": label, "pct": pct,
+                       "downloaded_mb": downloaded // 1024 // 1024, "total_mb": total // 1024 // 1024}
+            else:
+                evt = {"type": "progress", "label": label, "pct": None,
+                       "downloaded_mb": downloaded // 1024 // 1024, "total_mb": None}
+            print(_json.dumps(evt, ensure_ascii=False))
+            sys.stdout.flush()
+
+        result = toolinstaller.install_missing(need_java, need_maven, progress_cb=progress_cb)
+        print(_json.dumps({"type": "done", "java": result["java"], "maven": result["maven"],
+                            "errors": result["errors"]}, ensure_ascii=False))
+    except Exception as e:
+        # Реальный баг, найденный на живой Windows-машине: необработанное
+        # исключение здесь (напр. PermissionError внутри os.listdir при
+        # сканировании Program Files) раньше просто ронялo процесс БЕЗ
+        # единой строки вывода - Electron получал "installer finished with
+        # no response" вместо понятной причины. Теперь - гарантированно
+        # печатаем валидный JSON в любом случае.
+        print(_json.dumps({"type": "error", "message": f"{type(e).__name__}: {e}"}, ensure_ascii=False))
     return True
 
 
@@ -506,6 +515,8 @@ class Renamer:
         self._method_ctr = 0
         self._field_ctr = 0
         self._pkg_ctr = 0
+        self.class_name_hints = {}  # internal_name -> предложенное простое имя, см. naming_hints.py
+        self._used_hint_names = set()
 
     def friendly_class(self, internal_name):
         if internal_name in self.class_map:
@@ -519,12 +530,20 @@ class Renamer:
         # top-level файл, и "Outer.Inner" физически не резолвился бы.
         parts = simple.split("$")
         new_parts = []
-        for p in parts:
+        for idx, p in enumerate(parts):
             if p.isdigit():
                 new_parts.append(f"Anon{p}")
             elif looks_obfuscated(p, "class"):
-                self._class_ctr += 1
-                new_parts.append(f"ClassA{self._class_ctr}")
+                # Подсказка (см. naming_hints.py) - только для последнего
+                # сегмента (сам класс, не обёртки Outer$) и только если
+                # такое имя ещё не занято другим классом в этом же jar'е.
+                hint = self.class_name_hints.get(internal_name) if idx == len(parts) - 1 else None
+                if hint and hint not in self._used_hint_names:
+                    self._used_hint_names.add(hint)
+                    new_parts.append(hint)
+                else:
+                    self._class_ctr += 1
+                    new_parts.append(f"ClassA{self._class_ctr}")
             else:
                 new_parts.append(p)
         new_simple = "_".join(new_parts)
@@ -646,8 +665,6 @@ def process_jar_with_stats(jar_path, out_dir):
     перепарсивания README_RU.txt."""
     _t0 = time.time()
     _enable_windows_ansi()
-    import constfold
-    constfold.reset_stats()  # per-jar счётчик убранных opaque predicates (см. write_readme)
     print()
     print(banner_text())
     print()
@@ -689,6 +706,24 @@ def process_jar_with_stats(jar_path, out_dir):
                 parse_errors.append((n, str(e)))
         stats.classes_parsed = len(class_files)
         stats.parse_errors = parse_errors
+
+        # Ищем класс-расшифровщик строк (см. str_decrypt.py) - узнаваемая
+        # схема ОДНОГО конкретного обфускатора (маркер "AES/ECB/PKCS5Padding"
+        # в constant pool). Сбрасываем состояние с прошлого вызова в ЭТОМ ЖЕ
+        # процессе (--api-server может обработать несколько jar подряд, не
+        # перезапуская Python - нельзя, чтобы ключ от ПРЕДЫДУЩЕГО jar'а утёк
+        # в декомпиляцию следующего).
+        import str_decrypt
+        str_decrypt.ACTIVE = None
+        str_decrypt.DECRYPTED_COUNT = 0
+        for _internal, _cf in class_files.items():
+            _key = str_decrypt.find_decryptor_in_class(_cf)
+            if _key:
+                _decrypt_method = str_decrypt.decrypt_method_name(_cf)
+                if _decrypt_method:
+                    str_decrypt.ACTIVE = {"owner": _internal, "method": _decrypt_method, "key": _key}
+                    stats.decrypted_strings_owner = _internal
+                break
 
         # Смотрим pom.xml плагина (если он реально внутри jar'а) ЗАРАНЕЕ, до
         # решения какие классы пропускать - нужно для _relocated_library_prefixes
@@ -785,6 +820,18 @@ def process_jar_with_stats(jar_path, out_dir):
 
     renamer = Renamer()
 
+    # Подсказки для переименования обфусцированных классов (см.
+    # naming_hints.py - портировано с Rust-инструмента пользователя,
+    # адаптировано под наши структуры данных). Не заменяет обычную
+    # эвристику - только даёт осмысленное имя ВМЕСТО generic ClassA{N},
+    # когда его можно НАДЁЖНО прочитать из уже существующих в байткоде
+    # данных (аннотация с "name", Brigadier super("команда")). ДОЛЖНО
+    # выполниться ДО цикла ниже (renamer.friendly_class на каждый класс),
+    # иначе подсказка опоздает для классов, обработанных раньше.
+    import naming_hints
+    renamer.class_name_hints.update(naming_hints.by_annotation_name(class_files, looks_obfuscated))
+    renamer.class_name_hints.update(naming_hints.by_brigadier_super_call(class_files, looks_obfuscated))
+
     for internal, cf in class_files.items():
         renamer.friendly_class(internal)
         for f in cf.fields:
@@ -842,6 +889,7 @@ def process_jar_with_stats(jar_path, out_dir):
 
     stats.import_conflicts = check_import_collisions(all_imports)
     stats.synthetic_switchmap_classes_hidden = len(synthetic_switchmap_classes)
+    stats.decrypted_strings_count = str_decrypt.DECRYPTED_COUNT
 
     write_mapping_report(out_dir, renamer)
     write_readme(out_dir, jar_path, len(class_files), parse_errors, class_files, renamer, stats)
@@ -1117,6 +1165,7 @@ def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, sw
         if m.code is not None:
             stats.total_methods += 1
             result = decompile_method_body(cf, m, renamer, known_internal_by_dotted, internal, indent=2, enum_ordinals=enum_ordinals, switchmap_tables=switchmap_tables)
+            stats.junk_catches_removed += getattr(result, "junk_catches_removed", 0)
 
         # Имена параметров в сигнатуре ДОЛЖНЫ совпадать с именами, которые тело
         # метода реально использует (ctx.locals - argN по умолчанию, либо
@@ -1326,20 +1375,6 @@ def write_readme(out_dir, jar_path, n_classes, parse_errors, class_files, rename
                 f"({renamed_fields/max(total_fields,1)*100:.1f}%)\n")
 
         f.write("\n" + stats.summary_text() + "\n")
-
-        import constfold
-        dead_removed = constfold.get_dead_branches_removed()
-        if dead_removed:
-            f.write("\n" + "=" * 60 + "\n")
-            f.write("СВЁРТКА OPAQUE PREDICATES (см. constfold.py)\n")
-            f.write(
-                "Убрано заведомо мёртвых веток (if с условием, вычислимым уже на\n"
-                "этапе компиляции - типичный приём обфускаторов для запутывания\n"
-                f"control flow): {dead_removed}\n"
-                "Свёртка строго формальная (JLS constant folding), не эвристика -\n"
-                "убираются только ветки, чьё условие построено ИСКЛЮЧИТЕЛЬНО из\n"
-                "литеральных констант без переменных/полей/вызовов.\n"
-            )
 
         f.write("\n" + "=" * 60 + "\n")
         f.write(

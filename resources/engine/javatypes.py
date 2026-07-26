@@ -182,23 +182,6 @@ def looks_obfuscated(name, kind="class"):
     if kind in ("class", "method", "field") and len(base) == 1:
         return True
 
-    # "Confusable"-обфускация (Allatori/Stringer/ZKM и т.п. в режиме
-    # "неотличимые символы"): имя целиком (или почти целиком) состоит из
-    # букв/цифр, визуально неразличимых в большинстве шрифтов - строчная 'l',
-    # заглавная 'I', заглавная 'O', цифры '0'/'1'. Реальный пример:
-    # "lIllIlIIIll" - для человека это неотличимый набор палочек, но старая
-    # проверка ниже (flat_lower_long) требует ОТСУТСТВИЕ заглавных букв, а в
-    # такой строке заглавные I/O есть - поэтому пропускалось. Проверяем
-    # ОТДЕЛЬНО и раньше общего порога длины в 12: сигнал надёжен и на
-    # коротких именах (3+ символа) - реальный разработчик не называет
-    # класс/метод строкой из одних "lI1O0".
-    if kind in ("class", "method", "field") and len(base) >= 3:
-        confusable = set("lIO0o1")
-        confusable_ratio = sum(1 for c in base if c in confusable) / len(base)
-        distinct_confusable = len(set(base) & confusable)
-        if confusable_ratio >= 0.85 and distinct_confusable >= 2:
-            return True
-
     lower = base.lower()
     letters_only = re.sub(r"[^a-z]", "", lower)
     if len(letters_only) < 12:

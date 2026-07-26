@@ -16,6 +16,7 @@ import { app, BrowserWindow, ipcMain, dialog, shell } from "electron";
 import { spawn, ChildProcessWithoutNullStreams } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
+import { registerUpdateHandlers } from "./updater";
 
 let mainWindow: BrowserWindow | null = null;
 let runningProc: ChildProcessWithoutNullStreams | null = null;
@@ -56,7 +57,10 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  registerUpdateHandlers(engineDir);
+  createWindow();
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
@@ -247,7 +251,7 @@ ipcMain.handle("tools:install", async (_event, only?: "jdk" | "java" | "maven") 
 
     proc.on("close", () => {
       installingProc = null;
-      if (finalResult) resolve({ ok: true, ...finalResult });
+      if (finalResult) resolve({ ok: finalResult.errors.length === 0, ...finalResult });
       else resolve({ ok: false, error: "Установщик завершился без ответа - см. вывод декомпиляции для деталей" });
     });
 

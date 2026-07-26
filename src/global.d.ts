@@ -28,6 +28,15 @@ declare global {
         errors?: string[];
         error?: string;
       }>;
+      checkUpdate: () => Promise<{
+        ok: boolean;
+        currentVersion?: string;
+        latestVersion?: string;
+        hasUpdate?: boolean;
+        downloadUrl?: string | null;
+        error?: string;
+      }>;
+      applyUpdate: (downloadUrl: string) => Promise<{ ok: boolean; error?: string }>;
       onLog: (cb: (e: { line: string; stream: "stdout" | "stderr" }) => void) => () => void;
       onToolsProgress: (
         cb: (e: { type: "progress"; label: string; pct: number | null; downloaded_mb: number; total_mb: number | null }) => void

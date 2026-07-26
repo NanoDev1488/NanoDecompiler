@@ -127,6 +127,9 @@ class ProjectStats:
         self.library_classes_skipped = 0
         self.library_names_hit = set()
         self.malware_findings = []  # см. malware_scan.py - список находок эвристики
+        self.decrypted_strings_owner = None   # internal-имя класса-расшифровщика, если найден (см. str_decrypt.py)
+        self.decrypted_strings_count = 0      # сколько строковых литералов реально расшифровано
+        self.junk_catches_removed = 0         # см. catchclean.py - catch(T t){throw t;} блоки-пустышки
 
     def record_method(self, ok, reason=None):
         self.total_methods += 1

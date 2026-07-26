@@ -11,6 +11,7 @@ DecompileAbort, и вызывающий код (engine.py) обязан отка
 неверным.
 """
 import math
+import str_decrypt
 from ast_nodes import (
     Const, Local, This, FieldAccess, ArrayAccess, MethodCall, NewObject,
     NewArray, Cast, InstanceOf, BinOp, UnOp, Ternary, Assign, Raw,
@@ -342,7 +343,7 @@ def simulate_block(block, entry_stack, ctx, underflow_flag=None):
             return Const(java_float_literal(float(e[1]), ""), "double")
         if tag == "String":
             s = cf.utf8(e[1]) or ""
-            return Const(java_string_literal(s), "String")
+            return Const(java_string_literal(s), "String", raw=s)
         if tag == "Class":
             internal = cf.utf8(e[1])
             if internal and internal.startswith("["):
@@ -611,6 +612,24 @@ def simulate_block(block, entry_stack, ctx, underflow_flag=None):
             args = pop_n(len(params))
             args = [_coerce_arg(a, ctx.map_type(p)) for a, p in zip(args, params)]
             if mn == "invokestatic":
+                # Подмена расшифрованных строк (см. str_decrypt.py) - ТОЛЬКО
+                # если для этого jar'а найден известный класс-расшифровщик
+                # (узнаваемая схема одного конкретного обфускатора), вызов -
+                # ИМЕННО на него/этот метод, и аргумент - строковый литерал
+                # (не переменная/вычисленное выражение - иначе расшифровать
+                # нечего, это не константа времени компиляции). Если что-то
+                # не сходится - просто падаем через в обычную обработку ниже,
+                # никакого угадывания.
+                active = str_decrypt.ACTIVE
+                if (active and owner == active["owner"] and name == active["method"]
+                        and len(args) == 1 and isinstance(args[0], Const)
+                        and args[0].type == "String" and args[0].raw is not None):
+                    decrypted = str_decrypt.decrypt_string(active["key"], args[0].raw)
+                    if decrypted is not None:
+                        str_decrypt.DECRYPTED_COUNT += 1
+                        push(Const(java_string_literal(decrypted), "String", raw=decrypted))
+                        i += 1
+                        continue
                 mname = ctx.method_name(owner, name, desc)
                 call = MethodCall(None, mname, args, ctx.map_type(ret), static=True, owner=ctx.owner_display(owner))
                 if ret == "void":
@@ -1010,7 +1029,7 @@ def cp_const_simple(cf, idx, ctx):
     if tag == "Float": return Const(java_float_literal(float(e[1]), "f"), "float")
     if tag == "Long": return Const(f"{e[1]}L", "long")
     if tag == "Double": return Const(java_float_literal(float(e[1]), ""), "double")
-    if tag == "String": return Const(java_string_literal(cf.utf8(e[1]) or ""), "String")
+    if tag == "String": return Const(java_string_literal(cf.utf8(e[1]) or ""), "String", raw=(cf.utf8(e[1]) or ""))
     raise DecompileAbort(f"unsupported const-arg tag {tag}")
 
 

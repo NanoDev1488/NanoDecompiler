@@ -20,9 +20,12 @@ class Expr:
 
 
 class Const(Expr):
-    def __init__(self, literal, type_="int"):
+    def __init__(self, literal, type_="int", raw=None):
         self.literal = literal   # уже готовый Java-литерал строкой, напр. "42", "\"abc\"", "null"
         self.type = type_
+        self.raw = raw           # для type_="String" - сырая (неэкранированная) строка, если известна
+                                  # (нужно для str_decrypt.py - подмена зашифрованных строк без
+                                  # необходимости откатывать Java-экранирование обратно)
 
     def prec(self):
         return 100

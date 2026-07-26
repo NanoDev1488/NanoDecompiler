@@ -71,6 +71,9 @@ def stats_to_dict(stats):
         "import_conflicts": {k: v for k, v in stats.import_conflicts.items()},
         "synthetic_switchmap_classes_hidden": stats.synthetic_switchmap_classes_hidden,
         "malware_findings": list(stats.malware_findings),
+        "decrypted_strings_owner": stats.decrypted_strings_owner,
+        "decrypted_strings_count": stats.decrypted_strings_count,
+        "junk_catches_removed": stats.junk_catches_removed,
     }
 
 

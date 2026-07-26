@@ -101,7 +101,11 @@ def _well_known_dirs(kind):
             for vendor_dir in ("Java", "Eclipse Adoptium", "Eclipse Foundation", "Microsoft", "Zulu"):
                 base = os.path.join(pf, vendor_dir)
                 if os.path.isdir(base):
-                    for name in os.listdir(base):
+                    try:
+                        listing = os.listdir(base)
+                    except OSError:
+                        continue  # прав нет / антивирус держит / OneDrive-заглушка и т.п. - пропускаем эту папку
+                    for name in listing:
                         dirs.append(os.path.join(base, name, "bin"))
     elif kind == "maven":
         for var in ("MAVEN_HOME", "M2_HOME"):
@@ -116,14 +120,21 @@ def _well_known_dirs(kind):
                 dirs.append(os.path.join(base, "bin"))
             apache_base = os.path.join(pf, "Apache")
             if os.path.isdir(apache_base):
-                for name in os.listdir(apache_base):
+                try:
+                    listing = os.listdir(apache_base)
+                except OSError:
+                    listing = []
+                for name in listing:
                     if name.lower().startswith("maven"):
                         dirs.append(os.path.join(apache_base, name, "bin"))
         if user_profile:
             # scoop (частый способ установки Maven на Windows без админ-прав)
             scoop_current = os.path.join(user_profile, "scoop", "apps", "maven", "current", "bin")
             dirs.append(scoop_current)
-    return [d for d in dirs if os.path.isdir(d)]
+    try:
+        return [d for d in dirs if os.path.isdir(d)]
+    except OSError:
+        return []
 
 
 def resolve_tool_path(exe_names, kind):
@@ -216,8 +227,12 @@ def _adoptium_arch():
 def _find_one(tools_dir, dir_prefix, rel_bin):
     if not os.path.isdir(tools_dir):
         return None
+    try:
+        listing = os.listdir(tools_dir)
+    except OSError:
+        return None
     candidates = []
-    for name in os.listdir(tools_dir):
+    for name in listing:
         if name.lower().startswith(dir_prefix):
             full = os.path.join(tools_dir, name, *rel_bin)
             if os.path.isfile(full):
@@ -396,16 +411,25 @@ def install_missing(need_java, need_maven, progress_cb=None):
     """Ставит то, что запрошено (обычно - то, чего не хватает по
     check_java_maven()). Возвращает dict {"java": path_or_None, "maven": path_or_None,
     "errors": [...]}. НЕ бросает исключение наружу - собирает ошибки в список,
-    чтобы одна неудача (напр. Maven) не мешала попытке поставить другое (JDK)."""
+    чтобы одна неудача (напр. Maven) не мешала попытке поставить другое (JDK).
+
+    ВАЖНО: ловим Exception целиком, а не только ToolInstallError - реальный
+    баг, найденный на живой Windows-машине: os.listdir() в _well_known_dirs()
+    бросал голый OSError/PermissionError (антивирус держит папку, OneDrive-
+    заглушка и т.п.), который не является ToolInstallError - раньше это
+    падало необработанным прямо здесь, и вызывающая сторона (main.py
+    --install-tools-json, а через неё Electron) не получала вообще НИКАКОГО
+    ответа - именно то, что видно как "Установщик завершился без ответа"
+    в электрон-клиенте."""
     result = {"java": None, "maven": None, "errors": []}
     if need_java:
         try:
             result["java"] = install_jdk(progress_cb=progress_cb)
-        except ToolInstallError as e:
-            result["errors"].append(f"JDK: {e}")
+        except Exception as e:
+            result["errors"].append(f"JDK: {type(e).__name__}: {e}")
     if need_maven:
         try:
             result["maven"] = install_maven(progress_cb=progress_cb)
-        except ToolInstallError as e:
-            result["errors"].append(f"Maven: {e}")
+        except Exception as e:
+            result["errors"].append(f"Maven: {type(e).__name__}: {e}")
     return result

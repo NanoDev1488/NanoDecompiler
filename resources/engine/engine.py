@@ -16,6 +16,7 @@ from ast_nodes import (
 from structure import Structurer, simplify_stmts
 from emit import emit_stmts, set_shadow_context
 import disassembler
+import catchclean
 
 
 class MethodDecompileResult:
@@ -28,6 +29,7 @@ class MethodDecompileResult:
         self.n_blocks = 0
         self.stmts = None
         self.pre_lines = []
+        self.junk_catches_removed = 0
 
 
 def _collect_declared_names(stmts):
@@ -348,8 +350,10 @@ def decompile_method_body(cf, method, renamer, known_internal_by_dotted, class_i
     try:
         instrs, order = decode_method(method.code)
         result.n_instructions = len(order)
-        cfg = CFG(instrs, order, method.exceptions)
+        _filtered_exceptions, _junk_catches_removed = catchclean.filter_junk_catches(method)
+        cfg = CFG(instrs, order, _filtered_exceptions)
         result.n_blocks = len(cfg.blocks)
+        result.junk_catches_removed = _junk_catches_removed
         ctx = MethodCtx(cf, method, renamer, known_internal_by_dotted, class_internal)
         result.ctx = ctx
 
@@ -415,7 +419,7 @@ def decompile_method_body(cf, method, renamer, known_internal_by_dotted, class_i
             if res.exit_stack:
                 raise DecompileAbort(f"неразрешённый остаток на стеке в блоке {start}")
 
-        structurer = Structurer(cfg, results, method.exceptions, ctx)
+        structurer = Structurer(cfg, results, _filtered_exceptions, ctx)
         stmts = structurer.build(cfg.entry)
         stmts = simplify_stmts(stmts)
         if method.name == "<init>":
