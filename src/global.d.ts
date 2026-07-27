@@ -36,7 +36,7 @@ declare global {
         downloadUrl?: string | null;
         error?: string;
       }>;
-      applyUpdate: (downloadUrl: string) => Promise<{ ok: boolean; error?: string }>;
+      applyUpdate: (downloadUrl: string, latestTag?: string) => Promise<{ ok: boolean; error?: string }>;
       onLog: (cb: (e: { line: string; stream: "stdout" | "stderr" }) => void) => () => void;
       onToolsProgress: (
         cb: (e: { type: "progress"; label: string; pct: number | null; downloaded_mb: number; total_mb: number | null }) => void

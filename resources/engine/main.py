@@ -413,7 +413,7 @@ from classfile import ClassFile, access_str
 from disassembler import disassemble
 from javatypes import (
     field_descriptor_to_java, method_descriptor_to_java, looks_obfuscated, dotted_from_internal,
-    mark_type, resolve_type_markers,
+    mark_type, resolve_type_markers, parse_field_signature,
 )
 from pom_builder import build_pom, KNOWN_LIBS, find_pom_properties_and_xml, parse_shade_relocations
 from engine import decompile_method_body, fallback_bytecode_listing
@@ -662,7 +662,11 @@ def process_jar(jar_path, out_dir):
 def process_jar_with_stats(jar_path, out_dir):
     """То же самое, что process_jar(), но возвращает (out_dir, ProjectStats) -
     нужно режиму API (api.py), чтобы отдать статистику как JSON без
-    перепарсивания README_RU.txt."""
+    перепарсивания README_RU.txt.
+
+    Проверка легитимности (см. legitimacy_check.py) ВСЕГДА проверяет все
+    четыре источника (GitHub/Modrinth/SpigotMC/RuSpigot) - по прямому
+    запросу пользователя, без тумблеров."""
     _t0 = time.time()
     _enable_windows_ansi()
     print()
@@ -817,6 +821,22 @@ def process_jar_with_stats(jar_path, out_dir):
         with open(pom_dest, "w", encoding="utf-8") as f:
             f.write(pom_text)
         cprint(f"[*] pom.xml ({'найден оригинал' if pom_kind == 'original' else 'сгенерирован по эвристике'}): {pom_dest}")
+
+    # Проверка легитимности (см. legitimacy_check.py) - поля plugin.yml +
+    # ВСЕГДА все четыре сетевых источника (GitHub/Modrinth/SpigotMC/
+    # RuSpigot), без тумблеров.
+    _plugin_name_for_check = None
+    if plugin_yml_text:
+        _m = re.search(r"^name:\s*['\"]?([^'\"\n]+)['\"]?\s*$", plugin_yml_text, re.M)
+        if _m:
+            _plugin_name_for_check = _m.group(1).strip()
+    import legitimacy_check
+    section("Проверка легитимности")
+    stats.legitimacy = legitimacy_check.run_legitimacy_check(_plugin_name_for_check, plugin_yml_text)
+    _leg_text = legitimacy_check.format_for_console(stats.legitimacy)
+    if _leg_text:
+        for line in _leg_text.split("\n"):
+            cprint(line)
 
     renamer = Renamer()
 
@@ -1061,6 +1081,21 @@ def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, sw
             jtype = format_type_dotted(jtype, renamer, known_internal_by_dotted, all_imports)
         except Exception:
             jtype = f.descriptor
+        # См. HANDOFF_3 п.4 / javatypes.parse_field_signature() - если есть
+        # Signature-атрибут и он разобрался, печатаем generic-тип целиком
+        # (напр. `List<String>` вместо голого `List`) - БЕЗ повторного
+        # прогона через _simple_type()/mark_type() ниже, т.к.
+        # parse_field_signature() уже вернул готовую для печати строку
+        # (см. её докстринг про известное упрощение с импортами generic-
+        # аргументов). Базовый (не-generic) тип `jtype` выше по-прежнему
+        # нужен - используется как fallback и для регистрации импорта
+        # самого базового типа через format_type_dotted() чуть выше.
+        _generic_jtype = None
+        if getattr(f, "signature", None):
+            try:
+                _generic_jtype = parse_field_signature(f.signature)
+            except Exception:
+                _generic_jtype = None
         fname = renamer.field_map.get((internal, f.name, f.descriptor), f.name)
         renamed_note = "" if fname == f.name else f"  // было: {f.name}"
         if fname in interface_field_inits:
@@ -1070,7 +1105,8 @@ def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, sw
             cv = f" = {literal}" if literal is not None else ""
         for _ann in f.annotations:
             body_lines.append(f"    {_format_annotation(_ann, renamer, known_internal_by_dotted, all_imports)}")
-        body_lines.append(f"    {fmods} {_simple_type(jtype)} {fname}{cv};{renamed_note}".replace("  ", " "))
+        _display_type = _generic_jtype if _generic_jtype is not None else _simple_type(jtype)
+        body_lines.append(f"    {fmods} {_display_type} {fname}{cv};{renamed_note}".replace("  ", " "))
         if "." in jtype:
             all_imports.setdefault(jtype.rstrip("[]"), jtype.rstrip("[]").rsplit(".", 1)[-1])
     if other_fields:
@@ -1529,8 +1565,10 @@ def main():
         cprint("       python3 main.py --install-tools[=jdk|maven]   (portable JDK/Maven по требованию)")
         sys.exit(1)
     jar_path = sys.argv[1]
-    out_dir = sys.argv[2] if len(sys.argv) > 2 else os.path.splitext(os.path.basename(jar_path))[0] + "_decompiled"
-    process_jar(jar_path, out_dir)
+    rest = sys.argv[2:]
+    positional_rest = [a for a in rest if a != "--headless"]
+    out_dir = positional_rest[0] if positional_rest else os.path.splitext(os.path.basename(jar_path))[0] + "_decompiled"
+    process_jar_with_stats(jar_path, out_dir)
     cprint(f"[+] Готово. Результат в: {out_dir}")
 
 

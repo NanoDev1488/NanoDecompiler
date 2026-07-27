@@ -75,6 +75,8 @@ class Field:
         self.descriptor = ""
         self.constant_value = None
         self.annotations = []       # list[{"type": field_descriptor_str, "args": {name: value}}]
+        self.signature = None       # см. HANDOFF_3 п.4 / javatypes.parse_field_signature -
+                                     # сырая строка Signature-атрибута (generic-тип поля), None если нет
 
 
 class ExceptionEntry:
@@ -301,6 +303,9 @@ class ClassFile:
                     f.constant_value = self.pool.get(cv_idx)
                 elif a_name in ("RuntimeVisibleAnnotations", "RuntimeInvisibleAnnotations"):
                     f.annotations.extend(self._parse_annotations_attr(a_data))
+                elif a_name == "Signature" and len(a_data) >= 2:
+                    sig_idx = struct.unpack_from(">H", a_data, 0)[0]
+                    f.signature = self.utf8(sig_idx)
             self.fields.append(f)
 
         method_count = r.u2()

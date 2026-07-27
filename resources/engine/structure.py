@@ -45,6 +45,15 @@ class Structurer:
         # вложенного случая - реальная ошибка компиляции ("variable e1 is
         # already defined"), а для соседних - просто путаница при чтении.
         self._catch_var_ctr = 0
+        # См. HANDOFF_7/9 - глобальный (на весь метод, не per-region()-call)
+        # набор адресов блоков, которые реально попали КУДА-ТО в итоговый
+        # AST (через любой путь - тело try, catch, if-ветку, тело цикла,
+        # case switch'а...). Нужен для check_full_coverage() ниже - ловит
+        # случаи вроде найденного бага с try-with-resources, где точка
+        # схождения после try (`ipdom`) в редких случаях "перепрыгивает"
+        # реальный код между защищённым диапазоном и обработчиком (см.
+        # HANDOFF_7 - там это тихо теряло вызов close() на успешном пути).
+        self._all_consumed = set()
 
     # ---------------- loop discovery ----------------
 
@@ -85,7 +94,59 @@ class Structurer:
     # ---------------- entry point ----------------
 
     def build(self, entry_pc):
-        return self.region(entry_pc, frozenset())
+        stmts = self.region(entry_pc, frozenset())
+        self._check_full_coverage(entry_pc)
+        return stmts
+
+    def _check_full_coverage(self, entry_pc):
+        """См. HANDOFF_7/9. После полной структуризации метода - проверяем,
+        что КАЖДЫЙ блок, реально достижимый из entry по рёбрам CFG (включая
+        рёбра исключений - блок обработчика тоже "достижим"), попал хоть
+        куда-то в итоговый AST (`self._all_consumed`, см. region()). Если
+        нет - значит где-то в процессе структуризации часть живого кода
+        тихо потерялась (найденный реальный случай - try-with-resources,
+        нормальный путь `if (x != null) x.close();` между защищённым
+        диапазоном try и его обработчиком, см. HANDOFF_7 подробный разбор).
+
+        Откатываемся на честный байткод для ВСЕГО метода вместо того, чтобы
+        печатать код с тихо пропавшим statement'ом - это прямое продолжение
+        ключевого принципа архитектуры (см. HANDOFF_1). Не пытаемся сами
+        угадать/пофиксить точку схождения - это, как показала практика (см.
+        HANDOFF_7 - первая попытка чинить `_build_try` эвристикой "бери end,
+        если он раньше ipdom" уронила процент декомпиляции с 93 до 85 на
+        других, ранее корректных методах), слишком легко сломать другие,
+        уже рабочие случаи вслепую, без большого корпуса реальных .jar под
+        рукой для регрессии."""
+        reachable = set()
+        stack = [entry_pc]
+        while stack:
+            b = stack.pop()
+            if b in reachable or b not in self.cfg.blocks:
+                continue
+            reachable.add(b)
+            stack.extend(self.cfg.blocks[b].succs)
+        missing = reachable - self._all_consumed
+        # Безобидное исключение: блок, состоящий РОВНО из одного безусловного
+        # goto и не производящий ни одного видимого statement'а
+        # (self.results[pc].stmts пуст) - тот самый "трамплин", который
+        # region()/_resolve_jump_stmt уже сознательно умеют прозрачно
+        # пропускать в других местах (см. их докстринг) - у него физически
+        # нечего терять, поэтому это НЕ тот случай потери кода, который эта
+        # проверка ищет.
+        missing = {
+            pc for pc in missing
+            if not (
+                len(self.cfg.blocks[pc].instrs) == 1
+                and self.cfg.blocks[pc].instrs[0].mnemonic in ("goto", "goto_w")
+                and not self.results[pc].stmts
+            )
+        }
+        if missing:
+            raise DecompileAbort(
+                f"после структуризации остались недостижимые из AST, но живые "
+                f"по CFG блоки: {sorted(missing)} - похоже на потерю кода, "
+                f"откат на байткод"
+            )
 
     # ---------------- core linear region scanner ----------------
 
@@ -101,6 +162,7 @@ class Structurer:
             if pc in seen_here:
                 raise DecompileAbort("нередуцируемый переход внутри региона")
             seen_here.add(pc)
+            self._all_consumed.add(pc)
 
             if pc in self.try_by_start and pc not in self._consumed_try:
                 stmt, next_pc = self._build_try(pc, stop_addrs)

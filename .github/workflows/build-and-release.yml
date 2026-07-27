@@ -47,6 +47,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # См. HANDOFF_7/11 - КРИТИЧНО: без этого блока клиент на свежей
+      # установке требовал бы Python на машине конечного пользователя
+      # (electron/main.ts::engineInvocation() падает на python3/main.py,
+      # если рядом нет NanoDecompilerCLI.exe - а раньше exe появлялся
+      # ТОЛЬКО после первого клика "Обновить" в уже запущенном клиенте).
+      # Для обычного пользователя без Python это означало "приложение не
+      # работает из коробки". Собираем exe ЗДЕСЬ, кладём его ПРЯМО в
+      # resources/engine/ (плоско, не в dist/) ДО того, как electron-builder
+      # упакует extraResources - тогда engineInvocation() увидит его сразу
+      # при самом первом запуске, без Python вообще. Заодно пишем
+      # .engine-release-tag с текущим RELEASE_TAG - без этого свежая
+      # установка при первой проверке апдейтера всегда показывала бы
+      # "доступно обновление", даже если exe уже самый новый (см.
+      # electron/updater.ts - сравнение идёт именно по этому файлу).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Установить PyInstaller
+        run: pip install pyinstaller
+
+      - name: Собрать NanoDecompilerCLI.exe и встроить в клиент
+        working-directory: resources/engine
+        shell: pwsh
+        run: |
+          pyinstaller --onefile --name NanoDecompilerCLI --icon=icon.ico main.py
+          Move-Item -Force dist/NanoDecompilerCLI.exe NanoDecompilerCLI.exe
+          Remove-Item -Recurse -Force dist, build, NanoDecompilerCLI.spec
+          Set-Content -Path .engine-release-tag -Value $env:RELEASE_TAG -NoNewline
+
+      - name: Проверка - встроенный exe реально работает
+        shell: pwsh
+        run: |
+          resources/engine/NanoDecompilerCLI.exe test_jars/EryBuyer-v1.jar out_check_client_cli --headless
+          if (-not (Test-Path "out_check_client_cli")) { throw "CLI.exe (для клиента): out_dir не создан" }
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"

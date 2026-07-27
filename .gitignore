@@ -11,10 +11,16 @@ resources/engine/*.spec
 resources/engine/__pycache__/
 **/__pycache__/
 *.pyc
+# NanoDecompilerCLI.exe встраивается ПРЯМО в resources/engine/ при сборке
+# клиента (см. .github/workflows/build-and-release.yml::build-client) -
+# генерируется в CI, никогда не коммитится.
+resources/engine/NanoDecompilerCLI.exe
+resources/engine/.engine-release-tag
 
 # CI-мусор, который иногда остаётся после локального прогона проверок
 out_check_cli/
 out_check_api/
+out_check_client_cli/
 
 # OS
 .DS_Store

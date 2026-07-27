@@ -3,6 +3,7 @@ import { classifyLine } from "./classifyLine";
 
 type Status = "idle" | "running" | "ok" | "error";
 type InstallState = "idle" | "installing" | "done";
+type UpdateState = "idle" | "checking" | "up-to-date" | "available" | "applying" | "applied" | "error";
 
 interface LogLine {
   text: string;
@@ -39,7 +40,43 @@ export default function App() {
   const [installState, setInstallState] = useState<InstallState>("idle");
   const [installProgress, setInstallProgress] = useState<string | null>(null);
   const [dismissedInstallPrompt, setDismissedInstallPrompt] = useState(false);
+  const [updateState, setUpdateState] = useState<UpdateState>("idle");
+  const [updateInfo, setUpdateInfo] = useState<{ latestVersion?: string; downloadUrl?: string | null; error?: string } | null>(null);
   const termRef = useRef<HTMLDivElement>(null);
+
+  // Проверка обновлений ДВИЖКА (не клиента - у них разный жизненный цикл,
+  // см. electron/updater.ts) - один раз при запуске. Backend уже готов
+  // (update:check/update:apply), тут только подключение UI.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setUpdateState("checking");
+      const res = await window.nano.checkUpdate();
+      if (cancelled) return;
+      if (!res.ok) {
+        setUpdateState("error");
+        setUpdateInfo({ error: res.error });
+        return;
+      }
+      setUpdateInfo({ latestVersion: res.latestVersion, downloadUrl: res.downloadUrl });
+      setUpdateState(res.hasUpdate ? "available" : "up-to-date");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const applyUpdate = useCallback(async () => {
+    if (!updateInfo?.downloadUrl || status === "running") return;
+    setUpdateState("applying");
+    const res = await window.nano.applyUpdate(updateInfo.downloadUrl, updateInfo.latestVersion);
+    if (res.ok) {
+      setUpdateState("applied");
+    } else {
+      setUpdateState("error");
+      setUpdateInfo((prev) => ({ ...(prev ?? {}), error: res.error }));
+    }
+  }, [updateInfo, status]);
 
   useEffect(() => {
     const off = window.nano.onLog(({ line }) => {
@@ -156,6 +193,25 @@ export default function App() {
       <div className="topbar">
         <span className="brand">NanoDecompiler</span>
         <span className="brand-version">v2.1 · electron gui</span>
+        <span className="update-badge">
+          {updateState === "checking" && <span>проверка обновлений...</span>}
+          {updateState === "up-to-date" && <span>движок актуален{updateInfo?.latestVersion ? ` (${updateInfo.latestVersion})` : ""}</span>}
+          {updateState === "available" && (
+            <>
+              <span>доступно обновление движка{updateInfo?.latestVersion ? ` ${updateInfo.latestVersion}` : ""}</span>
+              <button className="btn-mini btn-mini-yes" onClick={applyUpdate} disabled={status === "running"}>
+                Обновить
+              </button>
+            </>
+          )}
+          {updateState === "applying" && (
+            <span>
+              <span className="dot running">●</span> устанавливаю обновление...
+            </span>
+          )}
+          {updateState === "applied" && <span>обновлено — перезапустите приложение</span>}
+          {updateState === "error" && <span title={updateInfo?.error}>проверка обновлений не удалась</span>}
+        </span>
       </div>
 
       <div className="main">

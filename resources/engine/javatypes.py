@@ -93,6 +93,137 @@ def field_descriptor_to_java(desc):
     return t
 
 
+# ---------------- Signature-атрибут (дженерики), см. HANDOFF_3 п.4 -------
+#
+# Грамматика (упрощённо, JVMS §4.7.9.1 FieldTypeSignature) - разбирает
+# ТОЛЬКО сигнатуру ПОЛЯ (`ClassSignature`/`MethodSignature` - с параметрами
+# типа <T extends X> и сигнатурами параметров метода - сознательно не
+# трогаем в этой версии, см. докстринг ниже) и текстовые аргументы
+# generic-параметров, чтобы напечатать `List<String>` вместо голого
+# `List`, если у поля/локальной переменной есть непустой атрибут
+# Signature. Дженерики стираются JVM-ом на уровне байткода (type erasure) -
+# это ЧИСТО косметическое обогащение отображаемого типа, ни на что другое
+# не влияет и не может сломать саму декомпиляцию (если разобрать сигнатуру
+# не удалось - тихо возвращаем None, вызывающий код просто использует
+# обычный, не-generic тип дескриптора, как и раньше).
+class _SignatureParseError(Exception):
+    pass
+
+
+class _FieldSigParser:
+    def __init__(self, s):
+        self.s = s
+        self.i = 0
+        self.n = len(s)
+
+    def _peek(self):
+        if self.i >= self.n:
+            raise _SignatureParseError("неожиданный конец сигнатуры")
+        return self.s[self.i]
+
+    def parse_type(self):
+        c = self._peek()
+        if c == "L":
+            return self._parse_class_type()
+        if c == "T":
+            return self._parse_type_var()
+        if c == "[":
+            self.i += 1
+            return self.parse_type() + "[]"
+        if c in _PRIMS:
+            self.i += 1
+            return _PRIMS[c]
+        if c == "*":
+            self.i += 1
+            return "?"
+        if c in "+-":
+            wc = c
+            self.i += 1
+            inner = self.parse_type()
+            return ("? extends " if wc == "+" else "? super ") + inner
+        raise _SignatureParseError(f"неожиданный символ {c!r} в позиции {self.i}")
+
+    def _parse_type_var(self):
+        self.i += 1  # 'T'
+        start = self.i
+        while self._peek() != ";":
+            self.i += 1
+        name = self.s[start:self.i]
+        self.i += 1  # ';'
+        return name
+
+    def _parse_class_type(self):
+        self.i += 1  # 'L'
+        start = self.i
+        while self._peek() not in "<;.":
+            self.i += 1
+        internal = self.s[start:self.i]
+        dotted = dotted_from_internal(internal)
+        # См. докстринг parse_field_signature() ниже про то, почему тут
+        # простое имя, а не полноценная интеграция с mark_type()/импортами.
+        result = dotted.rsplit(".", 1)[-1] if "." in dotted else dotted
+        if self._peek() == "<":
+            result += self._parse_type_args()
+        # вложенные классы вида Outer<T>.Inner<U> - редко, но встречается
+        while self.i < self.n and self._peek() == ".":
+            self.i += 1
+            istart = self.i
+            while self._peek() not in "<;.":
+                self.i += 1
+            iname = self.s[istart:self.i]
+            result += "." + iname
+            if self._peek() == "<":
+                result += self._parse_type_args()
+        if self._peek() != ";":
+            raise _SignatureParseError("ожидался ';' в конце ClassTypeSignature")
+        self.i += 1
+        return result
+
+    def _parse_type_args(self):
+        self.i += 1  # '<'
+        args = []
+        while self._peek() != ">":
+            args.append(self.parse_type())
+        self.i += 1  # '>'
+        return f"<{', '.join(args)}>"
+
+
+def parse_field_signature(sig):
+    """Разбирает Signature-атрибут ПОЛЯ (или локальной переменной из
+    LocalVariableTypeTable - грамматика та же, FieldTypeSignature) в
+    Java-подобную строку generic-типа, напр. `List<String>`.
+
+    ВАЖНО - известное упрощение: типы generic-аргументов печатаются
+    ПРОСТЫМ (неквалифицированным) именем напрямую, БЕЗ прогона через
+    mark_type()/resolve_type_markers() (см. выше) и без регистрации
+    в `all_imports` вызывающей стороны (main.py::render_class) - полная
+    интеграция потребовала бы протащить renamer/known_internal_by_dotted/
+    all_imports внутрь javatypes.py (сейчас renamer-агностичный модуль
+    более низкого уровня) - отдельная, более крупная переделка. Практическое
+    следствие: в РЕДКОМ случае, когда тип встречается в файле ТОЛЬКО внутри
+    generic-аргумента (нигде больше не упоминается как обычный тип) - явный
+    `import` для него может не сгенерироваться, и такой код придётся
+    доимпортировать руками. Для базового/внешнего типа (напр. `List` в
+    `List<String>`) обычный import-механизм по-прежнему работает как раньше -
+    это чисто ограничение для типов ВНУТРИ уголковых скобок.
+
+    None, если разобрать не удалось (пустой/непонятный сигнатуры не должны
+    ронять декомпиляцию метода - вызывающий код в этом случае просто
+    использует обычный дескриптор без дженериков, как было до этой фичи)."""
+    if not sig:
+        return None
+    try:
+        p = _FieldSigParser(sig)
+        result = p.parse_type()
+        if p.i != p.n:
+            return None  # в конце остался "хвост" - разобрали не всё, не доверяем
+        return result
+    except _SignatureParseError:
+        return None
+    except Exception:
+        return None
+
+
 def method_descriptor_to_java(desc):
     """returns (return_type_str, [param_type_str, ...])"""
     assert desc.startswith("(")

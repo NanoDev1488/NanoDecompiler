@@ -14,7 +14,7 @@ from ast_nodes import (
     FieldAccess, This, MethodCall, BlockStmt,
 )
 from structure import Structurer, simplify_stmts
-from emit import emit_stmts, set_shadow_context
+from emit import emit_stmts, set_shadow_context, emit_expr
 import disassembler
 import catchclean
 
@@ -299,12 +299,197 @@ def _has_escaping_local_decl(stmts):
     return check(stmts)
 
 
+def _expr_key(e):
+    """Текстовое представление выражения - используется только для сравнения
+    "это тот же объект блокировки", а не для вывода. emit_expr() не должен
+    падать на валидном AST-выражении, но на всякий случай - если упал,
+    считаем ключ несравнимым (уникальный id), чтобы просто НЕ сворачивать
+    (безопасный отказ, а не гадание)."""
+    try:
+        return emit_expr(e)
+    except Exception:
+        return f"<unrepr:{id(e)}>"
+
+
+def _strip_monitor_exits(stmts, key):
+    """Рекурсивно убирает _MonitorMarker('exit', ...) с совпадающим `key`
+    из ЛЮБОЙ вложенности (if/while/for/switch/try/block) - в javac каждый
+    путь выхода из synchronized-тела (return/break/fallthrough) дублирует
+    monitorexit ПЕРЕД собой, а в `synchronized(){}` из Java-исходника это
+    делает сама JVM неявно. Не заходит внутрь уже свёрнутого SyncStmt
+    другого lock'а (там могут быть свои markers с другим key - им тут
+    делать нечего, но рекурсия туда всё равно безопасна за счёт сравнения
+    по key)."""
+    if not stmts:
+        return stmts
+    out = []
+    for s in stmts:
+        if isinstance(s, _MonitorMarker) and s.kind == "exit" and _expr_key(s.expr) == key:
+            continue
+        if isinstance(s, IfStmt):
+            s.then_body = _strip_monitor_exits(s.then_body, key)
+            if s.else_body:
+                s.else_body = _strip_monitor_exits(s.else_body, key)
+        elif isinstance(s, (WhileStmt, DoWhileStmt, ForStmt, SyncStmt)):
+            s.body = _strip_monitor_exits(s.body, key)
+        elif isinstance(s, BlockStmt):
+            s.stmts = _strip_monitor_exits(s.stmts, key)
+        elif isinstance(s, SwitchStmt):
+            for c in s.cases:
+                c.body = _strip_monitor_exits(c.body, key)
+        elif isinstance(s, TryStmt):
+            s.body = _strip_monitor_exits(s.body, key)
+            s.catches = [(t, n, _strip_monitor_exits(b, key)) for t, n, b in s.catches]
+            if s.finally_body:
+                s.finally_body = _strip_monitor_exits(s.finally_body, key)
+        out.append(s)
+    return out
+
+
+def _is_monitor_rethrow_catch(catch_var, catch_body, key):
+    """True, если catch-блок - это ровно каноничный javac-паттерн эмуляции
+    finally для synchronized: `catch (Throwable t) { monitorexit; throw t; }`
+    (плюс сам monitorexit-маркер внутри). Если тело катча содержит ЕЩЁ
+    что-то (любую другую логику) - НЕ считаем это паттерном свёртки монитора
+    (мало ли это настоящий пользовательский catch, который просто рядом
+    оказался) и оставляем как есть -> сработает честный откат ниже."""
+    if not catch_body:
+        return False
+    has_exit = any(
+        isinstance(s, _MonitorMarker) and s.kind == "exit" and _expr_key(s.expr) == key
+        for s in catch_body
+    )
+    if not has_exit:
+        return False
+    rest = [s for s in catch_body if not isinstance(s, _MonitorMarker)]
+    if len(rest) != 1:
+        return False
+    only = rest[0]
+    return isinstance(only, ThrowStmt) and isinstance(only.expr, Local) and only.expr.name == catch_var
+
+
+def _unwrap_if_monitor_try(s, key):
+    """Если `s` - TryStmt, единственный catch которого - каноничный
+    monitor-rethrow (см. _is_monitor_rethrow_catch) и без finally - значит
+    javac обернул ЧАСТЬ synchronized-тела в try просто чтобы гарантировать
+    monitorexit при исключении. Раз exit-marker внутри этого catch'а всё
+    равно будет вырезан (тело теперь под настоящим Java `synchronized`,
+    JVM сама освобождает монитор при исключении) - разворачиваем такой
+    TryStmt в его body ПРЯМО на этот уровень. Несколько таких try подряд
+    под одним monitorenter - обычное дело (у одного метода бывает
+    НЕСКОЛЬКО exception-table диапазонов на один и тот же catch-all
+    handler, см. HANDOFF - реальный случай SkullUtils.isPlayerProfileApiPresent).
+    Возвращает список statement'ов или None, если `s` - не такой TryStmt."""
+    if (isinstance(s, TryStmt) and len(s.catches) == 1 and not s.finally_body and
+            _is_monitor_rethrow_catch(s.catches[0][1], s.catches[0][2], key)):
+        return s.body
+    return None
+
+
+def _extract_sync_region(stmts, start, key):
+    """Пытается вычленить тело synchronized-блока из `stmts[start:]`
+    (сразу после уже найденного _MonitorMarker('enter', key)). Разворачивает
+    по пути monitor-rethrow TryStmt'ы (см. _unwrap_if_monitor_try - их может
+    быть несколько подряд). Останавливается на:
+      - top-level _MonitorMarker('exit') с тем же key - обычный случай,
+        когда после synchronized-тела в методе/блоке есть ещё код;
+      - конце списка `stmts` - тоже валидный случай (synchronized - последнее,
+        что есть в этом методе/блоке, поэтому явного "хвостового" monitorexit
+        на этом уровне нет: у КАЖДОГО return внутри уже был свой monitorexit,
+        и все они разворачиваются через _unwrap_if_monitor_try/рекурсию).
+    Возвращает (body, next_index) или (None, None), если наткнулись на
+    ЕЩЁ один monitorenter раньше своего exit на этом уровне - такое не
+    распознаём, оставляем как есть для честного отката."""
+    body = []
+    j = start
+    n = len(stmts)
+    while j < n:
+        cand = stmts[j]
+        if isinstance(cand, _MonitorMarker) and cand.kind == "exit" and _expr_key(cand.expr) == key:
+            return body, j + 1
+        if isinstance(cand, _MonitorMarker) and cand.kind == "enter":
+            return None, None
+        unwrapped = _unwrap_if_monitor_try(cand, key)
+        if unwrapped is not None:
+            body.extend(unwrapped)
+        else:
+            body.append(cand)
+        j += 1
+    return body, n  # конец списка - см. докстринг
+
+
+def _fold_sync_blocks(stmts):
+    """Свёртка monitorenter/monitorexit (_MonitorMarker) в `synchronized(x){}`
+    (SyncStmt) - см. HANDOFF_3 п.5. Тело региона вычленяет `_extract_sync_region()`
+    (см. её докстринг): разворачивает подряд идущие monitor-rethrow TryStmt'ы
+    (обычное дело - у одного synchronized-тела бывает НЕСКОЛЬКО exception-table
+    диапазонов на один и тот же catch-all handler) и останавливается либо на
+    top-level exit-маркере, либо на конце списка (synchronized - последнее в
+    методе/блоке, у каждого return внутри уже свой exit, снятый рекурсивно).
+
+    Если распознать не удалось (второй monitorenter раньше своего exit на
+    этом уровне и т.п.) - маркер СОЗНАТЕЛЬНО остаётся как есть: ничего не
+    собираем "на удачу". Дальше по пайплайну его увидит
+    _contains_unfolded_monitor() и метод целиком откатится на честный
+    байткод - это и есть safety net, который эта функция не отменяет, а
+    только сужает круг случаев, где он срабатывает.
+
+    Рекурсивная: сперва сворачивает вложенные synchronized ВНУТРИ найденного
+    тела (там же, где эти markers физически лежат), потом уже строит
+    внешний SyncStmt - иначе вложенные markers с другим lock'ом словили бы
+    _strip_monitor_exits текущего уровня (сравнение по key их отсекает, но
+    рекурсия "снизу вверх" всё равно надёжнее и проще для рассуждения)."""
+    if not stmts:
+        return stmts
+
+    out = []
+    i = 0
+    n = len(stmts)
+    while i < n:
+        s = stmts[i]
+        if isinstance(s, _MonitorMarker) and s.kind == "enter":
+            key = _expr_key(s.expr)
+            body, next_index = _extract_sync_region(stmts, i + 1, key)
+
+            if body is not None:
+                body = _fold_sync_blocks(body)          # сначала вложенные
+                body = _strip_monitor_exits(body, key)   # затем свои monitorexit
+                out.append(SyncStmt(s.expr, body))
+                i = next_index
+                continue
+
+        # общий случай - не enter-маркер или не распознали паттерн: копируем
+        # statement как есть, но рекурсивно сворачиваем ВНУТРИ него (на
+        # случай synchronized где-то во вложенном if/try/switch/цикле).
+        if isinstance(s, IfStmt):
+            s.then_body = _fold_sync_blocks(s.then_body)
+            if s.else_body:
+                s.else_body = _fold_sync_blocks(s.else_body)
+        elif isinstance(s, (WhileStmt, DoWhileStmt, ForStmt, SyncStmt)):
+            s.body = _fold_sync_blocks(s.body)
+        elif isinstance(s, BlockStmt):
+            s.stmts = _fold_sync_blocks(s.stmts)
+        elif isinstance(s, SwitchStmt):
+            for c in s.cases:
+                c.body = _fold_sync_blocks(c.body)
+        elif isinstance(s, TryStmt):
+            s.body = _fold_sync_blocks(s.body)
+            s.catches = [(t, cn, _fold_sync_blocks(b)) for t, cn, b in s.catches]
+            if s.finally_body:
+                s.finally_body = _fold_sync_blocks(s.finally_body)
+        out.append(s)
+        i += 1
+
+    return out
+
+
 def _contains_unfolded_monitor(stmts):
     """True, если где-то во вложенных statement'ах остался НЕ свёрнутый в
-    SyncStmt monitorenter/monitorexit (_MonitorMarker). Свёртка
-    monitorenter/monitorexit -> `synchronized(x){...}` (SyncStmt) в этой
-    версии движка НЕ реализована (SyncStmt нигде не конструируется) -
-    поэтому _MonitorMarker всегда означает несвёрнутый synchronized-блок.
+    SyncStmt monitorenter/monitorexit (_MonitorMarker). `_fold_sync_blocks()`
+    выше сворачивает ДВА канонических паттерна, которые реально генерирует
+    javac (см. её докстринг) - если сюда всё равно дошёл необработанный
+    _MonitorMarker, значит паттерн ни под один из них не подошёл (что-то
+    нетиповое: несколько catch, ручной finally, экзотическая CFG-форма).
     Печатать его как есть (просто комментарий на месте monitorenter/exit)
     ПОЛНОСТЬЮ теряет семантику блокировки и часто соседствует с изломанной
     структуризацией try/catch вокруг него (см. HANDOFF - найдено на
@@ -421,6 +606,7 @@ def decompile_method_body(cf, method, renamer, known_internal_by_dotted, class_i
 
         structurer = Structurer(cfg, results, _filtered_exceptions, ctx)
         stmts = structurer.build(cfg.entry)
+        stmts = _fold_sync_blocks(stmts)  # monitorenter/monitorexit -> SyncStmt, см. HANDOFF_3 п.5
         stmts = simplify_stmts(stmts)
         if method.name == "<init>":
             stmts = _reorder_ctor_call_to_front(stmts)

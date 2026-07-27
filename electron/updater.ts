@@ -1,21 +1,11 @@
-import { app, ipcMain } from "electron";
+import { ipcMain } from "electron";
 import * as https from "https";
 import * as fs from "fs";
 import * as path from "path";
 
-// Меняешь на реальный владелец/репозиторий, куда публикуются релизы (см.
-// .github/workflows/build-and-release.yml - тот же тег v1.2/v1.0, что
-// используется там).
+// Подтверждено пользователем: реальный владелец/репозиторий (не заглушка).
 const GITHUB_OWNER = "NanoDev1488";
 const GITHUB_REPO = "NanoDecompiler";
-
-// Версия ДВИЖКА (не клиента - см. HANDOFF, у них разный жизненный цикл).
-// Клиент как целое обновляется через свой обычный установщик (NSIS) -
-// апдейтер ниже только для движка (NanoDecompilerAPI.exe), т.к. именно
-// он - тот самый "тяжёлый груз" (~10 МБ), который не хочется тащить
-// заново переустановкой ~150 МБ клиента целиком при каждом мелком фиксе
-// движка.
-export const ENGINE_VERSION = "v1.0";
 
 interface GhAsset {
   name: string;
@@ -26,11 +16,18 @@ interface GhRelease {
   assets: GhAsset[];
 }
 
+const REQUEST_TIMEOUT_MS = 8000;
+
 function httpsGetJson<T>(url: string): Promise<T> {
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { "User-Agent": "NanoDecompiler-updater" } }, (res) => {
+    const req = https.get(url, { headers: { "User-Agent": "NanoDecompiler-updater" } }, (res) => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         resolve(httpsGetJson<T>(res.headers.location));
+        return;
+      }
+      if (res.statusCode !== 200) {
+        reject(new Error(`HTTP ${res.statusCode} при запросе ${url}`));
+        res.resume();
         return;
       }
       let data = "";
@@ -42,19 +39,22 @@ function httpsGetJson<T>(url: string): Promise<T> {
           reject(e);
         }
       });
-    }).on("error", reject);
+    });
+    req.on("error", reject);
+    req.setTimeout(REQUEST_TIMEOUT_MS, () => req.destroy(new Error("Таймаут запроса к GitHub")));
   });
 }
 
 function httpsDownloadFile(url: string, destPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { "User-Agent": "NanoDecompiler-updater" } }, (res) => {
+    const req = https.get(url, { headers: { "User-Agent": "NanoDecompiler-updater" } }, (res) => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         httpsDownloadFile(res.headers.location, destPath).then(resolve, reject);
         return;
       }
       if (res.statusCode !== 200) {
         reject(new Error(`HTTP ${res.statusCode} при скачивании ${url}`));
+        res.resume();
         return;
       }
       const tmpPath = destPath + ".download";
@@ -73,8 +73,42 @@ function httpsDownloadFile(url: string, destPath: string): Promise<void> {
         fs.unlink(tmpPath, () => {});
         reject(err);
       });
-    }).on("error", reject);
+    });
+    req.on("error", reject);
+    req.setTimeout(REQUEST_TIMEOUT_MS, () => req.destroy(new Error("Таймаут скачивания")));
   });
+}
+
+// См. HANDOFF_7/8 - раньше версия движка была ЗАШИТА константой в код
+// (ENGINE_VERSION = "v1.0") и сравнивалась с тегом релиза из GitHub API
+// (release.tag_name). ЭТО БЫЛО СЛОМАНО: workflow публикует ОДИН общий тег
+// на клиент+движок (RELEASE_TAG, сейчас "v1.2"), а движок сам по себе
+// версионируется отдельно (API_VERSION, сейчас "v1.0") - эти два числа
+// заведомо разные по конструкции и никогда бы не совпали, поэтому
+// "обновление доступно" показывалось ВСЕГДА, даже сразу после успешного
+// обновления (константа в коде не менялась от одного apply к другому).
+//
+// Фикс: сравниваем тег с тегом (яблоки с яблоками) - какой релиз СЕЙЧАС
+// установлен, храним в маленьком текстовом файле рядом с самим exe
+// движка (обновляется после каждого успешного apply), а не в константе
+// в коде. Если файла нет (первый запуск после установки клиента, который
+// эту версию апдейтера ещё не знает) - считаем версию "неизвестной", это
+// покажет "доступно обновление" один-единственный раз до первого apply,
+// дальше ведёт себя корректно.
+function versionMarkerPath(engineDir: string): string {
+  return path.join(engineDir, ".engine-release-tag");
+}
+
+function readInstalledTag(engineDir: string): string | null {
+  try {
+    return fs.readFileSync(versionMarkerPath(engineDir), "utf-8").trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function writeInstalledTag(engineDir: string, tag: string): void {
+  fs.writeFileSync(versionMarkerPath(engineDir), tag, "utf-8");
 }
 
 export function registerUpdateHandlers(engineDir: () => string) {
@@ -83,12 +117,13 @@ export function registerUpdateHandlers(engineDir: () => string) {
       const release = await httpsGetJson<GhRelease>(
         `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`
       );
-      const latestTag = release.tag_name; // ожидаем что-то вроде "v1.0" (движок) - если релиз объединённый (v1.2, см. HANDOFF), тут может понадобиться отдельный тег специально под движок
-      const hasUpdate = latestTag !== ENGINE_VERSION;
-      const asset = release.assets.find((a) => a.name === "NanoDecompilerAPI.exe");
+      const latestTag = release.tag_name;
+      const installedTag = readInstalledTag(engineDir());
+      const hasUpdate = installedTag !== latestTag;
+      const asset = release.assets.find((a) => a.name === "NanoDecompilerCLI.exe");
       return {
         ok: true,
-        currentVersion: ENGINE_VERSION,
+        currentVersion: installedTag ?? "неизвестна (движок ещё не обновлялся этой версией клиента)",
         latestVersion: latestTag,
         hasUpdate,
         downloadUrl: asset ? asset.browser_download_url : null,
@@ -98,17 +133,22 @@ export function registerUpdateHandlers(engineDir: () => string) {
     }
   });
 
-  ipcMain.handle("update:apply", async (_e, downloadUrl: string) => {
+  ipcMain.handle("update:apply", async (_e, downloadUrl: string, latestTag?: string) => {
     try {
-      const dest = path.join(engineDir(), "NanoDecompilerAPI.exe");
+      const dir = engineDir();
+      const dest = path.join(dir, "NanoDecompilerCLI.exe");
       // ВАЖНО: движок вызывается ТОЛЬКО как дочерний процесс (spawn) - см.
       // electron/main.ts::run:decompile/tools:install - между вызовами
       // файл никем не заблокирован (Windows не даёт перезаписать EXE,
       // который прямо сейчас исполняется, но между запросами пользователя
       // это не так). Если apply вызван ПОКА идёт декомпиляция - перезапись
       // может упасть с EBUSY/EPERM - вызывающая сторона (App.tsx) должна
-      // дождаться завершения текущей операции перед вызовом apply.
+      // дождаться завершения текущей операции перед вызовом apply (уже
+      // сделано - кнопка "Обновить" задизейблена, пока status === "running").
       await httpsDownloadFile(downloadUrl, dest);
+      if (latestTag) {
+        writeInstalledTag(dir, latestTag);
+      }
       return { ok: true };
     } catch (e) {
       return { ok: false, error: String(e) };

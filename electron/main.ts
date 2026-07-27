@@ -35,6 +35,36 @@ function pythonBin(): string {
   return process.platform === "win32" ? "python" : "python3";
 }
 
+// См. HANDOFF_7/8/9 - раньше клиент ВСЕГДА запускал python3/python main.py
+// напрямую, а апдейтер (electron/updater.ts) при этом качал и подменял
+// NanoDecompilerCLI.exe, который клиент вообще никогда не вызывал - кнопка
+// "Обновить" в топбаре ничего реально не меняла в поведении. Теперь: если
+// рядом лежит NanoDecompilerCLI.exe (Windows-only, собирается в
+// .github/workflows/build-and-release.yml как `pyinstaller --onefile
+// --name NanoDecompilerCLI main.py` - ТОТ ЖЕ движок, те же флаги 1:1, т.к.
+// это просто main.py, упакованный в один exe) - используем его, иначе
+// как и раньше падаем на python3/python + main.py. На свежей установке
+// exe'а рядом нет (в extraResources пакуются только .py-файлы, см.
+// package.json) - клиент работает как и раньше, python; exe появляется
+// ТОЛЬКО после того, как пользователь один раз нажмёт "Обновить".
+//
+// НЕ включаем это на Linux/macOS/Termux - exe собирается только под
+// Windows (windows-latest раннер в workflow), на других платформах его
+// в принципе быть не может (а если бы вдруг оказался - попытка spawn()
+// его напрямую там просто упадёт с ENOEXEC, а не тихо сработает).
+function engineInvocation(scriptArgs: string[]): { cmd: string; args: string[] } {
+  if (process.platform === "win32") {
+    const exePath = path.join(engineDir(), "NanoDecompilerCLI.exe");
+    if (fs.existsSync(exePath)) {
+      // exe уже "содержит в себе" main.py - путь к скрипту не передаём,
+      // только сами позиционные аргументы/флаги.
+      return { cmd: exePath, args: scriptArgs };
+    }
+  }
+  const mainPy = path.join(engineDir(), "main.py");
+  return { cmd: pythonBin(), args: [mainPy, ...scriptArgs] };
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1180,
@@ -126,17 +156,16 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
     return { ok: false, error: "Файл .jar не найден: " + jarPath };
   }
 
-  const mainPy = path.join(engineDir(), "main.py");
   // --headless критически важен на Windows: без него main.py() бы всегда
   // пытался открыть tkinter GUI (см. main.py::main(), ветка
   // "platform.system() == Windows") ВМЕСТО обычной консольной декомпиляции -
   // именно эта ветка и была целью всей замены на Electron. На Linux/Termux
   // флаг безвреден (там и так нет форсированного GUI-пути), но передаём его
   // всегда, для единообразия между платформами.
-  const args = [mainPy, jarPath, outDir, "--headless"];
+  const { cmd, args } = engineInvocation([jarPath, outDir, "--headless"]);
 
   return new Promise((resolve) => {
-    const proc = spawn(pythonBin(), args, {
+    const proc = spawn(cmd, args, {
       cwd: engineDir(),
       env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1" },
     });
@@ -173,10 +202,10 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
 });
 
 ipcMain.handle("jar:summary", async (_e, jarPath: string) => {
-  const mainPy = path.join(engineDir(), "main.py");
+  const { cmd, args } = engineInvocation(["--jar-summary", jarPath]);
   return new Promise((resolve) => {
     let out = "";
-    const proc = spawn(pythonBin(), [mainPy, "--jar-summary", jarPath], {
+    const proc = spawn(cmd, args, {
       cwd: engineDir(),
       env: { ...process.env, PYTHONIOENCODING: "utf-8" },
     });
@@ -207,12 +236,11 @@ ipcMain.handle("tools:install", async (_event, only?: "jdk" | "java" | "maven") 
   if (installingProc) {
     return { ok: false, error: "Установка уже идёт" };
   }
-  const mainPy = path.join(engineDir(), "main.py");
   const flag = only ? `--install-tools-json=${only}` : "--install-tools-json";
-  const args = [mainPy, flag];
+  const { cmd, args } = engineInvocation([flag]);
 
   return new Promise((resolve) => {
-    const proc = spawn(pythonBin(), args, {
+    const proc = spawn(cmd, args, {
       cwd: engineDir(),
       env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1" },
     });

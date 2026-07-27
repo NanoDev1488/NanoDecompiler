@@ -74,6 +74,7 @@ def stats_to_dict(stats):
         "decrypted_strings_owner": stats.decrypted_strings_owner,
         "decrypted_strings_count": stats.decrypted_strings_count,
         "junk_catches_removed": stats.junk_catches_removed,
+        "legitimacy": stats.legitimacy,
     }
 
 
@@ -81,7 +82,8 @@ def decompile_silent(jar_path, out_dir):
     """Запускает process_jar_with_stats(), полностью проглатывая консольный
     вывод (баннер/прогресс-бар/цвет - в API-режиме они не нужны и только
     засоряли бы JSON, если бы утекли в stdout мимо перехвата). Возвращает
-    dict, готовый под json.dumps."""
+    dict, готовый под json.dumps. Проверка легитимности (github/modrinth/
+    spigot/ruspigot) запускается ВСЕГДА (см. legitimacy_check.py)."""
     import io
     from contextlib import redirect_stdout
 

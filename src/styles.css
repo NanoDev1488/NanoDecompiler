@@ -90,6 +90,21 @@ body {
   font-family: var(--font-mono);
 }
 
+.update-badge {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--on-surface-subtle);
+  -webkit-app-region: no-drag;
+}
+
+.update-badge .btn-mini-yes {
+  padding: 3px 10px;
+}
+
 .main {
   display: grid;
   grid-template-columns: 300px 1fr;

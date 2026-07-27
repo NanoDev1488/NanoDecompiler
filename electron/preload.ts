@@ -30,8 +30,8 @@ contextBridge.exposeInMainWorld("nano", {
     ipcRenderer.invoke("tools:install", only),
   checkUpdate: (): Promise<{ ok: boolean; currentVersion?: string; latestVersion?: string; hasUpdate?: boolean; downloadUrl?: string | null; error?: string }> =>
     ipcRenderer.invoke("update:check"),
-  applyUpdate: (downloadUrl: string): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke("update:apply", downloadUrl),
+  applyUpdate: (downloadUrl: string, latestTag?: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("update:apply", downloadUrl, latestTag),
   onLog: (cb: (e: LogEvent) => void) => {
     const handler = (_e: unknown, payload: LogEvent) => cb(payload);
     ipcRenderer.on("run:log", handler);

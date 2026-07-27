@@ -130,6 +130,7 @@ class ProjectStats:
         self.decrypted_strings_owner = None   # internal-имя класса-расшифровщика, если найден (см. str_decrypt.py)
         self.decrypted_strings_count = 0      # сколько строковых литералов реально расшифровано
         self.junk_catches_removed = 0         # см. catchclean.py - catch(T t){throw t;} блоки-пустышки
+        self.legitimacy = None                # см. legitimacy_check.py - dict или None, если не запускалось
 
     def record_method(self, ok, reason=None):
         self.total_methods += 1
