@@ -37,9 +37,9 @@ permissions:
   contents: write   # нужно softprops/action-gh-release, чтобы создавать/обновлять релиз
 
 env:
-  RELEASE_TAG: v1.3
-  CLIENT_VERSION: v1.3
-  API_VERSION: v1.3
+  RELEASE_TAG: v1.2
+  CLIENT_VERSION: v1.2
+  API_VERSION: v1.2
 
 jobs:
   build-client:

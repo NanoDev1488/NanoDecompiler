@@ -317,6 +317,71 @@ class Structurer:
             self._terminates_cache[pc] = result
         return result
 
+    def _find_forward_merge(self, true_t, false_t, stop_addrs, exclude_starts=False):
+        """Пытается найти общую точку схождения двух веток if, когда
+        ipdom(pc) её не увидел (обычно из-за консервативных рёбер
+        исключений - см. HANDOFF_7 Аддендум 13). Идёт вперёд по CFG
+        (ограниченный BFS) от каждой ветки и ищет ближайший блок, до
+        которого доходят ОБЕ, НЕ проходя через обработчики исключений
+        (`cfg.py` подмешивает рёбра try->handler прямо в block.succs -
+        без фильтрации BFS проваливается внутрь catch-машинерии и находит
+        ложное "слияние" там, а не в реальном коде - так уже ловилось
+        один раз при первой попытке этого фикса, отсюда фильтр). Чисто
+        эвристика-фоллбэк: если ошибётся - `_check_full_coverage()` (см.
+        Аддендум 3) поймает недостигнутый код и откатит МЕТОД на честный
+        байткод, а не тихо испортит вывод.
+
+        exclude_starts: не считать true_t/false_t сами по себе валидным
+        слиянием. Нужно ТОЛЬКО когда true_t и false_t раньше уже были
+        определены как явные ветки одного if (см. вызов из XOR-фоллбэка
+        ниже) - там true_t может быть ЧУЖОЙ shared jump-target (см.
+        SQLite.isConnected(), где false-ветка сама содержит ещё один if,
+        одна из веток которого ведёт на тот же адрес, что true_t внешнего
+        if) - без исключения BFS находит этот shared-адрес как "общую"
+        точку, что даёт ПУСТОЕ then_body (see HANDOFF_8/9).
+        Для общего вызова (оба branch термально расходятся, не связаны с
+        конкретным shared-target паттерном) исключать НЕЛЬЗЯ - здесь
+        true_t/false_t сами по себе иногда И ЕСТЬ правильный merge
+        (сломало InventoryListener.onInventoryClick при первой попытке
+        исключать всегда - см. HANDOFF_9)."""
+        def reachable(start):
+            seen = set()
+            frontier = [start]
+            limit = 4000  # разумный потолок для одного метода
+            while frontier and len(seen) < limit:
+                pc = frontier.pop()
+                if pc in seen or pc not in self.cfg.blocks:
+                    continue
+                block = self.cfg.blocks[pc]
+                if block.handler_types:
+                    continue  # вход в обработчик исключений - не идём дальше
+                seen.add(pc)
+                if pc in stop_addrs:
+                    # это уже известная внешняя граница ("конец метода"/
+                    # продолжение снаружи) - она САМА по себе валидный
+                    # кандидат на точку схождения (обе ветки реально в неё
+                    # упираются), просто дальше неё идти незачем - это чужая
+                    # территория (см. HANDOFF_8: раньше stop_addrs исключались
+                    # целиком, из-за чего вложенный if внутри isConnected() не
+                    # находил свою реальную точку схождения - она и была этой
+                    # внешней границей).
+                    continue
+                # ТОЛЬКО рёбра "вперёд" (target > pc) - back-edge цикла
+                # (continue/повтор итерации) уводит обратно к началу цикла,
+                # где "min(общих блоков)" перестаёт значить что-либо
+                # осмысленное (внутри цикла почти всё технически достижимо
+                # из всего) - конкретно на этом сломался реальный метод со
+                # while-циклом (SkullUtils.invokeSetSkin) при первой
+                # проверке фикса на EryBuyer-v1.jar.
+                frontier.extend(s for s in block.succs if s > pc)
+            return seen
+        common = reachable(true_t) & reachable(false_t)
+        if exclude_starts:
+            common = common - {true_t, false_t}
+        if not common:
+            return None
+        return min(common)
+
     def _build_if(self, pc, cond, true_t, false_t, stop_addrs):
         # Явный лимит глубины if/else-цепочки (region <-> _build_if
         # взаимно рекурсивны - каждое звено "else if" добавляет уровень).
@@ -362,10 +427,16 @@ class Structurer:
             f_term = self._is_terminating(false_t)
             if t_term and not f_term:
                 raw = self.ipdom.get(false_t)
+                if raw is None:
+                    raw = self._find_forward_merge(true_t, false_t, stop_addrs, exclude_starts=True)
                 merge = raw if raw is not None else false_t
             elif f_term and not t_term:
                 raw = self.ipdom.get(true_t)
+                if raw is None:
+                    raw = self._find_forward_merge(true_t, false_t, stop_addrs, exclude_starts=True)
                 merge = raw if raw is not None else true_t
+            if merge is None:
+                merge = self._find_forward_merge(true_t, false_t, stop_addrs)
         local_stop = stop_addrs | ({merge} if merge is not None else set())
         then_body = self.region(true_t, local_stop)
         else_body = None if false_t == merge or false_t in stop_addrs else self.region(false_t, local_stop)
@@ -586,6 +657,22 @@ def _fold_boolean_materialization(stmts):
                         continue
                     t1_type = getattr(v1, "type", None)
                     t2_type = getattr(v2, "type", None)
+                    # JVM хранит boolean как int (iconst_0/iconst_1) - если
+                    # одна сторона тернарника - такая "0/1"-константа
+                    # типа "int", а другая - НАСТОЯЩЕЕ boolean-выражение
+                    # (сравнение, !x, boolean-метод), тип константы (int)
+                    # вводит в заблуждение: результат на самом деле boolean,
+                    # а не int. Раньше это давало `int __stk1; ... return
+                    # __stk1;` при объявленном `boolean isConnected()` -
+                    # несовпадение типов, не компилируется (см. HANDOFF_9 -
+                    # предсуществующий баг, докопался при валидации
+                    # if/else-фикса, тут наконец чиню).
+                    if t1_type == "int" and _as_bool_const(v1) is not None and t2_type == "boolean":
+                        v1 = Const("false" if v1.literal == "0" else "true", "boolean")
+                        t1_type = "boolean"
+                    elif t2_type == "int" and _as_bool_const(v2) is not None and t1_type == "boolean":
+                        v2 = Const("false" if v2.literal == "0" else "true", "boolean")
+                        t2_type = "boolean"
                     if t1_type and t1_type not in _PSEUDO_TYPES:
                         result_type = t1_type
                     elif t2_type and t2_type not in _PSEUDO_TYPES:

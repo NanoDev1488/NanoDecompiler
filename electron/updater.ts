@@ -21,7 +21,13 @@ interface VersionsJson {
   api: string;
 }
 
-const REQUEST_TIMEOUT_MS = 8000;
+// См. HANDOFF_16/19 - пользователь просил именно 5 сек для ПРОВЕРКИ
+// (лёгкие JSON-запросы к api.github.com) - для СКАЧИВАНИЯ файлов (exe/
+// инсталлятор, могут быть десятки МБ) отдельный, более щедрый таймаут -
+// 5 сек для реальной закачки было бы слишком мало и рвало бы её на
+// медленном интернете.
+const CHECK_TIMEOUT_MS = 5000;
+const DOWNLOAD_TIMEOUT_MS = 30000;
 
 function httpsGetJson<T>(url: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -46,7 +52,7 @@ function httpsGetJson<T>(url: string): Promise<T> {
       });
     });
     req.on("error", reject);
-    req.setTimeout(REQUEST_TIMEOUT_MS, () => req.destroy(new Error("Таймаут запроса к GitHub")));
+    req.setTimeout(CHECK_TIMEOUT_MS, () => req.destroy(new Error("Таймаут запроса к GitHub")));
   });
 }
 
@@ -80,7 +86,7 @@ function httpsDownloadFile(url: string, destPath: string): Promise<void> {
       });
     });
     req.on("error", reject);
-    req.setTimeout(REQUEST_TIMEOUT_MS, () => req.destroy(new Error("Таймаут скачивания")));
+    req.setTimeout(DOWNLOAD_TIMEOUT_MS, () => req.destroy(new Error("Таймаут скачивания")));
   });
 }
 
@@ -128,7 +134,69 @@ function versionsEqual(a: string, b: string): boolean {
   return true;
 }
 
+// См. HANDOFF_16 - после "важного" (client) обновления новый инсталлятор
+// запускается ОТДЕЛЬНЫМ процессом (detached, переживает закрытие текущего
+// приложения), а ТЕКУЩИЙ клиент сам закрывается - Windows не даёт
+// перезаписать свой же запущенный .exe. NSIS-инсталлятор electron-builder
+// по умолчанию сам предлагает "запустить приложение" по завершении
+// (чекбокс включён по умолчанию) - но на случай, если пользователь его
+// снимет или что-то пойдёт не так, любой следующий запуск приложения
+// (хоть вручную, хоть через сам инсталлятор) проверяет этот файл-маркер
+// и показывает плашку "Обновление успешно установлено" - маркер надёжнее
+// пробрасывания CLI-флага через инсталлятор (который его сам не передаёт).
+function updateSuccessMarkerPath(): string {
+  return path.join(app.getPath("userData"), ".pending-update-success");
+}
+
+export function writeUpdateSuccessMarker(): void {
+  try {
+    fs.writeFileSync(updateSuccessMarkerPath(), "1", "utf-8");
+  } catch {
+    // не критично - в худшем случае просто не покажем плашку один раз
+  }
+}
+
+// Тот же результат достижим и явным флагом `--add-update-success` (см.
+// запрос пользователя) - на случай ручного/скриптового вызова, не только
+// через маркер-файл.
+export function consumeUpdateSuccessFlag(): boolean {
+  const viaFlag = process.argv.includes("--add-update-success");
+  let viaMarker = false;
+  try {
+    viaMarker = fs.existsSync(updateSuccessMarkerPath());
+    if (viaMarker) fs.unlinkSync(updateSuccessMarkerPath());
+  } catch {
+    // игнорируем - не критично
+  }
+  return viaFlag || viaMarker;
+}
+
 export function registerUpdateHandlers(engineDir: () => string) {
+  ipcMain.handle("update:consumeSuccessFlag", async () => consumeUpdateSuccessFlag());
+
+  ipcMain.handle("update:installClientAndRestart", async (_e, downloadUrl: string) => {
+    try {
+      const tmpDir = app.getPath("temp");
+      const installerPath = path.join(tmpDir, "NanoDecompiler-Client-Setup.exe");
+      await httpsDownloadFile(downloadUrl, installerPath);
+      writeUpdateSuccessMarker();
+      // detached + unref - инсталлятор должен пережить закрытие текущего
+      // процесса (не быть его child'ом с точки зрения жизненного цикла).
+      const { spawn } = await import("child_process");
+      const child = spawn(installerPath, [], { detached: true, stdio: "ignore" });
+      child.unref();
+      // Небольшая задержка перед выходом - даём инсталлятору реально
+      // стартовать (открыть свой файл) ДО того, как текущий .exe
+      // попытается завершиться (иначе на медленной машине можно словить
+      // гонку, где Windows ещё не успела дать installerPath файловый
+      // хэндл на чтение).
+      setTimeout(() => app.quit(), 700);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  });
+
   ipcMain.handle("update:check", async () => {
     try {
       const release = await httpsGetJson<GhRelease>(

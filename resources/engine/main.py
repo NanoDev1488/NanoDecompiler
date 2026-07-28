@@ -929,6 +929,12 @@ def process_jar_with_stats(jar_path, out_dir):
 
     write_mapping_report(out_dir, renamer)
     write_readme(out_dir, jar_path, len(class_files), parse_errors, class_files, renamer, stats)
+    # В --json-output это поле уже отдавалось как decompiled_pct (см. api.py),
+    # но обычный CLI-запуск его никогда не печатал в консоль - только прятал
+    # внутрь README_RU.txt. Пользователь должен видеть его сразу, не открывая
+    # файл.
+    pct = stats.pct(stats.decompiled_methods, stats.total_methods)
+    cprint(f"[*] Методов декомпилировано: {stats.decompiled_methods}/{stats.total_methods} ({pct:.1f}%)")
     cprint(f"[*] Заняло: {time.time() - _t0:.1f} сек.")
     return out_dir, stats
 

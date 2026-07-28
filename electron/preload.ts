@@ -41,6 +41,9 @@ contextBridge.exposeInMainWorld("nano", {
   }> => ipcRenderer.invoke("update:check"),
   applyUpdate: (downloadUrl: string, latestApiVersion?: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke("update:apply", downloadUrl, latestApiVersion),
+  installClientAndRestart: (downloadUrl: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("update:installClientAndRestart", downloadUrl),
+  consumeUpdateSuccessFlag: (): Promise<boolean> => ipcRenderer.invoke("update:consumeSuccessFlag"),
   onLog: (cb: (e: LogEvent) => void) => {
     const handler = (_e: unknown, payload: LogEvent) => cb(payload);
     ipcRenderer.on("run:log", handler);

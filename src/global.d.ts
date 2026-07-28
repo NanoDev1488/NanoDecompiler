@@ -40,6 +40,8 @@ declare global {
         error?: string;
       }>;
       applyUpdate: (downloadUrl: string, latestApiVersion?: string) => Promise<{ ok: boolean; error?: string }>;
+      installClientAndRestart: (downloadUrl: string) => Promise<{ ok: boolean; error?: string }>;
+      consumeUpdateSuccessFlag: () => Promise<boolean>;
       onLog: (cb: (e: { line: string; stream: "stdout" | "stderr" }) => void) => () => void;
       onToolsProgress: (
         cb: (e: { type: "progress"; label: string; pct: number | null; downloaded_mb: number; total_mb: number | null }) => void

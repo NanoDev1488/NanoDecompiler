@@ -52,44 +52,59 @@ export default function App() {
   } | null>(null);
   const termRef = useRef<HTMLDivElement>(null);
 
-  // Проверка обновлений - один раз при запуске. Два РАЗНЫХ типа
-  // обновления (см. electron/updater.ts):
+  // Проверка обновлений - см. HANDOFF_16/19. Два РАЗНЫХ типа обновления
+  // (см. electron/updater.ts):
   //  - "engine" - поменялся только движок (.exe) - можно тихо подменить
   //    файл на лету, обычное "Обновить".
   //  - "client" - поменялся сам клиент (GUI/Electron-обвязка) - его
   //    ТАК просто одним файлом не заменить (Windows не даёт процессу
   //    перезаписать свой же запущенный .exe) - нужен новый инсталлятор,
   //    показываем это как ВАЖНОЕ обновление со ссылкой на скачивание.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setUpdateState("checking");
-      const res = await window.nano.checkUpdate();
-      if (cancelled) return;
-      if (!res.ok) {
-        setUpdateState("error");
-        setUpdateInfo({ error: res.error });
-        return;
-      }
-      setUpdateInfo({
-        currentVersion: res.currentVersion,
-        latestVersion: res.latestVersion,
-        downloadUrl: res.downloadUrl,
-        clientDownloadUrl: res.clientDownloadUrl,
-      });
-      setUpdateKind(res.updateKind ?? "none");
-      setUpdateState(res.updateKind && res.updateKind !== "none" ? "available" : "up-to-date");
-    })();
-    return () => {
-      cancelled = true;
-    };
+  //
+  // ПОКА ПРИЛОЖЕНИЕ ОТКРЫТО - проверяем раз в 60 сек (не один раз при
+  // старте), таймаут на саму сетевую проверку - 5 сек (см.
+  // electron/updater.ts::CHECK_TIMEOUT_MS). После УСПЕШНОГО применения
+  // апдейта движка - следующие 5 минут проверки ПРОПУСКАЕМ (см.
+  // suppressChecksUntilRef ниже) - иначе пользователь видел
+  // "не удалось проверить обновления" сразу после обновления (см. отчёт
+  // пользователя) - похоже на гонку/временную недоступность сразу после
+  // сетевой активности апдейтера, пауза даёт этому "отлежаться".
+  const CHECK_INTERVAL_MS = 60_000;
+  const POST_UPDATE_SUPPRESS_MS = 5 * 60_000;
+  const suppressChecksUntilRef = useRef(0);
+
+  const runUpdateCheck = useCallback(async () => {
+    if (Date.now() < suppressChecksUntilRef.current) return;
+    setUpdateState("checking");
+    const res = await window.nano.checkUpdate();
+    if (Date.now() < suppressChecksUntilRef.current) return; // могли применить апдейт, пока ждали ответ
+    if (!res.ok) {
+      setUpdateState("error");
+      setUpdateInfo({ error: res.error });
+      return;
+    }
+    setUpdateInfo({
+      currentVersion: res.currentVersion,
+      latestVersion: res.latestVersion,
+      downloadUrl: res.downloadUrl,
+      clientDownloadUrl: res.clientDownloadUrl,
+    });
+    setUpdateKind(res.updateKind ?? "none");
+    setUpdateState(res.updateKind && res.updateKind !== "none" ? "available" : "up-to-date");
   }, []);
+
+  useEffect(() => {
+    runUpdateCheck();
+    const id = setInterval(runUpdateCheck, CHECK_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [runUpdateCheck]);
 
   const applyUpdate = useCallback(async () => {
     if (!updateInfo?.downloadUrl || status === "running") return;
     setUpdateState("applying");
     const res = await window.nano.applyUpdate(updateInfo.downloadUrl, updateInfo.latestVersion);
     if (res.ok) {
+      suppressChecksUntilRef.current = Date.now() + POST_UPDATE_SUPPRESS_MS;
       setUpdateState("applied");
     } else {
       setUpdateState("error");
@@ -97,11 +112,45 @@ export default function App() {
     }
   }, [updateInfo, status]);
 
-  const openClientDownload = useCallback(() => {
-    if (updateInfo?.clientDownloadUrl) {
-      window.nano.openExternal(updateInfo.clientDownloadUrl);
+  const [installingClient, setInstallingClient] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const installClientUpdate = useCallback(async () => {
+    if (!updateInfo?.clientDownloadUrl || installingClient) return;
+    setInstallingClient(true);
+    const res = await window.nano.installClientAndRestart(updateInfo.clientDownloadUrl);
+    if (!res.ok) {
+      setInstallingClient(false);
+      setUpdateState("error");
+      setUpdateInfo((prev) => ({ ...(prev ?? {}), error: res.error }));
     }
-  }, [updateInfo]);
+    // при успехе приложение само закроется через electron/updater.ts -
+    // никакого дальнейшего состояния тут показывать уже не успеем.
+  }, [updateInfo, installingClient]);
+
+  // Плашка "Обновление успешно установлено" - см. HANDOFF_16. Показывается
+  // один раз при первом запуске ПОСЛЕ того, как предыдущая версия сама
+  // запустила новый инсталлятор и закрылась (маркер-файл/--add-update-success,
+  // см. electron/updater.ts::consumeUpdateSuccessFlag) - само временное
+  // исчезновение плашки через TOAST_MS реализовано ниже.
+  const TOAST_MS = 6000;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const shouldShow = await window.nano.consumeUpdateSuccessFlag();
+      if (!cancelled && shouldShow) {
+        setToast("Обновление успешно установлено");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), TOAST_MS);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   useEffect(() => {
     const off = window.nano.onLog(({ line }) => {
@@ -234,8 +283,8 @@ export default function App() {
               <span className="update-badge-important">
                 ⚠ важное обновление{updateInfo?.latestVersion ? ` ${updateInfo.latestVersion}` : ""} - нужен новый инсталлятор
               </span>
-              <button className="btn-mini btn-mini-yes" onClick={openClientDownload}>
-                Скачать
+              <button className="btn-mini btn-mini-yes" onClick={installClientUpdate} disabled={installingClient}>
+                {installingClient ? "Скачиваю..." : "Скачать и установить"}
               </button>
             </>
           )}
@@ -248,17 +297,6 @@ export default function App() {
           {updateState === "error" && <span title={updateInfo?.error}>проверка обновлений не удалась</span>}
         </span>
       </div>
-
-      <a
-        className="bug-report-link"
-        href="#"
-        onClick={(e) => {
-          e.preventDefault();
-          window.nano.openExternal("https://t.me/ERROR_92");
-        }}
-      >
-        Нашёл баг? - t.me/ERROR_92
-      </a>
 
       <div className="main">
         <div className="panel">
@@ -386,9 +424,26 @@ export default function App() {
       </div>
 
       <div className="footer">
-        <span>движок: Python (main.py, без изменений)</span>
+        <a
+          className="bug-report-link"
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            window.nano.openExternal("https://t.me/ERROR_92");
+          }}
+        >
+          Нашёл баг? - t.me/ERROR_92
+        </a>
         <span>{jarPath ? jarPath : "—"}</span>
       </div>
+      {toast && (
+        <div className="toast">
+          <span>{toast}</span>
+          <div className="toast-expiry">
+            <div className="toast-expiry-bar" style={{ animationDuration: `${TOAST_MS}ms` }} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
