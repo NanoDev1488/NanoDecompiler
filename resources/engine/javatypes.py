@@ -224,6 +224,128 @@ def parse_field_signature(sig):
         return None
 
 
+# ---------------- MethodTypeSignature / ClassSignature (JVMS §4.7.9.1) ---
+#
+# Расширяет _FieldSigParser парсингом параметров типа (`<T extends X>`),
+# списка параметров метода, возвращаемого типа и (класс) списка
+# суперкласса/интерфейсов - то, чего нет у голого FieldTypeSignature.
+# throws-сигнатуры (`^TE;`) разбираются (чтобы не сбить курсор парсера),
+# но НЕ используются при рендере - см. parse_method_signature().
+class _FullSigParser(_FieldSigParser):
+    def _read_ident(self):
+        start = self.i
+        while self.i < self.n and self.s[self.i] not in ":<;.[/()^":
+            self.i += 1
+        return self.s[start:self.i]
+
+    def parse_type_params(self):
+        """<T extends X & Y, U:Ljava/lang/Object;> - возвращает
+        list[(name, [bound_str, ...])]. Пустой список, если параметров
+        типа нет (нет '<' в текущей позиции)."""
+        if self.i >= self.n or self._peek() != "<":
+            return []
+        self.i += 1
+        params = []
+        while self._peek() != ">":
+            name = self._read_ident()
+            bounds = []
+            if self._peek() != ":":
+                raise _SignatureParseError("ожидался ':' после имени параметра типа")
+            self.i += 1  # первое ':' (ClassBound, может быть пустым)
+            if self._peek() not in ":>":
+                bounds.append(self.parse_type())
+            while self._peek() == ":":  # InterfaceBound*
+                self.i += 1
+                bounds.append(self.parse_type())
+            # Неявная граница Object (javac всегда её печатает explicitно,
+            # но не всем интересно видеть "<T extends Object>" - опускаем
+            # в отображении, если это ЕДИНСТВЕННАЯ граница).
+            if bounds == ["Object"]:
+                bounds = []
+            params.append((name, bounds))
+        self.i += 1  # '>'
+        return params
+
+
+def _format_type_params(type_params):
+    if not type_params:
+        return ""
+    parts = []
+    for name, bounds in type_params:
+        parts.append(f"{name} extends {' & '.join(bounds)}" if bounds else name)
+    return f"<{', '.join(parts)}>"
+
+
+def parse_method_signature(sig):
+    """Разбирает Signature-атрибут МЕТОДА (MethodTypeSignature) в dict:
+    {"type_params": "<T>"|"", "param_types": [str, ...], "return_type": str}.
+    None, если разобрать не удалось - вызывающий код (main.py) в этом
+    случае просто использует обычные типы из дескриптора метода, как было
+    до этой фичи (см. тот же принцип, что и у parse_field_signature() -
+    сознательно не рискуем ронять рендер метода из-за кривой сигнатуры).
+
+    throws-сигнатуры разбираются, чтобы не потерять позицию курсора при
+    проверке "разобрали ли всё", но не возвращаются - typed throws
+    (`<E extends Exception> void foo() throws E`) встречается крайне редко
+    в декомпилируемых Bukkit-плагинах, а сам throws-список движок и так
+    берёт из отдельного атрибута Exceptions (см. main.py), не из Signature."""
+    if not sig:
+        return None
+    try:
+        p = _FullSigParser(sig)
+        type_params = p.parse_type_params()
+        if p._peek() != "(":
+            return None
+        p.i += 1
+        param_types = []
+        while p._peek() != ")":
+            param_types.append(p.parse_type())
+        p.i += 1  # ')'
+        if p._peek() == "V":
+            p.i += 1
+            ret = "void"
+        else:
+            ret = p.parse_type()
+        while p.i < p.n and p._peek() == "^":
+            p.i += 1
+            p.parse_type()
+        if p.i != p.n:
+            return None
+        return {
+            "type_params": _format_type_params(type_params),
+            "param_types": param_types,
+            "return_type": ret,
+        }
+    except _SignatureParseError:
+        return None
+    except Exception:
+        return None
+
+
+def parse_class_signature(sig):
+    """Разбирает Signature-атрибут КЛАССА (ClassSignature) в dict:
+    {"type_params": "<T>"|"", "superclass": str, "interfaces": [str, ...]}.
+    None при неудаче разбора (см. parse_method_signature())."""
+    if not sig:
+        return None
+    try:
+        p = _FullSigParser(sig)
+        type_params = p.parse_type_params()
+        superclass = p.parse_type()
+        interfaces = []
+        while p.i < p.n:
+            interfaces.append(p.parse_type())
+        return {
+            "type_params": _format_type_params(type_params),
+            "superclass": superclass,
+            "interfaces": interfaces,
+        }
+    except _SignatureParseError:
+        return None
+    except Exception:
+        return None
+
+
 def method_descriptor_to_java(desc):
     """returns (return_type_str, [param_type_str, ...])"""
     assert desc.startswith("(")

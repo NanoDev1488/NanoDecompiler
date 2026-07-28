@@ -4,6 +4,7 @@ import { classifyLine } from "./classifyLine";
 type Status = "idle" | "running" | "ok" | "error";
 type InstallState = "idle" | "installing" | "done";
 type UpdateState = "idle" | "checking" | "up-to-date" | "available" | "applying" | "applied" | "error";
+type UpdateKind = "none" | "engine" | "client";
 
 interface LogLine {
   text: string;
@@ -41,12 +42,24 @@ export default function App() {
   const [installProgress, setInstallProgress] = useState<string | null>(null);
   const [dismissedInstallPrompt, setDismissedInstallPrompt] = useState(false);
   const [updateState, setUpdateState] = useState<UpdateState>("idle");
-  const [updateInfo, setUpdateInfo] = useState<{ latestVersion?: string; downloadUrl?: string | null; error?: string } | null>(null);
+  const [updateKind, setUpdateKind] = useState<UpdateKind>("none");
+  const [updateInfo, setUpdateInfo] = useState<{
+    currentVersion?: string;
+    latestVersion?: string;
+    downloadUrl?: string | null;
+    clientDownloadUrl?: string | null;
+    error?: string;
+  } | null>(null);
   const termRef = useRef<HTMLDivElement>(null);
 
-  // Проверка обновлений ДВИЖКА (не клиента - у них разный жизненный цикл,
-  // см. electron/updater.ts) - один раз при запуске. Backend уже готов
-  // (update:check/update:apply), тут только подключение UI.
+  // Проверка обновлений - один раз при запуске. Два РАЗНЫХ типа
+  // обновления (см. electron/updater.ts):
+  //  - "engine" - поменялся только движок (.exe) - можно тихо подменить
+  //    файл на лету, обычное "Обновить".
+  //  - "client" - поменялся сам клиент (GUI/Electron-обвязка) - его
+  //    ТАК просто одним файлом не заменить (Windows не даёт процессу
+  //    перезаписать свой же запущенный .exe) - нужен новый инсталлятор,
+  //    показываем это как ВАЖНОЕ обновление со ссылкой на скачивание.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -58,8 +71,14 @@ export default function App() {
         setUpdateInfo({ error: res.error });
         return;
       }
-      setUpdateInfo({ latestVersion: res.latestVersion, downloadUrl: res.downloadUrl });
-      setUpdateState(res.hasUpdate ? "available" : "up-to-date");
+      setUpdateInfo({
+        currentVersion: res.currentVersion,
+        latestVersion: res.latestVersion,
+        downloadUrl: res.downloadUrl,
+        clientDownloadUrl: res.clientDownloadUrl,
+      });
+      setUpdateKind(res.updateKind ?? "none");
+      setUpdateState(res.updateKind && res.updateKind !== "none" ? "available" : "up-to-date");
     })();
     return () => {
       cancelled = true;
@@ -77,6 +96,12 @@ export default function App() {
       setUpdateInfo((prev) => ({ ...(prev ?? {}), error: res.error }));
     }
   }, [updateInfo, status]);
+
+  const openClientDownload = useCallback(() => {
+    if (updateInfo?.clientDownloadUrl) {
+      window.nano.openExternal(updateInfo.clientDownloadUrl);
+    }
+  }, [updateInfo]);
 
   useEffect(() => {
     const off = window.nano.onLog(({ line }) => {
@@ -192,15 +217,25 @@ export default function App() {
     <div className="app">
       <div className="topbar">
         <span className="brand">NanoDecompiler</span>
-        <span className="brand-version">v2.1 · electron gui</span>
+        <span className="brand-version">{updateInfo?.currentVersion ?? ""}</span>
         <span className="update-badge">
           {updateState === "checking" && <span>проверка обновлений...</span>}
-          {updateState === "up-to-date" && <span>движок актуален{updateInfo?.latestVersion ? ` (${updateInfo.latestVersion})` : ""}</span>}
-          {updateState === "available" && (
+          {updateState === "up-to-date" && <span>всё актуально</span>}
+          {updateState === "available" && updateKind === "engine" && (
             <>
               <span>доступно обновление движка{updateInfo?.latestVersion ? ` ${updateInfo.latestVersion}` : ""}</span>
               <button className="btn-mini btn-mini-yes" onClick={applyUpdate} disabled={status === "running"}>
                 Обновить
+              </button>
+            </>
+          )}
+          {updateState === "available" && updateKind === "client" && (
+            <>
+              <span className="update-badge-important">
+                ⚠ важное обновление{updateInfo?.latestVersion ? ` ${updateInfo.latestVersion}` : ""} - нужен новый инсталлятор
+              </span>
+              <button className="btn-mini btn-mini-yes" onClick={openClientDownload}>
+                Скачать
               </button>
             </>
           )}
@@ -213,6 +248,17 @@ export default function App() {
           {updateState === "error" && <span title={updateInfo?.error}>проверка обновлений не удалась</span>}
         </span>
       </div>
+
+      <a
+        className="bug-report-link"
+        href="#"
+        onClick={(e) => {
+          e.preventDefault();
+          window.nano.openExternal("https://t.me/ERROR_92");
+        }}
+      >
+        Нашёл баг? - t.me/ERROR_92
+      </a>
 
       <div className="main">
         <div className="panel">

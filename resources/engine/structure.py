@@ -457,6 +457,39 @@ class Structurer:
         overall_merge = self.ipdom.get(start)
         if overall_merge in stop_addrs:
             overall_merge = None
+        # См. HANDOFF_7/16 - вторая, более узкая попытка (первая уронила
+        # 93.08% -> 85.53%, откачена - см. подробный разбор в HANDOFF).
+        # ipdom(start) иногда "перепрыгивает" через РЕАЛЬНЫЙ код между
+        # концом защищённого диапазона (`end`) и найденной точкой схождения
+        # - конкретно, когда исключение и обычный путь ведут к РАЗНЫМ
+        # исходам (см. try-with-resources баг: catch делает athrow, обычный
+        # путь просто идёт себе дальше) - из-за консервативных рёбер
+        # исключений от ВЛОЖЕННЫХ/пересекающихся try (см. разбор). Отличаем
+        # от безобидного случая "end - это просто goto-трамплин" (там
+        # ipdom(start) обычно и так прав, см. getConnection() в HANDOFF) -
+        # тем же критерием, что и в _check_full_coverage() ниже: блок из
+        # ОДНОГО безусловного goto без собственных statement'ов - пропускаем,
+        # его физически нечего терять. Применяем подмену ТОЛЬКО когда в
+        # блоке `end` есть реальное содержимое (значит - его пропустить
+        # нельзя) И он раньше уже найденной ipdom(start) (никогда не двигаем
+        # точку схождения ПОЗЖЕ - это как раз ломало getConnection() в первой
+        # попытке).
+        #
+        # Подстраховка на случай, если эта эвристика всё равно окажется не
+        # универсальной: _check_full_coverage() (см. ниже) в любом случае
+        # поймает недостающий код и откатит метод на честный байткод, а не
+        # тихо потеряет его - так что риск этой правки теперь СИЛЬНО ниже,
+        # чем был у первой попытки (тогда такой подстраховки ещё не было).
+        if end in self.cfg.blocks and end not in stop_addrs:
+            end_block = self.cfg.blocks[end]
+            is_trampoline = (
+                len(end_block.instrs) == 1
+                and end_block.instrs[0].mnemonic in ("goto", "goto_w")
+            )
+            handler_pcs = {h for _, h in entries}
+            if not is_trampoline and end not in handler_pcs:
+                if overall_merge is None or end < overall_merge:
+                    overall_merge = end
         return TryStmt(body, catches, None), overall_merge
 
 

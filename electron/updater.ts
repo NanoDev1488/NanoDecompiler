@@ -1,4 +1,4 @@
-import { ipcMain } from "electron";
+import { app, ipcMain } from "electron";
 import * as https from "https";
 import * as fs from "fs";
 import * as path from "path";
@@ -13,7 +13,12 @@ interface GhAsset {
 }
 interface GhRelease {
   tag_name: string;
+  html_url: string;
   assets: GhAsset[];
+}
+interface VersionsJson {
+  client: string;
+  api: string;
 }
 
 const REQUEST_TIMEOUT_MS = 8000;
@@ -79,36 +84,48 @@ function httpsDownloadFile(url: string, destPath: string): Promise<void> {
   });
 }
 
-// См. HANDOFF_7/8 - раньше версия движка была ЗАШИТА константой в код
-// (ENGINE_VERSION = "v1.0") и сравнивалась с тегом релиза из GitHub API
-// (release.tag_name). ЭТО БЫЛО СЛОМАНО: workflow публикует ОДИН общий тег
-// на клиент+движок (RELEASE_TAG, сейчас "v1.2"), а движок сам по себе
-// версионируется отдельно (API_VERSION, сейчас "v1.0") - эти два числа
-// заведомо разные по конструкции и никогда бы не совпали, поэтому
-// "обновление доступно" показывалось ВСЕГДА, даже сразу после успешного
-// обновления (константа в коде не менялась от одного apply к другому).
-//
-// Фикс: сравниваем тег с тегом (яблоки с яблоками) - какой релиз СЕЙЧАС
-// установлен, храним в маленьком текстовом файле рядом с самим exe
-// движка (обновляется после каждого успешного apply), а не в константе
-// в коде. Если файла нет (первый запуск после установки клиента, который
-// эту версию апдейтера ещё не знает) - считаем версию "неизвестной", это
-// покажет "доступно обновление" один-единственный раз до первого apply,
-// дальше ведёт себя корректно.
-function versionMarkerPath(engineDir: string): string {
-  return path.join(engineDir, ".engine-release-tag");
+// См. HANDOFF_7/8/16 - версия ДВИЖКА (api) хранится в маленьком текстовом
+// файле рядом с exe (обновляется после каждого успешного apply), а не в
+// константе кода - см. предыдущие аддендумы про то, почему сравнение тегов
+// "в лоб" было сломано. Версия КЛИЕНТА никакого отдельного файла не
+// требует - её всегда точно знает сам Electron через app.getVersion()
+// (читает package.json "version", который electron-builder зашивает в
+// собранный .exe/инсталлятор на этапе сборки) - именно она "живёт" в
+// файловой системе как факт того, какой инсталлятор реально стоит.
+function apiVersionMarkerPath(engineDir: string): string {
+  return path.join(engineDir, ".engine-api-version");
 }
 
-function readInstalledTag(engineDir: string): string | null {
+function readInstalledApiVersion(engineDir: string): string | null {
   try {
-    return fs.readFileSync(versionMarkerPath(engineDir), "utf-8").trim() || null;
+    return fs.readFileSync(apiVersionMarkerPath(engineDir), "utf-8").trim() || null;
   } catch {
     return null;
   }
 }
 
-function writeInstalledTag(engineDir: string, tag: string): void {
-  fs.writeFileSync(versionMarkerPath(engineDir), tag, "utf-8");
+function writeInstalledApiVersion(engineDir: string, version: string): void {
+  fs.writeFileSync(apiVersionMarkerPath(engineDir), version, "utf-8");
+}
+
+// "v1.2" / "1.2" / "1.2.0" - в разных местах версия приходит в разном
+// формате (package.json без "v", релизный тег с "v", API_VERSION как
+// договорятся) - сравниваем по числовым компонентам, а не строкой 1:1.
+function versionParts(v: string): number[] {
+  return v
+    .replace(/^v/i, "")
+    .split(".")
+    .map((p) => parseInt(p, 10) || 0);
+}
+
+function versionsEqual(a: string, b: string): boolean {
+  const pa = versionParts(a);
+  const pb = versionParts(b);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return false;
+  }
+  return true;
 }
 
 export function registerUpdateHandlers(engineDir: () => string) {
@@ -117,37 +134,75 @@ export function registerUpdateHandlers(engineDir: () => string) {
       const release = await httpsGetJson<GhRelease>(
         `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`
       );
-      const latestTag = release.tag_name;
-      const installedTag = readInstalledTag(engineDir());
-      const hasUpdate = installedTag !== latestTag;
-      const asset = release.assets.find((a) => a.name === "NanoDecompilerCLI.exe");
+      const versionsAsset = release.assets.find((a) => a.name === "versions.json");
+      const cliAsset = release.assets.find((a) => a.name === "NanoDecompilerCLI.exe");
+      const setupAsset = release.assets.find((a) => /Setup\.exe$/i.test(a.name));
+
+      const currentClientVersion = app.getVersion();
+      const installedApiVersion = readInstalledApiVersion(engineDir());
+
+      if (!versionsAsset) {
+        // Старый релиз без versions.json (см. HANDOFF_16) - не можем
+        // различить тип обновления, откатываемся на грубое "обычное"
+        // поведение по тегу целиком, лишь бы не соврать про "всё ок".
+        return {
+          ok: true,
+          updateKind: release.tag_name === installedApiVersion ? "none" : "engine",
+          currentVersion: installedApiVersion ?? "неизвестна",
+          latestVersion: release.tag_name,
+          downloadUrl: cliAsset ? cliAsset.browser_download_url : null,
+          clientDownloadUrl: null,
+          releaseUrl: release.html_url,
+        };
+      }
+
+      const versions = await httpsGetJson<VersionsJson>(versionsAsset.browser_download_url);
+      const clientNeedsUpdate = !versionsEqual(currentClientVersion, versions.client);
+      const apiNeedsUpdate = installedApiVersion === null || !versionsEqual(installedApiVersion, versions.api);
+
+      // Клиент важнее движка: если поменялось само GUI-приложение, апдейт
+      // движка (даже если он ТОЖЕ поменялся) неважен сам по себе - новый
+      // инсталлятор клиента и так принесёт свежий движок внутри себя (см.
+      // build-client в workflow - он теперь сам собирает и встраивает
+      // NanoDecompilerCLI.exe).
+      let updateKind: "none" | "engine" | "client" = "none";
+      if (clientNeedsUpdate) updateKind = "client";
+      else if (apiNeedsUpdate) updateKind = "engine";
+
       return {
         ok: true,
-        currentVersion: installedTag ?? "неизвестна (движок ещё не обновлялся этой версией клиента)",
-        latestVersion: latestTag,
-        hasUpdate,
-        downloadUrl: asset ? asset.browser_download_url : null,
+        updateKind,
+        currentVersion: currentClientVersion,
+        latestVersion: updateKind === "client" ? versions.client : versions.api,
+        downloadUrl: cliAsset ? cliAsset.browser_download_url : null,
+        clientDownloadUrl: setupAsset ? setupAsset.browser_download_url : release.html_url,
+        releaseUrl: release.html_url,
       };
     } catch (e) {
       return { ok: false, error: String(e) };
     }
   });
 
-  ipcMain.handle("update:apply", async (_e, downloadUrl: string, latestTag?: string) => {
+  ipcMain.handle("update:apply", async (_e, downloadUrl: string, latestApiVersion?: string) => {
+    // ВАЖНО: apply умеет подменять ТОЛЬКО движок (exe) - см. updateKind
+    // выше. Обновление самого клиента "апдейтом" в этом же смысле в
+    // принципе невозможно - Windows не даёт процессу перезаписать
+    // собственный запущенный .exe/удалить свою же папку в Program Files;
+    // для клиента showUpdateKind "client" в App.tsx ведёт на скачивание
+    // НОВОГО инсталлятора через shell.openExternal, а не сюда.
     try {
       const dir = engineDir();
       const dest = path.join(dir, "NanoDecompilerCLI.exe");
-      // ВАЖНО: движок вызывается ТОЛЬКО как дочерний процесс (spawn) - см.
+      // Движок вызывается ТОЛЬКО как дочерний процесс (spawn) - см.
       // electron/main.ts::run:decompile/tools:install - между вызовами
-      // файл никем не заблокирован (Windows не даёт перезаписать EXE,
-      // который прямо сейчас исполняется, но между запросами пользователя
-      // это не так). Если apply вызван ПОКА идёт декомпиляция - перезапись
-      // может упасть с EBUSY/EPERM - вызывающая сторона (App.tsx) должна
-      // дождаться завершения текущей операции перед вызовом apply (уже
-      // сделано - кнопка "Обновить" задизейблена, пока status === "running").
+      // файл никем не заблокирован. Если apply вызван ПОКА идёт
+      // декомпиляция - перезапись может упасть с EBUSY/EPERM - вызывающая
+      // сторона (App.tsx) должна дождаться завершения текущей операции
+      // перед вызовом apply (уже сделано - кнопка "Обновить" задизейблена,
+      // пока status === "running").
       await httpsDownloadFile(downloadUrl, dest);
-      if (latestTag) {
-        writeInstalledTag(dir, latestTag);
+      if (latestApiVersion) {
+        writeInstalledApiVersion(dir, latestApiVersion);
       }
       return { ok: true };
     } catch (e) {

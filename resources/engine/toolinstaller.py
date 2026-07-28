@@ -39,7 +39,9 @@ import zipfile
 
 ADOPTIUM_FEATURE_VERSION = 17  # LTS, более чем достаточно для декомпилированных Bukkit-плагинов
 MAVEN_METADATA_URL = "https://repo1.maven.org/maven2/org/apache/maven/apache-maven/maven-metadata.xml"
-MAVEN_FALLBACK_VERSION = "3.9.9"  # если metadata.xml недоступен (сеть/зеркало легло) - известная рабочая версия
+MAVEN_FALLBACK_VERSION = "3.9.9"  # см. install_maven() - теперь качается с archive.apache.org
+                                    # при неудаче, так что версия тут не обязана быть "последней",
+                                    # архив хранит её вечно в любом случае
 REQUEST_TIMEOUT = 30
 DOWNLOAD_CHUNK = 1 << 16  # 64 КБ
 
@@ -384,15 +386,27 @@ def install_maven(progress_cb=None):
     try:
         data = _download(url, progress_cb, label="Maven")
     except ToolInstallError:
+        # См. HANDOFF_16 - dlcdn.apache.org держит ТОЛЬКО самую свежую
+        # версию, старые с него убирают почти сразу после следующего
+        # релиза - поэтому запасной вариант качаем с archive.apache.org
+        # (тот же путь, просто другой хост + префикс /dist/ - там версии
+        # хранятся НАВСЕГДА, в отличие от dlcdn). Раньше запасной URL тоже
+        # шёл через dlcdn с зашитым номером версии - как только Apache
+        # выпускал что-то новее MAVEN_FALLBACK_VERSION, этот "запасной"
+        # путь сам переставал работать (см. репорт пользователя - 404).
         if version != MAVEN_FALLBACK_VERSION:
-            # dlcdn иногда убирает старые версии сразу после релиза новой -
-            # если "последняя по metadata.xml" ещё не разъехалась по CDN,
-            # пробуем последний известный рабочий номер как запасной вариант.
             url = (f"https://dlcdn.apache.org/maven/maven-3/{MAVEN_FALLBACK_VERSION}"
                    f"/binaries/apache-maven-{MAVEN_FALLBACK_VERSION}-bin.zip")
-            data = _download(url, progress_cb, label="Maven")
+            try:
+                data = _download(url, progress_cb, label="Maven")
+            except ToolInstallError:
+                url = (f"https://archive.apache.org/dist/maven/maven-3/{MAVEN_FALLBACK_VERSION}"
+                       f"/binaries/apache-maven-{MAVEN_FALLBACK_VERSION}-bin.zip")
+                data = _download(url, progress_cb, label="Maven")
         else:
-            raise
+            url = (f"https://archive.apache.org/dist/maven/maven-3/{version}"
+                   f"/binaries/apache-maven-{version}-bin.zip")
+            data = _download(url, progress_cb, label="Maven")
     root = _extract_archive(data, tools_dir, is_zip=True)
     mvn_path = find_local_maven(tools_dir)
     if not mvn_path:

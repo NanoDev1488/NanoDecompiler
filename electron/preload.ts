@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld("nano", {
   selectOutDir: (defaultPath?: string): Promise<string | null> =>
     ipcRenderer.invoke("dialog:selectOutDir", defaultPath),
   openPath: (target: string): Promise<void> => ipcRenderer.invoke("shell:openPath", target),
+  openExternal: (url: string): Promise<void> => ipcRenderer.invoke("shell:openExternal", url),
   openInVSCode: (target: string): Promise<ShellResult> => ipcRenderer.invoke("shell:openInVSCode", target),
   jarSummary: (jarPath: string): Promise<JarSummary> => ipcRenderer.invoke("jar:summary", jarPath),
   runDecompile: (jarPath: string, outDir: string): Promise<RunResult> =>
@@ -28,10 +29,18 @@ contextBridge.exposeInMainWorld("nano", {
   cancel: (): Promise<boolean> => ipcRenderer.invoke("run:cancel"),
   installTools: (only?: "jdk" | "java" | "maven"): Promise<ToolsInstallResult> =>
     ipcRenderer.invoke("tools:install", only),
-  checkUpdate: (): Promise<{ ok: boolean; currentVersion?: string; latestVersion?: string; hasUpdate?: boolean; downloadUrl?: string | null; error?: string }> =>
-    ipcRenderer.invoke("update:check"),
-  applyUpdate: (downloadUrl: string, latestTag?: string): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke("update:apply", downloadUrl, latestTag),
+  checkUpdate: (): Promise<{
+    ok: boolean;
+    updateKind?: "none" | "engine" | "client";
+    currentVersion?: string;
+    latestVersion?: string;
+    downloadUrl?: string | null;
+    clientDownloadUrl?: string | null;
+    releaseUrl?: string;
+    error?: string;
+  }> => ipcRenderer.invoke("update:check"),
+  applyUpdate: (downloadUrl: string, latestApiVersion?: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("update:apply", downloadUrl, latestApiVersion),
   onLog: (cb: (e: LogEvent) => void) => {
     const handler = (_e: unknown, payload: LogEvent) => cb(payload);
     ipcRenderer.on("run:log", handler);

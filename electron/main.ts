@@ -127,6 +127,15 @@ ipcMain.handle("shell:openPath", async (_e, target: string) => {
   await shell.openPath(target);
 });
 
+ipcMain.handle("shell:openExternal", async (_e, url: string) => {
+  // Только http(s) - см. HANDOFF_16, ссылка на баг-репорт/скачивание
+  // нового инсталлятора открывается в системном браузере, а не внутри
+  // окна приложения.
+  if (/^https?:\/\//i.test(url)) {
+    await shell.openExternal(url);
+  }
+});
+
 ipcMain.handle("shell:openInVSCode", async (_e, target: string) => {
   // `code` - это shell-команда, которую сам VS Code добавляет в PATH при
   // установке (опция "Add to PATH" в инсталляторе, включена по умолчанию

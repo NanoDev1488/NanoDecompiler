@@ -104,6 +104,8 @@ class Method:
         self.annotations = []       # list[{"type": ..., "args": {...}}] - на сам метод (напр. @NotNull
                                      # на возвращаемом значении - так его пишут аннотаторы IntelliJ/JetBrains)
         self.param_annotations = [] # list[list[annotation]] - по одному списку на параметр
+        self.signature = None       # см. HANDOFF_3 п.4 / javatypes.parse_method_signature -
+                                     # сырая строка Signature-атрибута метода, None если нет
 
 
 class ClassFile:
@@ -121,6 +123,9 @@ class ClassFile:
         self.access = 0
         self.source_file = None
         self.annotations = []   # class-level @Аннотации (RuntimeVisible/InvisibleAnnotations)
+        self.signature = None    # см. HANDOFF_3 п.4 / javatypes.parse_class_signature -
+                                  # сырая строка Signature-атрибута класса (class Foo<T> extends
+                                  # Bar<T>), None если нет
         self.bootstrap_methods = []   # list[(method_handle_cp_index, [arg_cp_index,...])]
         self.inner_classes = []       # list of dict(inner, outer, inner_name, access)
         self._parse(data)
@@ -331,6 +336,9 @@ class ClassFile:
                         for i, lst in enumerate(parsed):
                             if i < len(m.param_annotations):
                                 m.param_annotations[i].extend(lst)
+                elif a_name == "Signature" and len(a_data) >= 2:
+                    sig_idx = struct.unpack_from(">H", a_data, 0)[0]
+                    m.signature = self.utf8(sig_idx)
             self.methods.append(m)
 
         # class attributes (SourceFile и т.д.)
@@ -344,6 +352,9 @@ class ClassFile:
                 self.source_file = self.utf8(sf_idx)
             elif a_name in ("RuntimeVisibleAnnotations", "RuntimeInvisibleAnnotations"):
                 self.annotations.extend(self._parse_annotations_attr(a_data))
+            elif a_name == "Signature" and len(a_data) >= 2:
+                sig_idx = struct.unpack_from(">H", a_data, 0)[0]
+                self.signature = self.utf8(sig_idx)
             elif a_name == "BootstrapMethods":
                 ar = Reader(a_data)
                 n = ar.u2()

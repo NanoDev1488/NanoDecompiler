@@ -37,9 +37,9 @@ permissions:
   contents: write   # нужно softprops/action-gh-release, чтобы создавать/обновлять релиз
 
 env:
-  RELEASE_TAG: v1.2
-  CLIENT_VERSION: v1.2
-  API_VERSION: v1.0
+  RELEASE_TAG: v1.3
+  CLIENT_VERSION: v1.3
+  API_VERSION: v1.3
 
 jobs:
   build-client:
@@ -57,7 +57,7 @@ jobs:
       # resources/engine/ (плоско, не в dist/) ДО того, как electron-builder
       # упакует extraResources - тогда engineInvocation() увидит его сразу
       # при самом первом запуске, без Python вообще. Заодно пишем
-      # .engine-release-tag с текущим RELEASE_TAG - без этого свежая
+      # .engine-api-version с текущим API_VERSION - без этого свежая
       # установка при первой проверке апдейтера всегда показывала бы
       # "доступно обновление", даже если exe уже самый новый (см.
       # electron/updater.ts - сравнение идёт именно по этому файлу).
@@ -75,7 +75,7 @@ jobs:
           pyinstaller --onefile --name NanoDecompilerCLI --icon=icon.ico main.py
           Move-Item -Force dist/NanoDecompilerCLI.exe NanoDecompilerCLI.exe
           Remove-Item -Recurse -Force dist, build, NanoDecompilerCLI.spec
-          Set-Content -Path .engine-release-tag -Value $env:RELEASE_TAG -NoNewline
+          Set-Content -Path .engine-api-version -Value $env:API_VERSION -NoNewline
 
       - name: Проверка - встроенный exe реально работает
         shell: pwsh
@@ -179,6 +179,19 @@ jobs:
           name: api-artifacts
           path: release-files
 
+      # См. HANDOFF_7/16 - без этого файла апдейтер (electron/updater.ts)
+      # не может отличить "поменялся только движок" (можно тихо подменить
+      # .exe на лету) от "поменялся сам клиент" (GUI/Electron-обвязка -
+      # так просто одним файлом не подменить, нужен новый инсталлятор) -
+      # тег релиза (RELEASE_TAG) один на двоих, а CLIENT_VERSION/
+      # API_VERSION по отдельности раньше были только в тексте релиза
+      # (не машиночитаемо).
+      - name: Сгенерировать versions.json (для апдейтера - client vs api)
+        shell: bash
+        run: |
+          mkdir -p release-files
+          printf '{"client":"%s","api":"%s"}' "$CLIENT_VERSION" "$API_VERSION" > release-files/versions.json
+
       - name: Публикация ОДНОГО релиза со всеми файлами и текстом
         uses: softprops/action-gh-release@v2
         with:
@@ -197,6 +210,7 @@ jobs:
             | `NanoDecompiler-Client-Setup.exe` | Клиентское приложение (Electron+React, полноценный GUI) - обычный инсталлятор, поставить и пользоваться | ${{ env.CLIENT_VERSION }} |
             | `NanoDecompilerAPI.exe` | Голый API, без GUI и без консоли - для встраивания в другие проекты: `NanoDecompilerAPI.exe plugin.jar [out_dir]`, ответ - JSON в stdout | ${{ env.API_VERSION }} |
             | `NanoDecompilerCLI.exe` | Тот же движок, что и в клиенте, но как отдельный консольный инструмент (флаги `--api`/`--json-output`/`--api-server`/`--install-tools`) | ${{ env.API_VERSION }} |
+            | `versions.json` | Машиночитаемые версии client/api - для автообновления клиента, не для ручного использования | - |
 
             ### Как проверялось
 

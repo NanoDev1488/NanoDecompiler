@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-NanoDecompiler v1.1
+NanoDecompiler v1.2
 
 Декомпилер + деобфускатор Java/Bukkit-плагинов (.jar) с ПОЛНЫМ восстановлением
 управляющей структуры (if/else, while/do-while/for, switch, try/catch) и
@@ -49,6 +49,21 @@ import zipfile
 
 sys.setrecursionlimit(20000)
 
+# См. HANDOFF_16 - PyInstaller-собранный NanoDecompilerCLI.exe (в отличие от
+# обычного `python3 main.py`) НЕ гарантированно соблюдает PYTHONUNBUFFERED=1
+# из env (electron/main.ts его выставляет, но это известная особенность
+# PyInstaller-бутлоадера - буферизация stdout иногда всё равно остаётся
+# блочной, а не построчной) - из-за этого пользователь видел ВЕСЬ прогресс
+# декомпиляции разом в конце вместо построчного вывода, как через python -
+# выглядит как будто прога зависла. Реконфигурируем построчную буферизацию
+# явно, в коде - не полагаемся только на переменную окружения, работает
+# одинаково что под python3, что под собранным exe.
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+except Exception:
+    pass  # не должно ронять запуск, если вдруг stdout - что-то нестандартное
+
 # На Windows с не-UTF8 консолью (напр. английская локаль - так настроены
 # раннеры GitHub Actions windows-latest) sys.stdout по умолчанию кодируется
 # в cp1252/cp437 и т.п., которые физически не умеют кириллицу - любой
@@ -62,7 +77,7 @@ for _stream in (sys.stdout, sys.stderr):
     except AttributeError:
         pass  # Python <3.7 или поток без reconfigure() - маловероятно, но не падать из-за этого
 
-NANO_DECOMPILER_VERSION = "NanoDecompiler v1.1"
+NANO_DECOMPILER_VERSION = "NanoDecompiler v1.2"
 
 
 def _enable_windows_ansi():
@@ -181,7 +196,7 @@ def banner_text():
     на очередь без isatty()==True - там банер печатается обычным текстом,
     без escape-мусора)."""
     lines = [
-        "✻ NanoDecompiler v1.1",
+        "✻ NanoDecompiler v1.2",
         "   Java-декомпилятор/деобфускатор для Bukkit-плагинов",
     ]
     width = max(len(l) for l in lines)
@@ -413,7 +428,8 @@ from classfile import ClassFile, access_str
 from disassembler import disassemble
 from javatypes import (
     field_descriptor_to_java, method_descriptor_to_java, looks_obfuscated, dotted_from_internal,
-    mark_type, resolve_type_markers, parse_field_signature,
+    mark_type, resolve_type_markers, parse_field_signature, parse_method_signature,
+    parse_class_signature,
 )
 from pom_builder import build_pom, KNOWN_LIBS, find_pom_properties_and_xml, parse_shade_relocations
 from engine import decompile_method_body, fallback_bytecode_listing
@@ -968,16 +984,31 @@ def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, sw
                                for a in cf.annotations]
 
     header = f"{mods} {kind} {simple}".replace("  ", " ").strip()
+    _cgsig = None
+    if getattr(cf, "signature", None):
+        try:
+            _cgsig = parse_class_signature(cf.signature)
+        except Exception:
+            _cgsig = None
+    if _cgsig and _cgsig.get("type_params"):
+        header += _cgsig["type_params"]
     if cf.super_class_name and cf.super_class_name != "java/lang/Object" and \
             not is_interface and not is_enum and cf.super_class_name != "java/lang/Enum":
         super_disp = format_type_dotted(internal_to_dotted(cf.super_class_name), renamer,
                                          known_internal_by_dotted, all_imports)
-        header += f" extends {_simple_type(super_disp)}"
+        if _cgsig and _cgsig.get("superclass"):
+            header += f" extends {_cgsig['superclass']}"
+        else:
+            header += f" extends {_simple_type(super_disp)}"
     if cf.interfaces:
         iface_strs = []
-        for iface in cf.interfaces:
-            d = format_type_dotted(internal_to_dotted(iface), renamer, known_internal_by_dotted, all_imports)
-            iface_strs.append(_simple_type(d))
+        _giface = _cgsig["interfaces"] if (_cgsig and len(_cgsig.get("interfaces", [])) == len(cf.interfaces)) else None
+        for idx, iface in enumerate(cf.interfaces):
+            if _giface is not None:
+                iface_strs.append(_giface[idx])
+            else:
+                d = format_type_dotted(internal_to_dotted(iface), renamer, known_internal_by_dotted, all_imports)
+                iface_strs.append(_simple_type(d))
         kw = "extends" if is_interface else "implements"
         header += f" {kw} " + ", ".join(iface_strs)
     header += " {"
@@ -1226,6 +1257,32 @@ def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, sw
         if param_names is None:
             param_names = [f"arg{i + arg_offset}" for i in range(len(params_disp))]
 
+        # См. HANDOFF_3 п.4 / javatypes.parse_method_signature() - если у
+        # метода есть Signature-атрибут, подменяем ret_disp/params_disp на
+        # generic-варианты (напр. `List<String>` вместо голого `List`).
+        # ВАЖНО: Signature НИКОГДА не включает синтетические ведущие
+        # параметры enum-конструктора (имя/ordinal) - они есть только в
+        # обычном дескрипторе (m.descriptor), поэтому сверяем длину именно
+        # с УЖЕ обрезанным (после enum_ctor-среза выше) params_disp, а не
+        # с "сырым" списком до среза. Несовпадение длины (любая другая
+        # причина рассинхронизации) - тихо пропускаем подмену и используем
+        # обычные типы, как и было до этой фичи (см. тот же принцип
+        # "не уверен - не рискуем" у parse_field_signature()).
+        _method_type_params = ""
+        _used_generic_sig = False
+        if getattr(m, "signature", None):
+            _gsig = None
+            try:
+                _gsig = parse_method_signature(m.signature)
+            except Exception:
+                _gsig = None
+            if _gsig is not None and len(_gsig["param_types"]) == len(params_disp):
+                params_disp = _gsig["param_types"]
+                if m.name != "<init>":
+                    ret_disp = _gsig["return_type"]
+                _method_type_params = _gsig["type_params"]
+                _used_generic_sig = True
+
         param_anns = list(m.param_annotations) if m.param_annotations else []
         if is_enum_ctor and param_anns:
             param_anns = param_anns[2:]
@@ -1235,13 +1292,15 @@ def render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, sw
             if i < len(param_anns) and param_anns[i]:
                 prefix = " ".join(_format_annotation(a, renamer, known_internal_by_dotted, all_imports)
                                    for a in param_anns[i]) + " "
-            param_parts.append(f"{prefix}{_simple_type(p)} {n}")
+            param_parts.append(f"{prefix}{p if _used_generic_sig else _simple_type(p)} {n}")
         param_str = ", ".join(param_parts)
         has_body = result is not None
         sig_end = " {" if has_body else ";"
         for _ann in m.annotations:
             body_lines.append(f"    {_format_annotation(_ann, renamer, known_internal_by_dotted, all_imports)}")
-        sig = f"    {mmods} {_simple_type(ret_disp)} {mname}({param_str}){sig_end}{renamed_note}".replace("  ", " ")
+        _ret_display = ret_disp if (_used_generic_sig and m.name != "<init>") else _simple_type(ret_disp)
+        _tparams_prefix = f"{_method_type_params} " if _method_type_params else ""
+        sig = f"    {mmods} {_tparams_prefix}{_ret_display} {mname}({param_str}){sig_end}{renamed_note}".replace("  ", " ")
         body_lines.append(sig)
 
         if result is not None:

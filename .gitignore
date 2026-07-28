@@ -15,7 +15,12 @@ resources/engine/__pycache__/
 # клиента (см. .github/workflows/build-and-release.yml::build-client) -
 # генерируется в CI, никогда не коммитится.
 resources/engine/NanoDecompilerCLI.exe
-resources/engine/.engine-release-tag
+resources/engine/.engine-api-version
+release-files/versions.json
+
+# Внутренние хэндофф-заметки между сессиями работы над проектом - рабочий
+# дневник, не предназначен для публичного репозитория.
+resources/engine/HANDOFF*.md
 
 # CI-мусор, который иногда остаётся после локального прогона проверок
 out_check_cli/

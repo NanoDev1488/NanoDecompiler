@@ -105,6 +105,30 @@ body {
   padding: 3px 10px;
 }
 
+.update-badge-important {
+  color: var(--danger, #e5484d);
+  font-weight: 700;
+}
+
+.bug-report-link {
+  position: fixed;
+  left: 14px;
+  bottom: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--on-surface-subtle);
+  text-decoration: none;
+  opacity: 0.75;
+  z-index: 10;
+  -webkit-app-region: no-drag;
+}
+
+.bug-report-link:hover {
+  opacity: 1;
+  color: var(--primary);
+  text-decoration: underline;
+}
+
 .main {
   display: grid;
   grid-template-columns: 300px 1fr;

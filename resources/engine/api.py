@@ -118,7 +118,7 @@ def run_json_output(jar_path, out_dir):
 # HTTP-сервер
 # ---------------------------------------------------------------------
 class _Handler(BaseHTTPRequestHandler):
-    server_version = "NanoDecompilerAPI/1.1"
+    server_version = "NanoDecompilerAPI/1.2"
 
     def log_message(self, fmt, *args):
         # Свой лог вместо дефолтного (тот пишет в stderr в формате Apache
