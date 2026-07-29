@@ -7,7 +7,7 @@
 """
 from ir import decode_method
 from cfg import CFG
-from stackvm import simulate_block, MethodCtx, DecompileAbort, CAUGHT_SENTINEL, _PSEUDO_TYPES, _MonitorMarker
+from stackvm import simulate_block, MethodCtx, DecompileAbort, CAUGHT_SENTINEL, _PSEUDO_TYPES, _MonitorMarker, _coerce_arg
 from ast_nodes import (
     Local, Assign, ExprStmt, LocalDecl, ReturnStmt, ThrowStmt, IfStmt, WhileStmt,
     DoWhileStmt, ForStmt, SyncStmt, SwitchStmt, TryStmt, ArrayAccess, Const,
@@ -1102,7 +1102,7 @@ def _inline_single_use_crossing_temps(stmts, ctx):
                     isinstance(cur.expr.target, Local) and cur.expr.target.name in ctx.crossing_temp_types and \
                     isinstance(nxt, ReturnStmt) and isinstance(nxt.expr, Local) and \
                     nxt.expr.name == cur.expr.target.name:
-                out.append(ReturnStmt(cur.expr.value))
+                out.append(ReturnStmt(_coerce_arg(cur.expr.value, ctx.ret_type)))
                 i += 2
                 continue
             out.append(cur)
@@ -1113,22 +1113,55 @@ def _inline_single_use_crossing_temps(stmts, ctx):
 
 def _refresh_crossing_temp_types(stmts, ctx):
     seen = {}
+    # JVM хранит boolean как int (iconst_0/iconst_1) - если ПЕРВОЕ по
+    # порядку присваивание сквозной (crossing) переменной оказывается
+    # такой "0/1"-константой типа "int", тип этого присваивания сам по
+    # себе может вводить в заблуждение (см. HANDOFF_11:
+    # SkullUtils.applyPlayerProfileSkullReflect - `__stk4 = 1;` (int) -
+    # единственное присваивание, но переменная реально boolean, судя по
+    # тому, что её значение напрямую возвращается из boolean-метода).
+    # Собираем "boolean-подсказки" отдельно: явное boolean-присваивание
+    # ЛИБО использование переменной как значения return в boolean-методе.
+    boolish_hint = set()
 
     def scan(lst):
         for s in lst:
             if isinstance(s, ExprStmt) and isinstance(s.expr, Assign) and isinstance(s.expr.target, Local):
                 name = s.expr.target.name
-                if name in ctx.crossing_temp_types and name not in seen:
-                    t = getattr(s.expr.value, "type", ctx.crossing_temp_types[name])
-                    if t in _PSEUDO_TYPES:
-                        t = ctx.crossing_temp_types[name]
+                if name in ctx.crossing_temp_types:
+                    vtype = getattr(s.expr.value, "type", None)
+                    if vtype == "boolean":
+                        boolish_hint.add(name)
+                    if name not in seen:
+                        t = vtype if vtype is not None else ctx.crossing_temp_types[name]
                         if t in _PSEUDO_TYPES:
-                            t = "Object"
-                    seen[name] = t
+                            t = ctx.crossing_temp_types[name]
+                            if t in _PSEUDO_TYPES:
+                                t = "Object"
+                        seen[name] = t
+            elif isinstance(s, ReturnStmt) and isinstance(s.expr, Local) and \
+                    s.expr.name in ctx.crossing_temp_types and ctx.ret_type == "boolean":
+                boolish_hint.add(s.expr.name)
         return lst
     _walk_stmt_lists(stmts, scan)
     for name, typ in seen.items():
+        if typ == "int" and name in boolish_hint:
+            typ = "boolean"
         ctx.crossing_temp_types[name] = typ
+    # Если тип в итоге определён как boolean, но какие-то присваивания
+    # этой переменной всё ещё несут "сырые" 0/1 int-константы (JVM-
+    # представление true/false) - `boolean __stk4; ... __stk4 = 1;` не
+    # компилируется - конвертируем такие константы в настоящие true/false.
+    def fix_bool_assigns(lst):
+        for s in lst:
+            if isinstance(s, ExprStmt) and isinstance(s.expr, Assign) and isinstance(s.expr.target, Local):
+                name = s.expr.target.name
+                if ctx.crossing_temp_types.get(name) == "boolean":
+                    v = s.expr.value
+                    if isinstance(v, Const) and v.type == "int" and v.literal in ("0", "1"):
+                        s.expr.value = Const("false" if v.literal == "0" else "true", "boolean")
+        return lst
+    _walk_stmt_lists(stmts, fix_bool_assigns)
     still_used = set()
 
     def scan_uses(lst):

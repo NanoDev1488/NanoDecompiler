@@ -75,10 +75,60 @@ class Structurer:
             self.loop_headers[header] = (body, exit_pc)
         self._consumed_loop = set()
 
+    class _MergedExc:
+        """Лёгкая замена ExceptionEntry - нужны только 4 поля, которые
+        читает _prepare_try/остальной код (start_pc/end_pc/catch_type/
+        handler_pc), без зависимости от classfile.py."""
+        __slots__ = ("start_pc", "end_pc", "catch_type", "handler_pc")
+        def __init__(self, start_pc, end_pc, catch_type, handler_pc):
+            self.start_pc = start_pc
+            self.end_pc = end_pc
+            self.catch_type = catch_type
+            self.handler_pc = handler_pc
+
+    def _merge_split_exception_ranges(self, exceptions):
+        """javac иногда режет ОДИН логический try-блок на НЕСКОЛЬКО смежных
+        диапазонов в exception-table для ОДНОГО И ТОГО ЖЕ (catch_type,
+        handler_pc) - реальный найденный случай (см. HANDOFF_11):
+        `SkullUtils.applyPlayerProfileSkullReflect` - 3 типа исключений,
+        КАЖДЫЙ дважды, с диапазонами (0,32) и (33,120) - ИДЕНТИЧНЫЙ
+        handler_pc для обеих половин каждого типа. Раньше `_prepare_try`
+        группировал СТРОГО по (start_pc,end_pc), из-за чего эти две
+        половины строились как ДВА вложенных try/catch с задвоенными
+        catch-блоками (и невалидными именами catch-переменных вне области
+        видимости - `e1` из внутреннего catch использовался во внешнем).
+        Сшиваем смежные (end предыдущего == start следующего) диапазоны
+        с ОДИНАКОВЫМ (catch_type, handler_pc) обратно в один ПЕРЕД
+        построением try/catch."""
+        by_group = {}
+        order = []
+        for e in exceptions:
+            k = (e.catch_type, e.handler_pc)
+            if k not in by_group:
+                by_group[k] = []
+                order.append(k)
+            by_group[k].append(e)
+        merged = []
+        for k in order:
+            es = sorted(by_group[k], key=lambda e: e.start_pc)
+            # Сшиваем ВСЕ диапазоны одного (catch_type, handler_pc) в один
+            # span (min start .. max end), а не только строго смежные -
+            # разрыв между ними бывает даже в 1 байткод-инструкцию (см.
+            # найденный случай: `ireturn` сам по себе бросить исключение
+            # не может, поэтому компилятор законно исключил именно эту
+            # ОДНУ инструкцию из защищённого диапазона, хотя семантически
+            # `return false;` находится ВНУТРИ того же try). Если один и
+            # тот же (catch_type, handler_pc) встречается в methode
+            # несколько раз - это практически всегда один логический
+            # try, а не совпадение (см. HANDOFF_11).
+            catch_type, handler_pc = k
+            merged.append(self._MergedExc(es[0].start_pc, es[-1].end_pc, catch_type, handler_pc))
+        return merged
+
     def _prepare_try(self):
         by_key = {}
         order = []
-        for e in self.exceptions:
+        for e in self._merge_split_exception_ranges(self.exceptions):
             key = (e.start_pc, e.end_pc)
             if key not in by_key:
                 by_key[key] = []
@@ -582,11 +632,17 @@ def _is_sentinel(e):
     return isinstance(e, Local) and e.name == CAUGHT_SENTINEL
 
 
-def _rename_sentinel(stmts, new_name):
+def _rename_local(stmts, old_name, new_name):
+    """Переименовывает ВСЕ обращения к Local(old_name) в new_name внутри
+    stmts. Используется как для переименования сентинела перехваченного
+    исключения (см. _rename_sentinel), так и для случая, когда JVM
+    переиспользовал JVM-слот под перехваченное исключение, а имя уже
+    занято переменной ДРУГОГО типа снаружи catch-а (см. HANDOFF_12 -
+    SQLite.getPlayerData()/var7)."""
     def walk_expr(e):
         if e is None:
             return e
-        if isinstance(e, Local) and e.name == CAUGHT_SENTINEL:
+        if isinstance(e, Local) and e.name == old_name:
             e.name = new_name
             return e
         for attr in ("left", "right", "expr", "target", "value", "array", "index",
@@ -626,6 +682,10 @@ def _rename_sentinel(stmts, new_name):
 
     for s in stmts:
         walk_stmt(s)
+
+
+def _rename_sentinel(stmts, new_name):
+    _rename_local(stmts, CAUGHT_SENTINEL, new_name)
 
 
 # ---------------- loop beautification (while(true)+break -> while/do-while/for) ----------------
