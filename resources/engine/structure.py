@@ -14,6 +14,7 @@
 DecompileAbort, и метод целиком откатывается на честный байткод-листинг
 (engine.py).
 """
+import re
 from ast_nodes import (
     IfStmt, WhileStmt, DoWhileStmt, ForStmt, BreakStmt, ContinueStmt,
     SwitchStmt, SwitchCase, TryStmt, SyncStmt, BlockStmt, ExprStmt, Const,
@@ -487,6 +488,21 @@ class Structurer:
                 merge = raw if raw is not None else true_t
             if merge is None:
                 merge = self._find_forward_merge(true_t, false_t, stop_addrs)
+        if merge is not None and any(merge == entry["header"] for entry in self.loop_stack):
+            # ipdom() честно вычисляет заголовок ОБЪЕМЛЮЩЕГО цикла как
+            # общий постдоминатор (все пути от pc рано или поздно
+            # возвращаются в начало цикла - это математически верно), но
+            # использовать его как "точку продолжения ПОСЛЕ if" нельзя:
+            # код тела цикла уже строится ОТДЕЛЬНЫМ вызовом region() (см.
+            # _build_loop) - попадание туда изнутри if это continue, а
+            # НЕ обычное линейное продолжение сканирования. Из-за этого
+            # `region()` пытался повторно построить уже строящийся
+            # заголовок цикла и падал в "нередуцируемый переход внутри
+            # региона" (см. HANDOFF_15 - найдено на bStats
+            # `getChartData()`: `for (Entry e : map.entrySet()) { if
+            # (e.getValue() <= 0) continue; ... }` - постдоминатор
+            # внутреннего if честно указывал на заголовок for-цикла).
+            merge = None
         local_stop = stop_addrs | ({merge} if merge is not None else set())
         then_body = self.region(true_t, local_stop)
         else_body = None if false_t == merge or false_t in stop_addrs else self.region(false_t, local_stop)
@@ -694,7 +710,206 @@ def simplify_stmts(stmts):
     out = []
     for s in stmts:
         out.append(simplify_stmt(s))
-    return _fold_boolean_materialization(out)
+    # Косметическая чистка вслед за рекурсивным фиксом пересечения стека
+    # (HANDOFF_13) - тот фикс даёт КОРРЕКТНЫЙ, но многословный код (по
+    # несколько __stkN на каждый уровень цепочки). См. HANDOFF_14: цикл
+    # до неподвижной точки, потому что каждый проход может открыть новую
+    # возможность для другого - например схлопывание цепочки temp'ов
+    # может привести if/else к виду, который тернарная свёртка узнаёт
+    # только СЕЙЧАС, а результат свёртки, в свою очередь, может стать
+    # кандидатом на инлайн в место вызова. Ограничение по числу итераций -
+    # чисто защитный пояс (в реальности сходится за 2-3 прохода).
+    for _ in range(4):
+        out = _fold_boolean_materialization(out)
+        out = _collapse_temp_chains(out)
+        out = _hoist_common_branch_tail(out)
+        out = _inline_single_use_temps_anywhere(out)
+    return out
+
+
+_SYNTH_TEMP_RE = re.compile(r"^__stk\d+$")
+
+
+def _is_synth_temp(name):
+    return bool(_SYNTH_TEMP_RE.match(name))
+
+
+def _contains_local_ref(node, name):
+    """Есть ли ГДЕ-ЛИБО в node (statement, expression или список того и
+    другого) чтение Local(name)? Используется чистящими проходами ниже,
+    чтобы убедиться в безопасности схлопывания/подстановки temp-
+    переменной - см. _collapse_temp_chains/_inline_single_use_temps_anywhere."""
+    if node is None:
+        return False
+    if isinstance(node, list):
+        return any(_contains_local_ref(x, name) for x in node)
+    if isinstance(node, Local):
+        return node.name == name
+    for attr in ("left", "right", "expr", "target", "value", "array", "index",
+                 "cond", "tval", "fval", "init", "then_body", "else_body",
+                 "body", "update", "selector", "finally_body"):
+        v = getattr(node, attr, None)
+        if v is not None and _contains_local_ref(v, name):
+            return True
+    args = getattr(node, "args", None)
+    if args and any(_contains_local_ref(a, name) for a in args):
+        return True
+    dims = getattr(node, "dims", None)
+    if dims and any(_contains_local_ref(d, name) for d in dims if d is not None):
+        return True
+    if hasattr(node, "cases"):
+        for c in node.cases:
+            if _contains_local_ref(c.body, name):
+                return True
+    if hasattr(node, "catches"):
+        for _, _, cb in node.catches:
+            if _contains_local_ref(cb, name):
+                return True
+    return False
+
+
+def _collapse_temp_chains(stmts):
+    """`__stk4 = A; ... __stk2 = __stk4;` (единственное дальнейшее
+    использование __stk4 в этом же списке - простое копирование) ->
+    `__stk2 = A;`, __stk4 убирается целиком. Порождается рекурсивным
+    фиксом пересечения стека (HANDOFF_13), где значение "проезжает"
+    через несколько уровней временных переменных подряд. Затрагивает
+    ТОЛЬКО синтетические __stkN - настоящие именованные локальные не
+    трогаются. Работает до неподвижной точки (может понадобиться
+    несколько проходов, если цепочка длиннее двух звеньев)."""
+    stmts = list(stmts)
+    changed = True
+    while changed:
+        changed = False
+        n = len(stmts)
+        for i in range(n):
+            a = _as_assign(stmts[i])
+            if a is None:
+                continue
+            tgt, val = a
+            if not (isinstance(tgt, Local) and _is_synth_temp(tgt.name)):
+                continue
+            uses = [j for j in range(i + 1, n) if _contains_local_ref(stmts[j], tgt.name)]
+            if len(uses) != 1:
+                continue
+            j = uses[0]
+            b = _as_assign(stmts[j])
+            if b is None:
+                continue
+            tgt2, val2 = b
+            if not (isinstance(val2, Local) and val2.name == tgt.name):
+                continue  # единственное использование - не простое копирование
+            stmts = stmts[:i] + stmts[i + 1:j] + [ExprStmt(Assign(tgt2, val))] + stmts[j + 1:]
+            changed = True
+            break
+    return stmts
+
+
+def _hoist_common_branch_tail(stmts):
+    """Если ПОСЛЕДНИЕ statements then_body и else_body - идентичные
+    простые копирования `t = u;` (одно и то же t и одно и то же u в
+    обеих ветках - типично для значения, которое просто "проезжает"
+    через if, не меняясь, см. HANDOFF_13/14), выносим их из ОБЕИХ веток
+    наружу, после if (порядок не важен - от cond они не зависят)."""
+    out = []
+    for s in stmts:
+        if isinstance(s, IfStmt) and s.then_body and s.else_body:
+            tb, eb = list(s.then_body), list(s.else_body)
+            tail = []
+            while tb and eb:
+                a1, a2 = _as_assign(tb[-1]), _as_assign(eb[-1])
+                if a1 is None or a2 is None:
+                    break
+                t1, v1 = a1
+                t2, v2 = a2
+                if isinstance(t1, Local) and isinstance(t2, Local) and t1.name == t2.name and \
+                        isinstance(v1, Local) and isinstance(v2, Local) and v1.name == v2.name:
+                    tail.append(tb.pop())
+                    eb.pop()
+                    continue
+                break
+            if tail:
+                s.then_body = tb
+                s.else_body = eb
+                out.append(s)
+                out.extend(reversed(tail))
+                continue
+        out.append(s)
+    return out
+
+
+def _substitute_temp(node, name, replacement):
+    """Заменяет ПЕРВОЕ вхождение Local(name) на replacement прямо в
+    дереве (мутирует на месте). Возвращает True при успешной замене."""
+    for attr in ("left", "right", "expr", "target", "value", "array", "index",
+                 "cond", "tval", "fval", "init"):
+        v = getattr(node, attr, None)
+        if v is None:
+            continue
+        if isinstance(v, Local) and v.name == name:
+            setattr(node, attr, replacement)
+            return True
+        if hasattr(v, "prec") and _substitute_temp(v, name, replacement):
+            return True
+    args = getattr(node, "args", None)
+    if args:
+        for idx, a in enumerate(args):
+            if isinstance(a, Local) and a.name == name:
+                args[idx] = replacement
+                return True
+            if hasattr(a, "prec") and _substitute_temp(a, name, replacement):
+                return True
+    dims = getattr(node, "dims", None)
+    if dims:
+        for idx, d in enumerate(dims):
+            if d is None:
+                continue
+            if isinstance(d, Local) and d.name == name:
+                dims[idx] = replacement
+                return True
+            if hasattr(d, "prec") and _substitute_temp(d, name, replacement):
+                return True
+    return False
+
+
+def _inline_single_use_temps_anywhere(stmts):
+    """`__stkN = X; <единственное следующее использование __stkN где-то
+    внутри одного выражения>` -> подставляем X прямо в место
+    использования, убираем присваивание. Обобщение существующего
+    `_inline_single_use_crossing_temps` (engine.py), который делал то же
+    самое, но ТОЛЬКО для паттерна `t=X; return t;` - здесь годится ЛЮБОЕ
+    следующее выражение-statement (вызов метода, putfield и т.п.), не
+    только return. Затрагивает ТОЛЬКО __stkN - см. HANDOFF_14."""
+    stmts = list(stmts)
+    changed = True
+    while changed:
+        changed = False
+        n = len(stmts)
+        for i in range(n):
+            a = _as_assign(stmts[i])
+            if a is None:
+                continue
+            tgt, val = a
+            if not (isinstance(tgt, Local) and _is_synth_temp(tgt.name)):
+                continue
+            uses = [j for j in range(i + 1, n) if _contains_local_ref(stmts[j], tgt.name)]
+            if len(uses) != 1:
+                continue
+            j = uses[0]
+            target_stmt = stmts[j]
+            if isinstance(target_stmt, (ExprStmt, ReturnStmt, ThrowStmt)):
+                target_expr = target_stmt.expr
+            else:
+                continue
+            if target_expr is None:
+                continue
+            if isinstance(target_expr, Local) and target_expr.name == tgt.name:
+                continue  # это тот самый case, который уже покрывает _collapse_temp_chains
+            if _substitute_temp(target_expr, tgt.name, val):
+                stmts = stmts[:i] + stmts[i + 1:]
+                changed = True
+                break
+    return stmts
 
 
 def _fold_boolean_materialization(stmts):

@@ -199,7 +199,7 @@ def _strip_decl_to_assign(lst, names, types):
     return new
 
 
-def _hoist_escaping_locals(stmts):
+def _hoist_escaping_locals(stmts, _declared_so_far=None):
     """Настоящее исправление (не просто детект-и-откат): если внутри
     if/while/for/try(body)/switch объявлена (LocalDecl) переменная, а
     используется она и ПОСЛЕ этого блока (см. _collect_shallow_referenced_names -
@@ -210,24 +210,36 @@ def _hoist_escaping_locals(stmts):
     switch() после), и паттерн guard-clause вида `if (cond) {setup...} else
     {return;} <используем setup...>` (одна из веток всегда завершается -
     поток исполнения корректен, но лексическая область видимости - нет).
-    Рекурсивно чинит все вложенные тела, снизу вверх."""
+    Рекурсивно чинит все вложенные тела, снизу вверх.
+
+    `_declared_so_far` - множество имён, уже получивших верхнеуровневое
+    объявление ГДЕ-ТО РАНЕЕ в ЭТОМ ЖЕ МЕТОДЕ (общее на всю рекурсию, не
+    создаётся заново на каждом вложенном вызове) - см. HANDOFF_15: один и
+    тот же JVM-слот иногда переиспользуется под одну и ту же логическую
+    переменную в НЕСКОЛЬКИХ независимых ветках метода (например счётчик,
+    настраиваемый в if ДО цикла и снова изменяемый внутри if ВНУТРИ цикла -
+    `Metrics_AdvancedPie.getChartData()`) - без общего состояния каждая
+    ветка хоистила СВОЁ `Type name;`, давая дублирующееся объявление в
+    одной области видимости (не компилируется)."""
+    if _declared_so_far is None:
+        _declared_so_far = set()
     fixed = []
     for s in (stmts or []):
         if isinstance(s, IfStmt):
-            s.then_body = _hoist_escaping_locals(s.then_body)
-            s.else_body = _hoist_escaping_locals(s.else_body) if s.else_body else s.else_body
+            s.then_body = _hoist_escaping_locals(s.then_body, _declared_so_far)
+            s.else_body = _hoist_escaping_locals(s.else_body, _declared_so_far) if s.else_body else s.else_body
         elif isinstance(s, (WhileStmt, DoWhileStmt, ForStmt, SyncStmt)):
-            s.body = _hoist_escaping_locals(s.body)
+            s.body = _hoist_escaping_locals(s.body, _declared_so_far)
         elif isinstance(s, BlockStmt):
-            s.stmts = _hoist_escaping_locals(s.stmts)
+            s.stmts = _hoist_escaping_locals(s.stmts, _declared_so_far)
         elif isinstance(s, SwitchStmt):
             for c in s.cases:
-                c.body = _hoist_escaping_locals(c.body)
+                c.body = _hoist_escaping_locals(c.body, _declared_so_far)
         elif isinstance(s, TryStmt):
-            s.body = _hoist_escaping_locals(s.body)
-            s.catches = [(t, v, _hoist_escaping_locals(cb)) for t, v, cb in s.catches]
+            s.body = _hoist_escaping_locals(s.body, _declared_so_far)
+            s.catches = [(t, v, _hoist_escaping_locals(cb, _declared_so_far)) for t, v, cb in s.catches]
             if s.finally_body:
-                s.finally_body = _hoist_escaping_locals(s.finally_body)
+                s.finally_body = _hoist_escaping_locals(s.finally_body, _declared_so_far)
         fixed.append(s)
 
     out = []
@@ -254,8 +266,10 @@ def _hoist_escaping_locals(stmts):
                     s.catches = [(t, v, _strip_decl_to_assign(cb, escaping, types)) for t, v, cb in s.catches]
                     if s.finally_body:
                         s.finally_body = _strip_decl_to_assign(s.finally_body, escaping, types)
-                for name in sorted(escaping):
+                new_names = escaping - _declared_so_far
+                for name in sorted(new_names):
                     out.append(LocalDecl(types.get(name, "Object"), name, None))
+                _declared_so_far |= escaping
         out.append(s)
     return out
 
@@ -560,21 +574,49 @@ def decompile_method_body(cf, method, renamer, known_internal_by_dotted, class_i
         # разрешаем пересечения стека между блоками (тернарные/логические
         # выражения, arr[i] = cond ? a : b, и т.п.) - возможно НЕСКОЛЬКО
         # значений сразу (K), пересекающих границу блока одновременно.
-        for cpc, k in underflow_starts.items():
-            preds = cfg.blocks[cpc].preds
-            if not preds:
-                raise DecompileAbort("унаследованное значение стека без предшественников")
-            producers = [p for p in preds if len(results[p].exit_stack) >= 1]
-            if len(producers) != len(preds):
-                raise DecompileAbort("не все предшественники поставляют значение через границу блока")
-            for p in producers:
-                if len(results[p].exit_stack) != k:
-                    raise DecompileAbort("несогласованная глубина пересечения стека между предшественниками")
+        # Значение может пересекать НЕСКОЛЬКО блоков подряд не меняясь -
+        # см. HANDOFF_13 (FunnyClans.setGlowColor()): `this` кладётся в
+        # блоке A, проходит НЕТРОНУТЫМ через блок B ИЛИ блок C (каждый из
+        # которых добавляет ещё ОДНО своё значение), и только блок D
+        # потребляет обе через putfield. Раньше реконсиляция была
+        # однопроходной и сверяла ТОЛЬКО непосредственных предков
+        # блока-потребителя - здесь непосредственные предки (B/C) сами
+        # производят МЕНЬШЕ, чем нужно D, и это ошибочно считалось
+        # несогласованностью.
+        #
+        # ВАЖНО: A - ОБЩИЙ предок для B И C одновременно. Первая версия
+        # этого фикса поднималась по цепочке рекурсивно, но материализовала
+        # значение предка (temp-переменная + `pres.exit_stack = []`) КАК
+        # ПОБОЧНЫЙ ЭФФЕКТ вызова со стороны ОДНОГО конкретного потребителя
+        # (B) - когда ВТОРОЙ потребитель (C) впоследствии тоже обращался к
+        # A за тем же значением, exit_stack там уже был очищен первым
+        # потребителем -> IndexError. Правильная модель: материализация
+        # значения производителя в temp - это СОБСТВЕННАЯ, ОДНОРАЗОВАЯ
+        # операция самого производителя (кэшируется в `_producer_temps`),
+        # а не одноразовый побочный эффект первого спросившего потребителя -
+        # любое количество разных потребителей может затем ссылаться на
+        # ОДИН И ТОТ ЖЕ закэшированный temp.
+        _producer_temps = {}  # pc -> [Local(temp), ...] - стабилизированный exit_stack
 
-            temp_names = []
-            for j in range(k):
-                sample = results[producers[0]].exit_stack[k - 1 - j]
-                t = ctx.stack_temp_for((cpc, j), "A")
+        def _get_producer_temps(pc, needed, chain):
+            """Гарантирует, что pc поставляет РОВНО needed значений,
+            представленных именованными temp'ами, и кэширует их - для
+            использования блоками, которые НАСЛЕДУЮТ значение ОТ pc (т.е.
+            pc сам служит предком для кого-то ещё). Материализация -
+            ОДНОРАЗОВАЯ (кэш `_producer_temps`), чтобы НЕСКОЛЬКО разных
+            потребителей могли ссылаться на ОДИН И ТОТ ЖЕ temp, не
+            перезатирая друг другу exit_stack (см. _ensure_depth ниже для
+            конечного потребителя, который в материализации не нуждается)."""
+            if pc in _producer_temps:
+                if len(_producer_temps[pc]) != needed:
+                    raise DecompileAbort("несогласованная глубина пересечения стека между предшественниками")
+                return _producer_temps[pc]
+            _ensure_depth(pc, needed, chain)
+            cur_stack = results[pc].exit_stack
+            temps = []
+            for j in range(needed):
+                sample = cur_stack[needed - 1 - j]
+                t = ctx.stack_temp_for((pc, j), "A")
                 sample_type = getattr(sample, "type", "Object") or "Object"
                 if sample_type in _PSEUDO_TYPES:
                     # "null"/"this" - внутренние маркеры-псевдотипы (см.
@@ -584,21 +626,63 @@ def decompile_method_body(cf, method, renamer, known_internal_by_dotted, class_i
                     # всегда можно безопасно объявить как Object.
                     sample_type = "Object"
                 ctx.crossing_temp_types[t] = sample_type
-                temp_names.append(t)
+                temps.append(Local(t, sample_type))
+            for j in range(needed):
+                real = cur_stack[needed - 1 - j]
+                results[pc].stmts.append(ExprStmt(Assign(temps[j], real)))
+            results[pc].exit_stack = []
+            _producer_temps[pc] = temps
+            return temps
 
-            for p in producers:
-                pres = results[p]
-                for j in range(k):
-                    real = pres.exit_stack[k - 1 - j]
-                    typ = ctx.crossing_temp_types[temp_names[j]]
-                    pres.stmts.append(ExprStmt(Assign(Local(temp_names[j], typ), real)))
-                pres.exit_stack = []
-
-            seed2 = [Local(temp_names[j], ctx.crossing_temp_types[temp_names[j]]) for j in reversed(range(k))]
+        def _ensure_depth(pc, needed, chain):
+            """Гарантирует len(results[pc].exit_stack) == needed -
+            рекурсивно наследуя недостающее у предшественников, если сам
+            pc производит МЕНЬШЕ (см. HANDOFF_13 -
+            FunnyClans.setGlowColor(): `this` кладётся в блоке A, проходит
+            НЕТРОНУТЫМ через блок B ИЛИ блок C, каждый из которых
+            добавляет ещё ОДНО своё значение). НЕ материализует/не
+            кэширует само pc - это для КОНЕЧНОГО потребителя (напр. блок
+            с putfield+return), который может законно потребить ВСЕ
+            значения без остатка (exit_stack после = 0) - материализация
+            нужна только тем, у кого ЕЩЁ есть потребители выше по цепочке
+            (см. _get_producer_temps)."""
+            if pc in chain:
+                raise DecompileAbort("зацикленное пересечение стека между блоками")
+            cur_stack = results[pc].exit_stack
+            if len(cur_stack) == needed:
+                return
+            if len(cur_stack) > needed:
+                raise DecompileAbort("несогласованная глубина пересечения стека между предшественниками")
+            preds = cfg.blocks[pc].preds
+            if not preds:
+                raise DecompileAbort("унаследованное значение стека без предшественников")
+            missing = needed - len(cur_stack)
+            new_chain = chain + (pc,)
+            canonical = _get_producer_temps(preds[0], missing, new_chain)
+            for p in preds[1:]:
+                # Если p сам НЕ нуждается в рекурсии (уже естественно
+                # производит missing значений) и ЕЩЁ не является
+                # закэшированным разделяемым предком - берём его СЫРЫЕ
+                # значения напрямую, без лишнего промежуточного temp'а (как
+                # раньше, до обобщения на цепочки - см. HANDOFF_13: лишний
+                # слой ломает распознавание паттерна тернарника в
+                # `_fold_boolean_materialization`, давая многословный if/else
+                # вместо чистого `cond ? a : b` там, где рекурсия вообще не
+                # требовалась).
+                if p in _producer_temps or len(results[p].exit_stack) < missing:
+                    own = _get_producer_temps(p, missing, new_chain)
+                else:
+                    own = [results[p].exit_stack[missing - 1 - j] for j in range(missing)]
+                    results[p].exit_stack = []
+                for j, tmp in enumerate(canonical):
+                    results[p].stmts.append(ExprStmt(Assign(Local(tmp.name, tmp.type), own[j])))
             flag2 = {}
-            results[cpc] = simulate_block(cfg.blocks[cpc], seed2, ctx, underflow_flag=flag2)
+            results[pc] = simulate_block(cfg.blocks[pc], list(reversed(canonical)), ctx, underflow_flag=flag2)
             if flag2.get("missing"):
                 raise DecompileAbort("двойное пересечение стека не поддерживается")
+
+        for cpc, k in underflow_starts.items():
+            _ensure_depth(cpc, k, ())
 
         for start, res in results.items():
             if res.exit_stack:
