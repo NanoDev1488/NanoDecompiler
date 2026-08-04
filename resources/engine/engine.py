@@ -288,7 +288,16 @@ def _has_escaping_local_decl(stmts):
     (не полный _collect_referenced_names) - иначе ловится масса ложных
     срабатываний на безобидном переиспользовании одного имени/слота в
     независимой более поздней ветке if/else (см. её докстринг - на этом уже
-    один раз наступили: -8..-14 п.п. успешности на реальных jar)."""
+    один раз наступили: -8..-14 п.п. успешности на реальных jar).
+
+    HANDOFF_20: разобран конкретный случай, где этот abort срабатывает
+    (ChatFilterPlus.LinksManager.looksLikeLinkCandidate()) - НЕ чинить
+    точечно, если снова встретится. Там переменная-эскейпер (`var5`) -
+    лишь СИМПТОМ гораздо более глубокой путаницы (в том же методе
+    переменная `triggers` меняет тип с `int` на `Iterator` посреди
+    метода, а окружающий `while(true)` выглядит как слияние ДВУХ
+    изначально разных циклов) - настоящая проблема в структуризации
+    самого control-flow, не в этой конкретной проверке."""
     def check(lst):
         for i, s in enumerate(lst):
             inner = None
@@ -305,7 +314,7 @@ def _has_escaping_local_decl(stmts):
                          (s.finally_body or []))
             if inner:
                 declared = _collect_declared_names(inner)
-                if declared and (declared & _collect_shallow_referenced_names(lst[i + 1:])):
+                if declared & _collect_shallow_referenced_names(lst[i + 1:]):
                     return True
                 if check(inner):
                     return True
@@ -655,7 +664,7 @@ def decompile_method_body(cf, method, renamer, known_internal_by_dotted, class_i
                 raise DecompileAbort("несогласованная глубина пересечения стека между предшественниками")
             preds = cfg.blocks[pc].preds
             if not preds:
-                if self.cfg.blocks[pc].handler_types:
+                if cfg.blocks[pc].handler_types:
                     # Блок - вход в обработчик исключений (`catch`), а не
                     # обычный узел CFG - он ВСЕГДА начинается с чистого,
                     # заранее засеянного стека (пойманное исключение, см.
