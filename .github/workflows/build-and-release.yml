@@ -15,10 +15,12 @@ name: build-and-release
 # publish-release не запустится вообще (весь релиз атомарный: либо оба
 # продукта собрались и опубликовались, либо не публикуется ничего).
 #
-# Тег релиза - статический (RELEASE_TAG ниже). При повторном push
-# softprops/action-gh-release сам обновит существующий релиз новыми
-# файлами вместо создания дубликата - когда версию нужно поднять,
-# меняешь RELEASE_TAG/CLIENT_VERSION/API_VERSION в env.
+# Тег релиза - статический (берётся из package.json, см. resolve-version
+# ниже). При повторном push softprops/action-gh-release сам обновит
+# существующий релиз новыми файлами вместо создания дубликата - когда
+# версию нужно поднять, меняешь ТОЛЬКО "version" в package.json (единый
+# источник правды - см. HANDOFF по версионированию v1.4.1), ничего в этом
+# workflow трогать не нужно.
 
 # ПРИМЕЧАНИЕ про npm install vs npm ci: в проекте нет package-lock.json
 # (собирался package.json вручную, без сети для реального npm install) -
@@ -36,14 +38,33 @@ on:
 permissions:
   contents: write   # нужно softprops/action-gh-release, чтобы создавать/обновлять релиз
 
-env:
-  RELEASE_TAG: v1.2
-  CLIENT_VERSION: v1.2
-  API_VERSION: v1.2
-
 jobs:
+  resolve-version:
+    # Единственное место, где версия читается из файла - package.json
+    # ("version" в корне) - ЕДИНСТВЕННЫЙ источник правды для всего
+    # релиза (тег, версия клиента, версия API/CLI-exe). Раньше это было
+    # трижды продублировано прямо в env: этого workflow (RELEASE_TAG/
+    # CLIENT_VERSION/API_VERSION) и НЕЗАВИСИМО от package.json - легко
+    # было забыть поднять что-то одно из трёх. Теперь поднимаешь версию
+    # в package.json - и она подтягивается сюда, и в собранный
+    # electron-builder-инсталлятор (он тоже читает package.json
+    # нативно), и в CLIENT_VERSION/API_VERSION ниже.
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Прочитать версию из package.json
+        id: get_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=v$VERSION" >> "$GITHUB_OUTPUT"
+
   build-client:
+    needs: [resolve-version]
     runs-on: windows-latest
+    env:
+      API_VERSION: ${{ needs.resolve-version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -123,6 +144,7 @@ jobs:
           if-no-files-found: error
 
   build-api:
+    needs: [resolve-version]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -166,8 +188,12 @@ jobs:
           if-no-files-found: error
 
   publish-release:
-    needs: [build-client, build-api]
+    needs: [resolve-version, build-client, build-api]
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ needs.resolve-version.outputs.version }}
+      CLIENT_VERSION: ${{ needs.resolve-version.outputs.version }}
+      API_VERSION: ${{ needs.resolve-version.outputs.version }}
     steps:
       - uses: actions/download-artifact@v4
         with:

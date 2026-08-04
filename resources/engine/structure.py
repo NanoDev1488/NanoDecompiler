@@ -46,6 +46,16 @@ class Structurer:
         # вложенного случая - реальная ошибка компиляции ("variable e1 is
         # already defined"), а для соседних - просто путаница при чтении.
         self._catch_var_ctr = 0
+        # HANDOFF_18: адрес, который ПОСЛЕДНИЙ раз вернул _build_try как
+        # свою собственную "точку продолжения после try/catch" (или None).
+        # Используется ТОЛЬКО чтобы узнать в _build_if_inner "этот if -
+        # ПЕРВЫЙ statement сразу после только что построенного try/catch?"
+        # - см. докстринг у места использования, почему это важно и почему
+        # это ДОЛЖНО быть узко (широкое правило регрессировало - см.
+        # HANDOFF_17). "Потребляется" (сбрасывается в None) при первом же
+        # чтении, чтобы не давать ложных срабатываний на несвязанных if
+        # дальше по методу.
+        self._last_try_merge_pc = None
         # См. HANDOFF_7/9 - глобальный (на весь метод, не per-region()-call)
         # набор адресов блоков, которые реально попали КУДА-ТО в итоговый
         # AST (через любой путь - тело try, catch, if-ветку, тело цикла,
@@ -455,6 +465,11 @@ class Structurer:
             self._if_chain_depth -= 1
 
     def _build_if_inner(self, pc, cond, true_t, false_t, stop_addrs):
+        # HANDOFF_18: "потребляем" флаг СРАЗУ, до любых вложенных вызовов
+        # (которые сами могут пройти через _build_try и перезаписать его) -
+        # см. докстринг у места использования ниже.
+        was_right_after_try = (pc == self._last_try_merge_pc)
+        self._last_try_merge_pc = None
         sp_true = self._try_resolve_special_target(true_t)
         sp_false = self._try_resolve_special_target(false_t)
 
@@ -488,6 +503,32 @@ class Structurer:
                 merge = raw if raw is not None else true_t
             if merge is None:
                 merge = self._find_forward_merge(true_t, false_t, stop_addrs)
+        if was_right_after_try and merge is not None:
+            # HANDOFF_18: этот if - ПЕРВЫЙ statement сразу после только
+            # что построенного try/catch (см. `_last_try_merge_pc`,
+            # выставляется в _build_try). Именно в ЭТОЙ конкретной
+            # позиции ipdom() иногда "перепрыгивает" ДАЛЬШЕ, чем нужно -
+            # через рёбра исключений (которые только что построенный
+            # try/catch добавил в граф) он может честно увидеть ОБЩИЙ
+            # постдоминатор где-то далеко (напр. `return` в самом конце
+            # метода), хотя обе ветки на самом деле сходятся намного
+            # РАНЬШЕ - и между "рано" и "поздно" есть настоящий код,
+            # который при таком merge молча теряется (см. HANDOFF_17 -
+            # FunnyClans.DatabaseManager.setupDatabase(): `if (resource
+            # != null) resource.close();` сразу после try/catch - ipdom
+            # сказал "160" (конец метода) вместо настоящих 89).
+            #
+            # В HANDOFF_17 то же самое исправление уже пробовалось, но
+            # БЕЗ этого узкого условия (применялось ко ВСЕМ if без
+            # разбора) - дало чистую РЕГРЕССИЮ на широком корпусе
+            # (ChatFilterPlus -18, MSG -22, TowerClans -5 и т.д.),
+            # откачено. Здесь условие сужено ИМЕННО до того случая,
+            # который был проверен и подтверждён - если регрессий не
+            # будет и на этот раз, можно постепенно расширять условие
+            # дальше, но НЕ раньше повторной широкой проверки.
+            forward = self._find_forward_merge(true_t, false_t, stop_addrs)
+            if forward is not None and forward < merge:
+                merge = forward
         if merge is not None and any(merge == entry["header"] for entry in self.loop_stack):
             # ipdom() честно вычисляет заголовок ОБЪЕМЛЮЩЕГО цикла как
             # общий постдоминатор (все пути от pc рано или поздно
@@ -627,6 +668,7 @@ class Structurer:
             if not is_trampoline and end not in handler_pcs:
                 if overall_merge is None or end < overall_merge:
                     overall_merge = end
+        self._last_try_merge_pc = overall_merge
         return TryStmt(body, catches, None), overall_merge
 
 
