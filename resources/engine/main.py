@@ -666,16 +666,16 @@ def _format_annotation(ann, renamer, known_internal_by_dotted, all_imports):
     return f"@{name_marker}({', '.join(parts)})"
 
 
-def process_jar(jar_path, out_dir):
+def process_jar(jar_path, out_dir, skip_legitimacy=False):
     """Обратно-совместимая обёртка (см. gui_raw.py/gui_neon.py/gui_md3.py и
     CLI-ветку main() ниже) - возвращает только out_dir, как и раньше.
     Для программного доступа к статистике (режим API - см. api.py) см.
     process_jar_with_stats()."""
-    out_dir, _stats = process_jar_with_stats(jar_path, out_dir)
+    out_dir, _stats = process_jar_with_stats(jar_path, out_dir, skip_legitimacy=skip_legitimacy)
     return out_dir
 
 
-def process_jar_with_stats(jar_path, out_dir):
+def process_jar_with_stats(jar_path, out_dir, skip_legitimacy=False):
     """То же самое, что process_jar(), но возвращает (out_dir, ProjectStats) -
     нужно режиму API (api.py), чтобы отдать статистику как JSON без
     перепарсивания README_RU.txt.
@@ -840,19 +840,24 @@ def process_jar_with_stats(jar_path, out_dir):
 
     # Проверка легитимности (см. legitimacy_check.py) - поля plugin.yml +
     # ВСЕГДА все четыре сетевых источника (GitHub/Modrinth/SpigotMC/
-    # RuSpigot), без тумблеров.
-    _plugin_name_for_check = None
-    if plugin_yml_text:
-        _m = re.search(r"^name:\s*['\"]?([^'\"\n]+)['\"]?\s*$", plugin_yml_text, re.M)
-        if _m:
-            _plugin_name_for_check = _m.group(1).strip()
-    import legitimacy_check
-    section("Проверка легитимности")
-    stats.legitimacy = legitimacy_check.run_legitimacy_check(_plugin_name_for_check, plugin_yml_text)
-    _leg_text = legitimacy_check.format_for_console(stats.legitimacy)
-    if _leg_text:
-        for line in _leg_text.split("\n"):
-            cprint(line)
+    # RuSpigot), КРОМЕ случая, когда её явно выключили (см.
+    # skip_legitimacy - GUI-настройка, HANDOFF_19: раньше тумблера не
+    # было вообще, теперь пробрасывается сюда из --no-legitimacy-check).
+    if skip_legitimacy:
+        stats.legitimacy = None
+    else:
+        _plugin_name_for_check = None
+        if plugin_yml_text:
+            _m = re.search(r"^name:\s*['\"]?([^'\"\n]+)['\"]?\s*$", plugin_yml_text, re.M)
+            if _m:
+                _plugin_name_for_check = _m.group(1).strip()
+        import legitimacy_check
+        section("Проверка легитимности")
+        stats.legitimacy = legitimacy_check.run_legitimacy_check(_plugin_name_for_check, plugin_yml_text)
+        _leg_text = legitimacy_check.format_for_console(stats.legitimacy)
+        if _leg_text:
+            for line in _leg_text.split("\n"):
+                cprint(line)
 
     renamer = Renamer()
 
@@ -1631,9 +1636,10 @@ def main():
         sys.exit(1)
     jar_path = sys.argv[1]
     rest = sys.argv[2:]
-    positional_rest = [a for a in rest if a != "--headless"]
+    skip_legitimacy = "--no-legitimacy-check" in rest
+    positional_rest = [a for a in rest if a not in ("--headless", "--no-legitimacy-check")]
     out_dir = positional_rest[0] if positional_rest else os.path.splitext(os.path.basename(jar_path))[0] + "_decompiled"
-    process_jar_with_stats(jar_path, out_dir)
+    process_jar_with_stats(jar_path, out_dir, skip_legitimacy=skip_legitimacy)
     cprint(f"[+] Готово. Результат в: {out_dir}")
 
 

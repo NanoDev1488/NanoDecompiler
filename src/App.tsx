@@ -52,6 +52,31 @@ export default function App() {
   } | null>(null);
   const termRef = useRef<HTMLDivElement>(null);
 
+  // Настройки (см. HANDOFF_19 - экран настроек, раньше не было вообще).
+  // null пока не загружены (первый рендер, до ответа main-процесса) -
+  // отличаем от "уже загружены и оба тумблера включены" (дефолт).
+  const [settings, setSettingsState] = useState<{
+    legitimacyCheck: boolean;
+    autoUpdateCheck: boolean;
+  } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const s = await window.nano.getSettings();
+      if (!cancelled) setSettingsState(s);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const updateSetting = useCallback(async (partial: Partial<{ legitimacyCheck: boolean; autoUpdateCheck: boolean }>) => {
+    const merged = await window.nano.setSettings(partial);
+    setSettingsState(merged);
+  }, []);
+
   // Проверка обновлений - см. HANDOFF_16/19. Два РАЗНЫХ типа обновления
   // (см. electron/updater.ts):
   //  - "engine" - поменялся только движок (.exe) - можно тихо подменить
@@ -94,10 +119,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    // См. HANDOFF_19 - тумблер "автопроверка обновлений". Ждём, пока
+    // настройки реально загрузятся (settings === null на первом рендере) -
+    // не проверяем "на всякий случай" до этого, чтобы не мигнуть проверкой
+    // один раз, если пользователь успел выключить тумблер раньше.
+    if (settings === null) return;
+    if (!settings.autoUpdateCheck) return;
     runUpdateCheck();
     const id = setInterval(runUpdateCheck, CHECK_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [runUpdateCheck]);
+  }, [runUpdateCheck, settings]);
 
   const applyUpdate = useCallback(async () => {
     if (!updateInfo?.downloadUrl || status === "running") return;
@@ -270,6 +301,11 @@ export default function App() {
         <span className="update-badge">
           {updateState === "checking" && <span>проверка обновлений...</span>}
           {updateState === "up-to-date" && <span>всё актуально</span>}
+          {updateState === "idle" && settings && !settings.autoUpdateCheck && (
+            <button className="btn-mini btn-mini-no" onClick={runUpdateCheck}>
+              Проверить обновления
+            </button>
+          )}
           {updateState === "available" && updateKind === "engine" && (
             <>
               <span>доступно обновление движка{updateInfo?.latestVersion ? ` ${updateInfo.latestVersion}` : ""}</span>
@@ -296,7 +332,54 @@ export default function App() {
           {updateState === "applied" && <span>обновлено — перезапустите приложение</span>}
           {updateState === "error" && <span title={updateInfo?.error}>проверка обновлений не удалась</span>}
         </span>
+        <button
+          className="settings-gear"
+          title="Настройки"
+          aria-label="Настройки"
+          onClick={() => setSettingsOpen(true)}
+        >
+          ⚙
+        </button>
       </div>
+
+      {settingsOpen && settings && (
+        <div className="modal-overlay" onClick={() => setSettingsOpen(false)}>
+          <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <span>Настройки</span>
+              <button className="modal-close" onClick={() => setSettingsOpen(false)} aria-label="Закрыть">
+                ✕
+              </button>
+            </div>
+            <label className="settings-row">
+              <div>
+                <div className="settings-row-title">Проверка легитимности</div>
+                <div className="settings-row-hint">
+                  Сверять плагин с GitHub/Modrinth/SpigotMC/RuSpigot при декомпиляции
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.legitimacyCheck}
+                onChange={(e) => updateSetting({ legitimacyCheck: e.target.checked })}
+              />
+            </label>
+            <label className="settings-row">
+              <div>
+                <div className="settings-row-title">Автопроверка обновлений</div>
+                <div className="settings-row-hint">
+                  Проверять новую версию движка/клиента в фоне, пока приложение открыто
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.autoUpdateCheck}
+                onChange={(e) => updateSetting({ autoUpdateCheck: e.target.checked })}
+              />
+            </label>
+          </div>
+        </div>
+      )}
 
       <div className="main">
         <div className="panel">

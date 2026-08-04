@@ -23,6 +23,42 @@ let runningProc: ChildProcessWithoutNullStreams | null = null;
 
 const isDev = !app.isPackaged;
 
+// Настройки (см. HANDOFF_19 - экран настроек, раньше не было вообще).
+// Простой JSON-файл в userData - для двух булевых тумблеров полноценная
+// зависимость (electron-store и т.п.) избыточна, а свой формат/схему
+// версионировать/мигрировать тут пока не нужно (если настроек станет
+// много - тогда и стоит пересмотреть).
+type Settings = {
+  legitimacyCheck: boolean;
+  autoUpdateCheck: boolean;
+};
+const DEFAULT_SETTINGS: Settings = { legitimacyCheck: true, autoUpdateCheck: true };
+
+function settingsPath(): string {
+  return path.join(app.getPath("userData"), "settings.json");
+}
+
+function loadSettings(): Settings {
+  try {
+    const raw = fs.readFileSync(settingsPath(), "utf-8");
+    const parsed = JSON.parse(raw);
+    // Разбираем поле за полем (не просто {...DEFAULT, ...parsed}) - на
+    // случай если в файле окажется мусор/чужой тип по конкретному ключу
+    // (напр. кто-то руками отредактировал файл) - тогда берём дефолт
+    // именно для ЭТОГО ключа, а не роняем все настройки разом.
+    return {
+      legitimacyCheck: typeof parsed.legitimacyCheck === "boolean" ? parsed.legitimacyCheck : DEFAULT_SETTINGS.legitimacyCheck,
+      autoUpdateCheck: typeof parsed.autoUpdateCheck === "boolean" ? parsed.autoUpdateCheck : DEFAULT_SETTINGS.autoUpdateCheck,
+    };
+  } catch {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+function saveSettings(s: Settings): void {
+  fs.writeFileSync(settingsPath(), JSON.stringify(s, null, 2), "utf-8");
+}
+
 function engineDir(): string {
   return isDev
     ? path.join(__dirname, "..", "resources", "engine")
@@ -94,6 +130,14 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+ipcMain.handle("settings:get", async (): Promise<Settings> => loadSettings());
+
+ipcMain.handle("settings:set", async (_e, partial: Partial<Settings>): Promise<Settings> => {
+  const merged = { ...loadSettings(), ...partial };
+  saveSettings(merged);
+  return merged;
 });
 
 ipcMain.handle("dialog:selectJar", async () => {
@@ -171,7 +215,12 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
   // именно эта ветка и была целью всей замены на Electron. На Linux/Termux
   // флаг безвреден (там и так нет форсированного GUI-пути), но передаём его
   // всегда, для единообразия между платформами.
-  const { cmd, args } = engineInvocation([jarPath, outDir, "--headless"]);
+  const scriptArgs = [jarPath, outDir, "--headless"];
+  // См. HANDOFF_19 - тумблер "проверка легитимности" в настройках. По
+  // умолчанию включена (см. DEFAULT_SETTINGS) - флаг добавляется, ТОЛЬКО
+  // когда пользователь явно выключил.
+  if (!loadSettings().legitimacyCheck) scriptArgs.push("--no-legitimacy-check");
+  const { cmd, args } = engineInvocation(scriptArgs);
 
   return new Promise((resolve) => {
     const proc = spawn(cmd, args, {

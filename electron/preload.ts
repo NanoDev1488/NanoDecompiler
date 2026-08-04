@@ -16,6 +16,11 @@ export type JarSummary = {
   error?: string;
 };
 
+export type AppSettings = {
+  legitimacyCheck: boolean;
+  autoUpdateCheck: boolean;
+};
+
 contextBridge.exposeInMainWorld("nano", {
   selectJar: (): Promise<string | null> => ipcRenderer.invoke("dialog:selectJar"),
   selectOutDir: (defaultPath?: string): Promise<string | null> =>
@@ -54,4 +59,7 @@ contextBridge.exposeInMainWorld("nano", {
     ipcRenderer.on("tools:progress", handler);
     return () => ipcRenderer.removeListener("tools:progress", handler);
   },
+  getSettings: (): Promise<AppSettings> => ipcRenderer.invoke("settings:get"),
+  setSettings: (partial: Partial<AppSettings>): Promise<AppSettings> =>
+    ipcRenderer.invoke("settings:set", partial),
 });
