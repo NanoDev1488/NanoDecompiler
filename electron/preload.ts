@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-export type LogEvent = { line: string; stream: "stdout" | "stderr" };
+export type LogLineEntry = { line: string; stream: "stdout" | "stderr" };
+export type LogEvent = { lines: LogLineEntry[] };
 export type RunResult = { ok: boolean; code?: number | null; outDir?: string; error?: string };
 export type ShellResult = { ok: boolean; error?: string };
 export type ToolsProgressEvent = { type: "progress"; label: string; pct: number | null; downloaded_mb: number; total_mb: number | null };
@@ -58,6 +59,12 @@ contextBridge.exposeInMainWorld("nano", {
     const handler = (_e: unknown, payload: ToolsProgressEvent) => cb(payload);
     ipcRenderer.on("tools:progress", handler);
     return () => ipcRenderer.removeListener("tools:progress", handler);
+  },
+  onDownloadProgress: (cb: (e: { downloaded: number; total: number | null; kind: "client" | "engine" }) => void) => {
+    const handler = (_e: unknown, payload: { downloaded: number; total: number | null; kind: "client" | "engine" }) =>
+      cb(payload);
+    ipcRenderer.on("update:downloadProgress", handler);
+    return () => ipcRenderer.removeListener("update:downloadProgress", handler);
   },
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke("settings:get"),
   setSettings: (partial: Partial<AppSettings>): Promise<AppSettings> =>

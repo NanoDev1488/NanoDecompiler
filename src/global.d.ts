@@ -34,6 +34,7 @@ declare global {
         updateKind?: "none" | "engine" | "client";
         currentVersion?: string;
         latestVersion?: string;
+        latestVersionKind?: "release" | "prerelease";
         downloadUrl?: string | null;
         clientDownloadUrl?: string | null;
         releaseUrl?: string;
@@ -42,9 +43,12 @@ declare global {
       applyUpdate: (downloadUrl: string, latestApiVersion?: string) => Promise<{ ok: boolean; error?: string }>;
       installClientAndRestart: (downloadUrl: string) => Promise<{ ok: boolean; error?: string }>;
       consumeUpdateSuccessFlag: () => Promise<boolean>;
-      onLog: (cb: (e: { line: string; stream: "stdout" | "stderr" }) => void) => () => void;
+      onLog: (cb: (e: { lines: { line: string; stream: "stdout" | "stderr" }[] }) => void) => () => void;
       onToolsProgress: (
         cb: (e: { type: "progress"; label: string; pct: number | null; downloaded_mb: number; total_mb: number | null }) => void
+      ) => () => void;
+      onDownloadProgress: (
+        cb: (e: { downloaded: number; total: number | null; kind: "client" | "engine" }) => void
       ) => () => void;
       getSettings: () => Promise<{ legitimacyCheck: boolean; autoUpdateCheck: boolean }>;
       setSettings: (

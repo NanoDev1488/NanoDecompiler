@@ -31,9 +31,56 @@ function parseMissingTools(line: string): string[] | null {
   return m[1].split(",").map((s) => s.trim()).filter(Boolean);
 }
 
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} Б`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} КБ`;
+  return `${(n / 1024 / 1024).toFixed(1)} МБ`;
+}
+
+function formatSpeed(bps: number): string {
+  if (bps <= 0) return "…";
+  return `${formatBytes(bps)}/с`;
+}
+
+function formatEta(sec: number | null): string {
+  if (sec === null || !isFinite(sec) || sec < 0) return "…";
+  if (sec < 60) return `${Math.ceil(sec)} с`;
+  const m = Math.floor(sec / 60);
+  const s = Math.ceil(sec % 60);
+  return `${m} мин ${s} с`;
+}
+
+/** Material Symbols (Google, Apache License 2.0) - несколько самых
+ * используемых иконок вшиты прямо как SVG-path, без внешнего шрифта/CDN
+ * (в песочнице сборки нет сети на npm-реестр - см. HANDOFF_22). */
+function Icon({ name, size = 16 }: { name: "folder_open" | "code" | "check_circle" | "error" | "refresh" | "cloud_download"; size?: number }) {
+  const paths: Record<string, string> = {
+    folder_open:
+      "M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z",
+    code: "M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6zm5.2 0L19.2 12l-4.6-4.6L16 6l6 6-6 6z",
+    check_circle:
+      "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z",
+    error:
+      "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2zm0-4h-2V7h2z",
+    refresh:
+      "M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08a5.99 5.99 0 0 1-5.65 4c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L14 11h7V4z",
+    cloud_download:
+      "M19.35 10.04A7.49 7.49 0 0 0 12 4a7.49 7.49 0 0 0-7.35 6.04A5.994 5.994 0 0 0 0 16c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4z",
+  };
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" style={{ flexShrink: 0 }}>
+      <path d={paths[name]} />
+    </svg>
+  );
+}
+
 export default function App() {
   const [jarPath, setJarPath] = useState<string | null>(null);
   const [outDir, setOutDir] = useState<string | null>(null);
+  // Разобранная строка "Методов декомпилировано: X/Y (Z%)" из лога движка
+  // (см. main.py) - показывается крупной плашкой результата, а не только
+  // в самом логе (раньше результат было легко пропустить - см. HANDOFF_22).
+  const [resultStats, setResultStats] = useState<{ done: number; total: number; pct: number } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [lines, setLines] = useState<LogLine[]>([]);
@@ -46,11 +93,13 @@ export default function App() {
   const [updateInfo, setUpdateInfo] = useState<{
     currentVersion?: string;
     latestVersion?: string;
+    latestVersionKind?: "release" | "prerelease";
     downloadUrl?: string | null;
     clientDownloadUrl?: string | null;
     error?: string;
   } | null>(null);
   const termRef = useRef<HTMLDivElement>(null);
+  const [installingClient, setInstallingClient] = useState(false);
 
   // Настройки (см. HANDOFF_19 - экран настроек, раньше не было вообще).
   // null пока не загружены (первый рендер, до ответа main-процесса) -
@@ -111,6 +160,7 @@ export default function App() {
     setUpdateInfo({
       currentVersion: res.currentVersion,
       latestVersion: res.latestVersion,
+      latestVersionKind: res.latestVersionKind,
       downloadUrl: res.downloadUrl,
       clientDownloadUrl: res.clientDownloadUrl,
     });
@@ -125,15 +175,53 @@ export default function App() {
     // один раз, если пользователь успел выключить тумблер раньше.
     if (settings === null) return;
     if (!settings.autoUpdateCheck) return;
+    // См. HANDOFF_22 - раньше проверка обновлений продолжала идти по
+    // таймеру ДАЖЕ пока сам апдейт уже качается/применяется - бессмысленно
+    // (мы и так знаем, что обновление есть, мы его уже качаем) и лишняя
+    // сетевая/UI-активность прямо во время скачивания.
+    if (updateState === "applying" || installingClient) return;
     runUpdateCheck();
     const id = setInterval(runUpdateCheck, CHECK_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [runUpdateCheck, settings]);
+  }, [runUpdateCheck, settings, updateState, installingClient]);
+
+  // Детальный прогресс скачивания (размер/скорость/осталось) - см.
+  // HANDOFF_22: раньше во время скачивания клиент/движка ничего этого не
+  // показывал вообще, просто "Скачиваю...". Скорость считаем сами по
+  // дельте между последовательными событиями прогресса (electron/updater.ts
+  // шлёт их не чаще раза в ~120мс - см. его комментарий про троттлинг).
+  const [downloadProgress, setDownloadProgress] = useState<{
+    downloaded: number;
+    total: number | null;
+    kind: "client" | "engine";
+    speedBps: number;
+    etaSec: number | null;
+  } | null>(null);
+  const downloadSampleRef = useRef<{ t: number; bytes: number } | null>(null);
+  const [downloadDetailOpen, setDownloadDetailOpen] = useState(false);
+
+  useEffect(() => {
+    const off = window.nano.onDownloadProgress(({ downloaded, total, kind }) => {
+      const now = Date.now();
+      const prev = downloadSampleRef.current;
+      let speedBps = 0;
+      if (prev && now > prev.t) {
+        speedBps = ((downloaded - prev.bytes) / (now - prev.t)) * 1000;
+      }
+      downloadSampleRef.current = { t: now, bytes: downloaded };
+      const etaSec = total && speedBps > 1024 ? (total - downloaded) / speedBps : null;
+      setDownloadProgress({ downloaded, total, kind, speedBps, etaSec });
+    });
+    return off;
+  }, []);
 
   const applyUpdate = useCallback(async () => {
     if (!updateInfo?.downloadUrl || status === "running") return;
     setUpdateState("applying");
+    downloadSampleRef.current = null;
+    setDownloadProgress(null);
     const res = await window.nano.applyUpdate(updateInfo.downloadUrl, updateInfo.latestVersion);
+    setDownloadProgress(null);
     if (res.ok) {
       suppressChecksUntilRef.current = Date.now() + POST_UPDATE_SUPPRESS_MS;
       setUpdateState("applied");
@@ -143,15 +231,17 @@ export default function App() {
     }
   }, [updateInfo, status]);
 
-  const [installingClient, setInstallingClient] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const installClientUpdate = useCallback(async () => {
     if (!updateInfo?.clientDownloadUrl || installingClient) return;
     setInstallingClient(true);
+    downloadSampleRef.current = null;
+    setDownloadProgress(null);
     const res = await window.nano.installClientAndRestart(updateInfo.clientDownloadUrl);
     if (!res.ok) {
       setInstallingClient(false);
+      setDownloadProgress(null);
       setUpdateState("error");
       setUpdateInfo((prev) => ({ ...(prev ?? {}), error: res.error }));
     }
@@ -183,10 +273,32 @@ export default function App() {
     return () => clearTimeout(t);
   }, [toast]);
 
+  // Верхний предел строк лога в памяти/DOM - на jar в тысячи методов лог
+  // мог разрастись до многих тысяч строк без предела, что само по себе
+  // тормозило рендер (терминал без виртуализации). Обрезаем самые старые,
+  // отчёт (README_RU.txt/JSON) всё равно содержит полную статистику -
+  // в живом логе важен ХВОСТ (последние события), не самое начало.
+  const MAX_LOG_LINES = 4000;
+
   useEffect(() => {
-    const off = window.nano.onLog(({ line }) => {
-      const missing = parseMissingTools(line);
-      setLines((prev) => [...prev, { text: line, kind: classifyLine(line), missingTools: missing ?? undefined }]);
+    const off = window.nano.onLog(({ lines: batch }) => {
+      const parsedNew: LogLine[] = [];
+      let newStats: { done: number; total: number; pct: number } | null = null;
+      for (const { line } of batch) {
+        const missing = parseMissingTools(line);
+        parsedNew.push({ text: line, kind: classifyLine(line), missingTools: missing ?? undefined });
+        const statsMatch = line.match(/Методов декомпилировано:\s*(\d+)\/(\d+)\s*\(([\d.]+)%\)/);
+        if (statsMatch) {
+          newStats = { done: Number(statsMatch[1]), total: Number(statsMatch[2]), pct: Number(statsMatch[3]) };
+        }
+      }
+      // Один setLines на весь батч (не по одному на строку) - см. выше про
+      // причину лагов на крупных jar.
+      setLines((prev) => {
+        const merged = prev.length + parsedNew.length > MAX_LOG_LINES ? prev.slice(-(MAX_LOG_LINES - parsedNew.length)) : prev;
+        return [...merged, ...parsedNew];
+      });
+      if (newStats) setResultStats(newStats);
     });
     return off;
   }, []);
@@ -255,6 +367,7 @@ export default function App() {
     const resolvedOut = outDir ?? defaultOutPathFor(jarPath);
 
     setLines([]);
+    setResultStats(null);
     setStatus("running");
     const res = await window.nano.runDecompile(jarPath, resolvedOut);
     setStatus(res.ok ? "ok" : "error");
@@ -298,7 +411,12 @@ export default function App() {
       <div className="topbar">
         <span className="brand">NanoDecompiler</span>
         <span className="brand-version">{updateInfo?.currentVersion ?? ""}</span>
-        <span className="update-badge">
+        <span
+          className={"update-badge" + (downloadProgress ? " is-clickable" : "")}
+          onClick={() => {
+            if (downloadProgress) setDownloadDetailOpen((v) => !v);
+          }}
+        >
           {updateState === "checking" && <span>проверка обновлений...</span>}
           {updateState === "up-to-date" && <span>всё актуально</span>}
           {updateState === "idle" && settings && !settings.autoUpdateCheck && (
@@ -308,7 +426,21 @@ export default function App() {
           )}
           {updateState === "available" && updateKind === "engine" && (
             <>
-              <span>доступно обновление движка{updateInfo?.latestVersion ? ` ${updateInfo.latestVersion}` : ""}</span>
+              <span>
+                доступно обновление движка{updateInfo?.latestVersion ? ` ${updateInfo.latestVersion}` : ""}
+                {updateInfo?.latestVersionKind && (
+                  <span
+                    className={"version-kind version-kind-" + updateInfo.latestVersionKind}
+                    title={
+                      updateInfo.latestVersionKind === "prerelease"
+                        ? "Тестовая (бета) версия — возможны баги, обновляйтесь осторожно"
+                        : "Финальная релизная версия — можно спокойно пользоваться"
+                    }
+                  >
+                    {updateInfo.latestVersionKind === "prerelease" ? "бета" : "релиз"}
+                  </span>
+                )}
+              </span>
               <button className="btn-mini btn-mini-yes" onClick={applyUpdate} disabled={status === "running"}>
                 Обновить
               </button>
@@ -318,15 +450,46 @@ export default function App() {
             <>
               <span className="update-badge-important">
                 ⚠ важное обновление{updateInfo?.latestVersion ? ` ${updateInfo.latestVersion}` : ""} - нужен новый инсталлятор
+                {updateInfo?.latestVersionKind && (
+                  <span
+                    className={"version-kind version-kind-" + updateInfo.latestVersionKind}
+                    title={
+                      updateInfo.latestVersionKind === "prerelease"
+                        ? "Тестовая (бета) версия — возможны баги, обновляйтесь осторожно"
+                        : "Финальная релизная версия — можно спокойно пользоваться"
+                    }
+                  >
+                    {updateInfo.latestVersionKind === "prerelease" ? "бета" : "релиз"}
+                  </span>
+                )}
               </span>
               <button className="btn-mini btn-mini-yes" onClick={installClientUpdate} disabled={installingClient}>
                 {installingClient ? "Скачиваю..." : "Скачать и установить"}
               </button>
             </>
           )}
-          {updateState === "applying" && (
-            <span>
-              <span className="dot running">●</span> устанавливаю обновление...
+          {(updateState === "applying" || installingClient) && (
+            <span className="download-progress-inline">
+              <span className="dot running">●</span>
+              {downloadProgress ? (
+                <>
+                  <span>
+                    {formatBytes(downloadProgress.downloaded)}
+                    {downloadProgress.total ? ` / ${formatBytes(downloadProgress.total)}` : ""}
+                  </span>
+                  <span className="download-progress-sep">·</span>
+                  <span>{formatSpeed(downloadProgress.speedBps)}</span>
+                  {downloadProgress.etaSec !== null && (
+                    <>
+                      <span className="download-progress-sep">·</span>
+                      <span>осталось {formatEta(downloadProgress.etaSec)}</span>
+                    </>
+                  )}
+                  <span className="download-progress-hint">клик — подробнее</span>
+                </>
+              ) : (
+                <span>скачиваю...</span>
+              )}
             </span>
           )}
           {updateState === "applied" && <span>обновлено — перезапустите приложение</span>}
@@ -338,9 +501,55 @@ export default function App() {
           aria-label="Настройки"
           onClick={() => setSettingsOpen(true)}
         >
-          ⚙
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
         </button>
       </div>
+
+      {downloadDetailOpen && downloadProgress && (
+        <div className="modal-overlay" onClick={() => setDownloadDetailOpen(false)}>
+          <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <span>{downloadProgress.kind === "client" ? "Скачивание клиента" : "Скачивание движка"}</span>
+              <button className="modal-close" onClick={() => setDownloadDetailOpen(false)} aria-label="Закрыть">
+                ✕
+              </button>
+            </div>
+            <div className="download-detail-bar">
+              <div
+                className="download-detail-bar-fill"
+                style={{
+                  width: downloadProgress.total
+                    ? `${Math.min(100, (downloadProgress.downloaded / downloadProgress.total) * 100)}%`
+                    : "100%",
+                }}
+              />
+            </div>
+            <div className="download-detail-grid">
+              <div>
+                <div className="settings-row-title">Скачано</div>
+                <div className="settings-row-hint">
+                  {formatBytes(downloadProgress.downloaded)}
+                  {downloadProgress.total ? ` из ${formatBytes(downloadProgress.total)}` : " (размер неизвестен)"}
+                  {downloadProgress.total
+                    ? ` (${Math.min(100, (downloadProgress.downloaded / downloadProgress.total) * 100).toFixed(0)}%)`
+                    : ""}
+                </div>
+              </div>
+              <div>
+                <div className="settings-row-title">Скорость</div>
+                <div className="settings-row-hint">{formatSpeed(downloadProgress.speedBps)}</div>
+              </div>
+              <div>
+                <div className="settings-row-title">Осталось времени</div>
+                <div className="settings-row-hint">{formatEta(downloadProgress.etaSec)}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {settingsOpen && settings && (
         <div className="modal-overlay" onClick={() => setSettingsOpen(false)}>
@@ -445,27 +654,52 @@ export default function App() {
             </button>
           )}
 
-          <div className="status-row">
-            <span className={"dot " + status}>{dotFor[status]}</span>
-            <span>{statusLabel[status]}</span>
-          </div>
+          {(status === "idle" || status === "running") && (
+            <div className="status-row">
+              <span className={"dot " + status}>{dotFor[status]}</span>
+              <span>{statusLabel[status]}</span>
+            </div>
+          )}
 
-          {status === "ok" && outDir && (
-            <div className="path-row">
-              <button className="btn" onClick={() => window.nano.openPath(outDir)}>
-                Открыть папку
-              </button>
-              <button
-                className="btn"
-                onClick={async () => {
-                  const r = await window.nano.openInVSCode(outDir);
-                  if (!r.ok && r.error) {
-                    setLines((prev) => [...prev, { text: "[!] " + r.error, kind: "error" }]);
-                  }
-                }}
-              >
-                Открыть в VS Code
-              </button>
+          {status === "ok" && (
+            <div className="result-card result-card-ok">
+              <div className="result-card-headline">
+                <span className="result-card-icon">✓</span>
+                <span>Готово{resultStats ? ` — ${resultStats.pct.toFixed(1)}%` : ""}</span>
+              </div>
+              {resultStats && (
+                <div className="result-card-detail">
+                  {resultStats.done} из {resultStats.total} методов полностью восстановлено в читаемый Java
+                </div>
+              )}
+              {outDir && (
+                <div className="path-row">
+                  <button className="btn" onClick={() => window.nano.openPath(outDir)}>
+                    Открыть папку
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={async () => {
+                      const r = await window.nano.openInVSCode(outDir);
+                      if (!r.ok && r.error) {
+                        setLines((prev) => [...prev, { text: "[!] " + r.error, kind: "error" }]);
+                      }
+                    }}
+                  >
+                    Открыть в VS Code
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {status === "error" && (
+            <div className="result-card result-card-error">
+              <div className="result-card-headline">
+                <span className="result-card-icon">✕</span>
+                <span>Не получилось</span>
+              </div>
+              <div className="result-card-detail">Подробности — в логе ниже</div>
             </div>
           )}
         </div>

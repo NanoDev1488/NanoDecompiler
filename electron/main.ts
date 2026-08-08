@@ -17,6 +17,7 @@ import { spawn, ChildProcessWithoutNullStreams } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
 import { registerUpdateHandlers } from "./updater";
+import { readJarSummaryNative } from "./jarSummary";
 
 let mainWindow: BrowserWindow | null = null;
 let runningProc: ChildProcessWithoutNullStreams | null = null;
@@ -236,18 +237,38 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
     };
 
     let buf = "";
+    // Батчим строки лога вместо отправки КАЖДОЙ отдельным IPC-сообщением -
+    // на jar с тысячами методов движок может выдать сотни строк за долю
+    // секунды, и раньше каждая строка = отдельный IPC round-trip +
+    // отдельный React-рендер на стороне клиента (см. App.tsx) - реальная
+    // причина ощутимых лагов на крупных jar, не сама анимация плашек.
+    let pendingLines: { line: string; stream: "stdout" | "stderr" }[] = [];
+    let flushTimer: NodeJS.Timeout | null = null;
+    const scheduleFlush = () => {
+      if (flushTimer) return;
+      flushTimer = setTimeout(() => {
+        flushTimer = null;
+        if (pendingLines.length === 0) return;
+        const batch = pendingLines;
+        pendingLines = [];
+        send("run:log", { lines: batch });
+      }, 40);
+    };
     const flushLines = (chunk: Buffer, stream: "stdout" | "stderr") => {
       buf += chunk.toString("utf-8");
       const lines = buf.split(/\r?\n/);
       buf = lines.pop() ?? "";
-      for (const line of lines) send("run:log", { line, stream });
+      for (const line of lines) pendingLines.push({ line, stream });
+      if (pendingLines.length > 0) scheduleFlush();
     };
 
     proc.stdout.on("data", (d) => flushLines(d, "stdout"));
     proc.stderr.on("data", (d) => flushLines(d, "stderr"));
 
     proc.on("close", (code) => {
-      if (buf) send("run:log", { line: buf, stream: "stdout" });
+      if (buf) pendingLines.push({ line: buf, stream: "stdout" });
+      if (flushTimer) clearTimeout(flushTimer);
+      if (pendingLines.length > 0) send("run:log", { lines: pendingLines });
       runningProc = null;
       resolve({ ok: code === 0, code, outDir });
     });
@@ -260,23 +281,33 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
 });
 
 ipcMain.handle("jar:summary", async (_e, jarPath: string) => {
-  const { cmd, args } = engineInvocation(["--jar-summary", jarPath]);
-  return new Promise((resolve) => {
-    let out = "";
-    const proc = spawn(cmd, args, {
-      cwd: engineDir(),
-      env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+  // См. HANDOFF_22: раньше ВСЕГДА спавнили Python-подпроцесс - для
+  // PyInstaller onefile-сборки это самораспаковка exe на КАЖДЫЙ вызов,
+  // ощущалось как "очень долго". Теперь читаем ZIP central directory
+  // напрямую в Node (jarSummary.ts) - быстрый путь для 99% реальных jar.
+  // Подпроцесс - только запасной вариант для того, что быстрый путь
+  // сознательно не поддерживает (ZIP64 и т.п. edge-case).
+  try {
+    return readJarSummaryNative(jarPath);
+  } catch {
+    const { cmd, args } = engineInvocation(["--jar-summary", jarPath]);
+    return new Promise((resolve) => {
+      let out = "";
+      const proc = spawn(cmd, args, {
+        cwd: engineDir(),
+        env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+      });
+      proc.stdout.on("data", (d) => (out += d.toString("utf-8")));
+      proc.on("close", () => {
+        try {
+          resolve(JSON.parse(out.trim().split(/\r?\n/).pop() ?? "{}"));
+        } catch {
+          resolve({ error: "не удалось получить сводку по jar" });
+        }
+      });
+      proc.on("error", (err) => resolve({ error: String(err) }));
     });
-    proc.stdout.on("data", (d) => (out += d.toString("utf-8")));
-    proc.on("close", () => {
-      try {
-        resolve(JSON.parse(out.trim().split(/\r?\n/).pop() ?? "{}"));
-      } catch {
-        resolve({ error: "не удалось получить сводку по jar" });
-      }
-    });
-    proc.on("error", (err) => resolve({ error: String(err) }));
-  });
+  }
 });
 
 ipcMain.handle("run:cancel", async () => {

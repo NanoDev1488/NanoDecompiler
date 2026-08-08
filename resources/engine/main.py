@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-NanoDecompiler v1.2
+NanoDecompiler v1.6
+
+(ВНИМАНИЕ при поднятии версии: это НЕ единственное место - см.
+NANO_DECOMPILER_VERSION чуть ниже и print_banner() - раньше их
+рассинхронизировали, версия годами показывала "v1.2" в CLI, хотя
+package.json уже был на v1.4+. Три места в этом файле - докстринг здесь,
+NANO_DECOMPILER_VERSION, и лента в print_banner() - ДОЛЖНЫ всегда
+совпадать. См. HANDOFF_22.)
 
 Декомпилер + деобфускатор Java/Bukkit-плагинов (.jar) с ПОЛНЫМ восстановлением
 управляющей структуры (if/else, while/do-while/for, switch, try/catch) и
@@ -77,7 +84,7 @@ for _stream in (sys.stdout, sys.stderr):
     except AttributeError:
         pass  # Python <3.7 или поток без reconfigure() - маловероятно, но не падать из-за этого
 
-NANO_DECOMPILER_VERSION = "NanoDecompiler v1.2"
+NANO_DECOMPILER_VERSION = "NanoDecompiler v1.6"
 
 
 def _enable_windows_ansi():
@@ -196,7 +203,7 @@ def banner_text():
     на очередь без isatty()==True - там банер печатается обычным текстом,
     без escape-мусора)."""
     lines = [
-        "✻ NanoDecompiler v1.2",
+        f"✻ {NANO_DECOMPILER_VERSION}",
         "   Java-декомпилятор/деобфускатор для Bukkit-плагинов",
     ]
     width = max(len(l) for l in lines)

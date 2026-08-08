@@ -115,15 +115,19 @@ body {
   background: transparent;
   border: none;
   color: var(--on-surface-subtle);
-  font-size: 15px;
   line-height: 1;
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 6px;
   border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 .settings-gear:hover {
   color: var(--on-surface);
   background: var(--surface-container-high);
+  transform: rotate(20deg);
 }
 
 .modal-overlay {
@@ -188,6 +192,63 @@ body {
   height: 18px;
   accent-color: var(--primary);
   cursor: pointer;
+}
+
+.update-badge.is-clickable {
+  cursor: pointer;
+}
+
+.version-kind {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.version-kind-release {
+  background: color-mix(in srgb, var(--primary) 22%, transparent);
+  color: var(--primary);
+}
+.version-kind-prerelease {
+  background: color-mix(in srgb, var(--warn, #e8b339) 25%, transparent);
+  color: var(--warn, #e8b339);
+}
+
+.download-progress-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--on-surface-variant);
+}
+.download-progress-sep { opacity: 0.5; }
+.download-progress-hint {
+  margin-left: 4px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  opacity: 0.7;
+}
+
+.download-detail-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--outline);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.download-detail-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 999px;
+  transition: width 0.15s linear;
+}
+.download-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
 }
 
 .bug-report-link {
@@ -384,6 +445,37 @@ body {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
 }
+
+.result-card {
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.result-card-ok {
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface-container));
+  border: 1.5px solid var(--primary);
+}
+.result-card-error {
+  background: color-mix(in srgb, var(--error, #e5484d) 14%, var(--surface-container));
+  border: 1.5px solid var(--error, #e5484d);
+}
+.result-card-headline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--on-surface);
+}
+.result-card-ok .result-card-icon { color: var(--primary); }
+.result-card-error .result-card-icon { color: var(--error, #e5484d); }
+.result-card-detail {
+  color: var(--on-surface-variant);
+  font-size: 13px;
+}
+.result-card .path-row { margin-top: 4px; }
 
 /* --- лог остаётся "утопленным" (sunken surface) и моношрифтным - это
    зона контента (консольный вывод), а не хром интерфейса --- */

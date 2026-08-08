@@ -57,8 +57,21 @@ jobs:
       - name: Прочитать версию из package.json
         id: get_version
         run: |
+          # Соглашение о номерах версий проекта: релиз - РОВНО два числа
+          # (1.4, 1.5, 1.6...), БЕЗ хвостового нуля. Пререлиз/бета - три
+          # и больше чисел (1.4.1, 1.4.2...). package.json обязан быть
+          # валидным semver (major.minor.patch, все три числа) - поэтому
+          # релизы там хранятся как "1.6.0" и здесь патч-нуль ОТРЕЗАЕТСЯ
+          # для тега/отображения; если патч не ноль (напр. "1.6.1") -
+          # это бета, показываем как есть, с патчем.
           VERSION=$(node -p "require('./package.json').version")
-          echo "version=v$VERSION" >> "$GITHUB_OUTPUT"
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+          if [ "$PATCH" = "0" ]; then
+            DISPLAY=$(echo "$VERSION" | cut -d. -f1,2)
+          else
+            DISPLAY="$VERSION"
+          fi
+          echo "version=v$DISPLAY" >> "$GITHUB_OUTPUT"
 
   build-client:
     needs: [resolve-version]

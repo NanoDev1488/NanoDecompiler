@@ -56,11 +56,15 @@ function httpsGetJson<T>(url: string): Promise<T> {
   });
 }
 
-function httpsDownloadFile(url: string, destPath: string): Promise<void> {
+function httpsDownloadFile(
+  url: string,
+  destPath: string,
+  onProgress?: (downloaded: number, total: number | null) => void
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const req = https.get(url, { headers: { "User-Agent": "NanoDecompiler-updater" } }, (res) => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        httpsDownloadFile(res.headers.location, destPath).then(resolve, reject);
+        httpsDownloadFile(res.headers.location, destPath, onProgress).then(resolve, reject);
         return;
       }
       if (res.statusCode !== 200) {
@@ -68,11 +72,30 @@ function httpsDownloadFile(url: string, destPath: string): Promise<void> {
         res.resume();
         return;
       }
+      const totalHeader = res.headers["content-length"];
+      const total = totalHeader ? parseInt(Array.isArray(totalHeader) ? totalHeader[0] : totalHeader, 10) : null;
+      let downloaded = 0;
+      // Троттлинг - см. HANDOFF_22: если слать прогресс на КАЖДЫЙ chunk
+      // (могут прилетать десятки раз в секунду на быстром интернете),
+      // получаем ту же болезнь, что и с логом декомпиляции - шквал IPC +
+      // рендеров вместо плавного счётчика. Раз в ~120мс более чем
+      // достаточно для человеческого глаза (это уже ~8 обновлений/сек).
+      let lastEmit = 0;
+      if (onProgress) onProgress(0, total);
+      res.on("data", (chunk: Buffer) => {
+        downloaded += chunk.length;
+        const now = Date.now();
+        if (onProgress && now - lastEmit >= 120) {
+          lastEmit = now;
+          onProgress(downloaded, total);
+        }
+      });
       const tmpPath = destPath + ".download";
       const file = fs.createWriteStream(tmpPath);
       res.pipe(file);
       file.on("finish", () => {
         file.close(() => {
+          if (onProgress) onProgress(downloaded, total);
           // Атомарная замена - переименование внутри одной файловой системы
           // почти мгновенное, не оставляет "битого" файла на середине,
           // если что-то пойдёт не так ДО этого момента.
@@ -134,6 +157,16 @@ function versionsEqual(a: string, b: string): boolean {
   return true;
 }
 
+// Соглашение о номерах версий проекта (см. HANDOFF_22): релиз - РОВНО два
+// числа через точку (1.4, 1.5, 1.6...), без хвостовых нулей на конце.
+// Пререлиз/бета - три и больше чисел (1.4.1, 1.4.2, ...) - это
+// промежуточные тестовые сборки на пути к следующему релизу. Используется
+// при проверке обновлений, чтобы явно сказать пользователю "это бета,
+// осторожнее" или "это релиз, можно спокойно пользоваться".
+function classifyVersion(v: string): "release" | "prerelease" {
+  return versionParts(v).length >= 3 ? "prerelease" : "release";
+}
+
 // См. HANDOFF_16 - после "важного" (client) обновления новый инсталлятор
 // запускается ОТДЕЛЬНЫМ процессом (detached, переживает закрытие текущего
 // приложения), а ТЕКУЩИЙ клиент сам закрывается - Windows не даёт
@@ -174,11 +207,13 @@ export function consumeUpdateSuccessFlag(): boolean {
 export function registerUpdateHandlers(engineDir: () => string) {
   ipcMain.handle("update:consumeSuccessFlag", async () => consumeUpdateSuccessFlag());
 
-  ipcMain.handle("update:installClientAndRestart", async (_e, downloadUrl: string) => {
+  ipcMain.handle("update:installClientAndRestart", async (event, downloadUrl: string) => {
     try {
       const tmpDir = app.getPath("temp");
       const installerPath = path.join(tmpDir, "NanoDecompiler-Client-Setup.exe");
-      await httpsDownloadFile(downloadUrl, installerPath);
+      await httpsDownloadFile(downloadUrl, installerPath, (downloaded, total) => {
+        event.sender.send("update:downloadProgress", { downloaded, total, kind: "client" });
+      });
       writeUpdateSuccessMarker();
       // detached + unref - инсталлятор должен пережить закрытие текущего
       // процесса (не быть его child'ом с точки зрения жизненного цикла).
@@ -218,6 +253,7 @@ export function registerUpdateHandlers(engineDir: () => string) {
           updateKind: release.tag_name === installedApiVersion ? "none" : "engine",
           currentVersion: installedApiVersion ?? "неизвестна",
           latestVersion: release.tag_name,
+          latestVersionKind: classifyVersion(release.tag_name),
           downloadUrl: cliAsset ? cliAsset.browser_download_url : null,
           clientDownloadUrl: null,
           releaseUrl: release.html_url,
@@ -242,6 +278,7 @@ export function registerUpdateHandlers(engineDir: () => string) {
         updateKind,
         currentVersion: currentClientVersion,
         latestVersion: updateKind === "client" ? versions.client : versions.api,
+        latestVersionKind: classifyVersion(updateKind === "client" ? versions.client : versions.api),
         downloadUrl: cliAsset ? cliAsset.browser_download_url : null,
         clientDownloadUrl: setupAsset ? setupAsset.browser_download_url : release.html_url,
         releaseUrl: release.html_url,
@@ -251,7 +288,7 @@ export function registerUpdateHandlers(engineDir: () => string) {
     }
   });
 
-  ipcMain.handle("update:apply", async (_e, downloadUrl: string, latestApiVersion?: string) => {
+  ipcMain.handle("update:apply", async (event, downloadUrl: string, latestApiVersion?: string) => {
     // ВАЖНО: apply умеет подменять ТОЛЬКО движок (exe) - см. updateKind
     // выше. Обновление самого клиента "апдейтом" в этом же смысле в
     // принципе невозможно - Windows не даёт процессу перезаписать
@@ -268,7 +305,9 @@ export function registerUpdateHandlers(engineDir: () => string) {
       // сторона (App.tsx) должна дождаться завершения текущей операции
       // перед вызовом apply (уже сделано - кнопка "Обновить" задизейблена,
       // пока status === "running").
-      await httpsDownloadFile(downloadUrl, dest);
+      await httpsDownloadFile(downloadUrl, dest, (downloaded, total) => {
+        event.sender.send("update:downloadProgress", { downloaded, total, kind: "engine" });
+      });
       if (latestApiVersion) {
         writeInstalledApiVersion(dir, latestApiVersion);
       }
