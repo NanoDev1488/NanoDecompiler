@@ -47,7 +47,7 @@ contextBridge.exposeInMainWorld("nano", {
   }> => ipcRenderer.invoke("update:check"),
   applyUpdate: (downloadUrl: string, latestApiVersion?: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke("update:apply", downloadUrl, latestApiVersion),
-  installClientAndRestart: (downloadUrl: string): Promise<{ ok: boolean; error?: string }> =>
+  installClientAndRestart: (downloadUrl: string): Promise<{ ok: boolean; error?: string; manual?: boolean }> =>
     ipcRenderer.invoke("update:installClientAndRestart", downloadUrl),
   consumeUpdateSuccessFlag: (): Promise<boolean> => ipcRenderer.invoke("update:consumeSuccessFlag"),
   onLog: (cb: (e: LogEvent) => void) => {
@@ -69,4 +69,9 @@ contextBridge.exposeInMainWorld("nano", {
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke("settings:get"),
   setSettings: (partial: Partial<AppSettings>): Promise<AppSettings> =>
     ipcRenderer.invoke("settings:set", partial),
+  // HANDOFF_52: мини-IDE - см. main.ts::fs:listDir/fs:readTextFile.
+  listDir: (root: string, relDir: string): Promise<{ ok: boolean; items?: { name: string; isDir: boolean }[]; error?: string }> =>
+    ipcRenderer.invoke("fs:listDir", root, relDir),
+  readTextFile: (root: string, relPath: string): Promise<{ ok: boolean; content?: string; size?: number; error?: string }> =>
+    ipcRenderer.invoke("fs:readTextFile", root, relPath),
 });

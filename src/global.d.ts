@@ -41,7 +41,7 @@ declare global {
         error?: string;
       }>;
       applyUpdate: (downloadUrl: string, latestApiVersion?: string) => Promise<{ ok: boolean; error?: string }>;
-      installClientAndRestart: (downloadUrl: string) => Promise<{ ok: boolean; error?: string }>;
+      installClientAndRestart: (downloadUrl: string) => Promise<{ ok: boolean; error?: string; manual?: boolean }>;
       consumeUpdateSuccessFlag: () => Promise<boolean>;
       onLog: (cb: (e: { lines: { line: string; stream: "stdout" | "stderr" }[] }) => void) => () => void;
       onToolsProgress: (
@@ -54,6 +54,8 @@ declare global {
       setSettings: (
         partial: Partial<{ legitimacyCheck: boolean; autoUpdateCheck: boolean }>
       ) => Promise<{ legitimacyCheck: boolean; autoUpdateCheck: boolean }>;
+      listDir: (root: string, relDir: string) => Promise<{ ok: boolean; items?: { name: string; isDir: boolean }[]; error?: string }>;
+      readTextFile: (root: string, relPath: string) => Promise<{ ok: boolean; content?: string; size?: number; error?: string }>;
     };
   }
 }

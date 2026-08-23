@@ -1,7 +1,7 @@
 {
   "name": "nano-decompiler-gui",
   "version": "1.6.0",
-  "description": "NanoDecompiler — Electron/React GUI поверх Python-движка декомпиляции",
+  "description": "NanoDecompiler — Electron/React GUI поверх C++ движка декомпиляции",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -23,7 +23,11 @@
   },
   "dependencies": {
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "@uiw/react-codemirror": "^4.23.6",
+    "@codemirror/lang-java": "^6.0.1",
+    "@codemirror/lang-xml": "^6.1.0",
+    "@codemirror/lang-yaml": "^6.1.2"
   },
   "build": {
     "appId": "com.nanodecompiler.app",
@@ -44,7 +48,14 @@
       "icon": "resources/engine/icon.ico"
     },
     "linux": {
-      "target": "AppImage"
+      "target": "AppImage",
+      "icon": "resources/engine/icon.png",
+      "category": "Development"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "resources/engine/icon.png",
+      "identity": null
     }
   }
 }

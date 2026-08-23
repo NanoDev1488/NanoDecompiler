@@ -1,17 +1,14 @@
 // Главный процесс Electron.
 //
-// ВАЖНО (архитектурное решение): движок декомпиляции (classfile.py, ir.py,
-// cfg.py, stackvm.py, engine.py, structure.py, emit.py и т.д.) НЕ переписан
-// на TypeScript и запускается как есть, через python3, дочерним процессом.
-// Причина - см. HANDOFF_1_ARCHITECTURE.md, раздел "ключевой принцип
-// архитектуры": движок - это ~9 диагностированных и исправленных багов
-// компиляции, откалиброванный на реальных .jar (EryBuyer/DeathUtils/
-// GlowClans, ~93-97% "полностью восстановлено"). Переписывать несколько
-// тысяч строк символического исполнения байткода на JS без тех же
-// регрессионных .jar под рукой - гарантированный откат качества и повторный
-// проход по всем 9 багам заново. Здесь переписан ТОЛЬКО GUI-слой (три
-// Tkinter/CustomTkinter/Flet темы -> один Electron+React интерфейс),
-// что и было целью запроса.
+// HANDOFF_46: движок декомпиляции ПЕРЕПИСАН на C++ (resources/engine_cpp) -
+// это ЕДИНСТВЕННЫЙ способ его запустить, python-фолбэка больше нет (main.py
+// и весь остальной python-код удалены из проекта). cli_main.cpp - полная
+// совместимая замена main.py по флагам/выводу (см. cli_main.cpp шапку).
+// Для истории архитектурного решения "почему GUI переписан отдельно от
+// движка" - см. HANDOFF_1_ARCHITECTURE.md (было верно, когда движок ещё был
+// на Python; сейчас GUI по-прежнему остаётся отдельным TypeScript-слоем
+// поверх движка, спавнящим его как дочерний процесс - изменился только сам
+// движок, не сама архитектура "GUI отдельно, движок отдельно").
 import { app, BrowserWindow, ipcMain, dialog, shell } from "electron";
 import { spawn, ChildProcessWithoutNullStreams } from "child_process";
 import * as path from "path";
@@ -66,40 +63,27 @@ function engineDir(): string {
     : path.join(process.resourcesPath, "engine");
 }
 
-function pythonBin(): string {
-  // Termux/Linux/macOS - всегда python3 (см. HANDOFF_1). На Windows тоже
-  // пробуем python3 первым, с фолбэком на python в рендерере при ошибке.
-  return process.platform === "win32" ? "python" : "python3";
-}
-
-// См. HANDOFF_7/8/9 - раньше клиент ВСЕГДА запускал python3/python main.py
-// напрямую, а апдейтер (electron/updater.ts) при этом качал и подменял
-// NanoDecompilerCLI.exe, который клиент вообще никогда не вызывал - кнопка
-// "Обновить" в топбаре ничего реально не меняла в поведении. Теперь: если
-// рядом лежит NanoDecompilerCLI.exe (Windows-only, собирается в
-// .github/workflows/build-and-release.yml как `pyinstaller --onefile
-// --name NanoDecompilerCLI main.py` - ТОТ ЖЕ движок, те же флаги 1:1, т.к.
-// это просто main.py, упакованный в один exe) - используем его, иначе
-// как и раньше падаем на python3/python + main.py. На свежей установке
-// exe'а рядом нет (в extraResources пакуются только .py-файлы, см.
-// package.json) - клиент работает как и раньше, python; exe появляется
-// ТОЛЬКО после того, как пользователь один раз нажмёт "Обновить".
-//
-// НЕ включаем это на Linux/macOS/Termux - exe собирается только под
-// Windows (windows-latest раннер в workflow), на других платформах его
-// в принципе быть не может (а если бы вдруг оказался - попытка spawn()
-// его напрямую там просто упадёт с ENOEXEC, а не тихо сработает).
+// HANDOFF_46: python-фолбэк убран полностью (main.py удалён из проекта -
+// движок теперь ТОЛЬКО C++, resources/engine_cpp/src/cli_main.cpp).
+// Раньше (HANDOFF_7/8/9/45) здесь был путь через python3/python как
+// основной или запасной вариант - см. историю в этих хэндоффах, если
+// понадобится контекст. Если бинарника рядом нет (например, CI ещё не
+// пересобрал extraResources/engine после этого коммита) - функция бросает
+// понятную ошибку, а НЕ падает молча/не пытается угадать питон.
 function engineInvocation(scriptArgs: string[]): { cmd: string; args: string[] } {
-  if (process.platform === "win32") {
-    const exePath = path.join(engineDir(), "NanoDecompilerCLI.exe");
-    if (fs.existsSync(exePath)) {
-      // exe уже "содержит в себе" main.py - путь к скрипту не передаём,
-      // только сами позиционные аргументы/флаги.
-      return { cmd: exePath, args: scriptArgs };
-    }
+  const binName = process.platform === "win32" ? "NanoDecompilerCLI.exe" : "NanoDecompilerCLI";
+  const binPath = path.join(engineDir(), binName);
+  if (!fs.existsSync(binPath)) {
+    throw new Error(
+      `Движок не найден: ${binPath}. Убедитесь, что resources/engine_cpp собран (см. ` +
+        `resources/engine_cpp/CMakeLists.txt) и бинарник NanoDecompilerCLI${
+          process.platform === "win32" ? ".exe" : ""
+        } скопирован в resources/engine/ (см. .github/workflows/build-and-release.yml).`,
+    );
   }
-  const mainPy = path.join(engineDir(), "main.py");
-  return { cmd: pythonBin(), args: [mainPy, ...scriptArgs] };
+  // Бинарник уже "содержит в себе" весь движок - путь к скрипту не
+  // передаём, только сами позиционные аргументы/флаги.
+  return { cmd: binPath, args: scriptArgs };
 }
 
 function createWindow() {
@@ -187,7 +171,7 @@ ipcMain.handle("shell:openInVSCode", async (_e, target: string) => {
   // на Windows) - если её нет, значит VS Code либо не установлен, либо
   // ставился без этой опции. shell:true нужен именно для .cmd-обёртки VS
   // Code на Windows (сам `code` там - это code.cmd, как и `mvn.cmd` в
-  // toolinstaller.py - subprocess без shell не умеет их запускать напрямую).
+  // toolinstaller.hpp - на POSIX это шло бы иначе, но здесь конкретно про code.cmd/mvn.cmd на Windows).
   return new Promise((resolve) => {
     const proc = spawn("code", [target], { shell: true, windowsHide: true });
     let errored = false;
@@ -210,23 +194,25 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
     return { ok: false, error: "Файл .jar не найден: " + jarPath };
   }
 
-  // --headless критически важен на Windows: без него main.py() бы всегда
-  // пытался открыть tkinter GUI (см. main.py::main(), ветка
-  // "platform.system() == Windows") ВМЕСТО обычной консольной декомпиляции -
-  // именно эта ветка и была целью всей замены на Electron. На Linux/Termux
-  // флаг безвреден (там и так нет форсированного GUI-пути), но передаём его
-  // всегда, для единообразия между платформами.
-  const scriptArgs = [jarPath, outDir, "--headless"];
+  // HANDOFF_47: --headless убран совсем (был no-op в cli_main.cpp - см.
+  // HANDOFF_46, движок и так никогда не пытается открыть GUI, вся
+  // GUI-логика тут, в Electron; пользователь счёл флаг бесполезным).
+  const scriptArgs = [jarPath, outDir];
   // См. HANDOFF_19 - тумблер "проверка легитимности" в настройках. По
   // умолчанию включена (см. DEFAULT_SETTINGS) - флаг добавляется, ТОЛЬКО
   // когда пользователь явно выключил.
   if (!loadSettings().legitimacyCheck) scriptArgs.push("--no-legitimacy-check");
-  const { cmd, args } = engineInvocation(scriptArgs);
+  let cmd: string, args: string[];
+  try {
+    ({ cmd, args } = engineInvocation(scriptArgs));
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
 
   return new Promise((resolve) => {
     const proc = spawn(cmd, args, {
       cwd: engineDir(),
-      env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1" },
+      env: { ...process.env },
     });
     runningProc = proc;
 
@@ -281,21 +267,27 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
 });
 
 ipcMain.handle("jar:summary", async (_e, jarPath: string) => {
-  // См. HANDOFF_22: раньше ВСЕГДА спавнили Python-подпроцесс - для
-  // PyInstaller onefile-сборки это самораспаковка exe на КАЖДЫЙ вызов,
-  // ощущалось как "очень долго". Теперь читаем ZIP central directory
-  // напрямую в Node (jarSummary.ts) - быстрый путь для 99% реальных jar.
-  // Подпроцесс - только запасной вариант для того, что быстрый путь
-  // сознательно не поддерживает (ZIP64 и т.п. edge-case).
+  // См. HANDOFF_22 (история): раньше ВСЕГДА спавнили Python-подпроцесс - для
+  // PyInstaller onefile-сборки это была самораспаковка exe на КАЖДЫЙ вызов,
+  // ощущалось как "очень долго". Сейчас движок - компактный C++-бинарник
+  // (HANDOFF_46), подпроцесс сам по себе больше не так дорог, но читать ZIP
+  // central directory напрямую в Node всё равно быстрее (без spawn() вообще)
+  // - оставлено как основной путь. Подпроцесс - только запасной вариант для
+  // того, что быстрый путь сознательно не поддерживает (ZIP64 и т.п. edge-case).
   try {
     return readJarSummaryNative(jarPath);
   } catch {
-    const { cmd, args } = engineInvocation(["--jar-summary", jarPath]);
+    let cmd: string, args: string[];
+    try {
+      ({ cmd, args } = engineInvocation(["--jar-summary", jarPath]));
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
     return new Promise((resolve) => {
       let out = "";
       const proc = spawn(cmd, args, {
         cwd: engineDir(),
-        env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+        env: { ...process.env },
       });
       proc.stdout.on("data", (d) => (out += d.toString("utf-8")));
       proc.on("close", () => {
@@ -319,6 +311,71 @@ ipcMain.handle("run:cancel", async () => {
   return false;
 });
 
+// HANDOFF_52: мини-IDE (файловый проводник + просмотр/редактирование
+// декомпилированных файлов, см. HANDOFF_39 п.2 старой спецификации) -
+// два хендлера: список директории (ленивая подгрузка по одному уровню -
+// у крупных проектов, напр. BukkitOfUtils, 618+ .java файлов, разом
+// строить весь рекурсивный список дорого и не нужно, пока узел дерева не
+// раскрыли) и чтение файла (с лимитом размера - защита от случайной
+// попытки открыть большой бинарный ресурс как текст).
+//
+// БЕЗОПАСНОСТЬ: renderer передаёт `root` (тот самый outDir, который САМ
+// ЖЕ электрон вернул после успешной декомпиляции/пользователь выбрал
+// через dialog:selectOutDir) и относительный путь ВНУТРИ него - сервер
+// (этот процесс) проверяет, что итоговый абсолютный путь ДЕЙСТВИТЕЛЬНО
+// лежит внутри root (через path.resolve + startsWith с проверкой границы
+// разделителя, чтобы "/foo" не совпадал с "/foobar"), прежде чем читать
+// что-либо с диска - иначе renderer (если когда-нибудь скомпрометирован
+// какой-то будущей уязвимостью в самой странице) не смог бы читать
+// произвольные файлы пользователя через эту функцию конкретно (остальные
+// пути атаки типа openInVSCode/openPath - отдельный вопрос, не эта задача).
+const MAX_TEXT_FILE_BYTES = 4 * 1024 * 1024; // 4 МБ - с запасом для любого разумного .java/.xml/.txt
+
+function resolveWithinRoot(root: string, relPath: string): string | null {
+  const resolvedRoot = path.resolve(root);
+  const resolvedTarget = path.resolve(resolvedRoot, relPath || ".");
+  if (resolvedTarget === resolvedRoot) return resolvedTarget;
+  if (resolvedTarget.startsWith(resolvedRoot + path.sep)) return resolvedTarget;
+  return null;
+}
+
+ipcMain.handle("fs:listDir", async (_e, root: string, relDir: string) => {
+  const dirPath = resolveWithinRoot(root, relDir);
+  if (!dirPath) return { ok: false, error: "путь вне корневой директории проекта" };
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    const items = entries
+      .map((ent) => ({ name: ent.name, isDir: ent.isDirectory() }))
+      .sort((a, b) => (a.isDir === b.isDir ? a.name.localeCompare(b.name) : a.isDir ? -1 : 1));
+    return { ok: true, items };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
+ipcMain.handle("fs:readTextFile", async (_e, root: string, relPath: string) => {
+  const filePath = resolveWithinRoot(root, relPath);
+  if (!filePath) return { ok: false, error: "путь вне корневой директории проекта" };
+  try {
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) return { ok: false, error: "не файл" };
+    if (stat.size > MAX_TEXT_FILE_BYTES) {
+      return { ok: false, error: `файл слишком большой для просмотра в редакторе (${(stat.size / 1024 / 1024).toFixed(1)} МБ)` };
+    }
+    const buf = fs.readFileSync(filePath);
+    // Грубая эвристика "это бинарный файл" - нулевой байт в первых 8000
+    // байтах практически никогда не встречается в валидном UTF-8/ASCII
+    // тексте (тот же трюк использует git для своего "binary file" détection).
+    const probeLen = Math.min(buf.length, 8000);
+    for (let i = 0; i < probeLen; i++) {
+      if (buf[i] === 0) return { ok: false, error: "похоже на бинарный файл - предпросмотр недоступен" };
+    }
+    return { ok: true, content: buf.toString("utf-8"), size: stat.size };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
 let installingProc: ChildProcessWithoutNullStreams | null = null;
 
 ipcMain.handle("tools:install", async (_event, only?: "jdk" | "java" | "maven") => {
@@ -326,12 +383,17 @@ ipcMain.handle("tools:install", async (_event, only?: "jdk" | "java" | "maven") 
     return { ok: false, error: "Установка уже идёт" };
   }
   const flag = only ? `--install-tools-json=${only}` : "--install-tools-json";
-  const { cmd, args } = engineInvocation([flag]);
+  let cmd: string, args: string[];
+  try {
+    ({ cmd, args } = engineInvocation([flag]));
+  } catch (e) {
+    return { java: null, maven: null, errors: [(e as Error).message] };
+  }
 
   return new Promise((resolve) => {
     const proc = spawn(cmd, args, {
       cwd: engineDir(),
-      env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUNBUFFERED: "1" },
+      env: { ...process.env },
     });
     installingProc = proc;
 

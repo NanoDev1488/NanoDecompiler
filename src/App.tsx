@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { classifyLine } from "./classifyLine";
+import MiniIde from "./MiniIde";
 
 type Status = "idle" | "running" | "ok" | "error";
 type InstallState = "idle" | "installing" | "done";
@@ -78,8 +79,9 @@ export default function App() {
   const [jarPath, setJarPath] = useState<string | null>(null);
   const [outDir, setOutDir] = useState<string | null>(null);
   // Разобранная строка "Методов декомпилировано: X/Y (Z%)" из лога движка
-  // (см. main.py) - показывается крупной плашкой результата, а не только
-  // в самом логе (раньше результат было легко пропустить - см. HANDOFF_22).
+  // (см. cli_main.cpp::run_decompile_console) - показывается крупной плашкой
+  // результата, а не только в самом логе (раньше результат было легко
+  // пропустить - см. HANDOFF_22).
   const [resultStats, setResultStats] = useState<{ done: number; total: number; pct: number } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
@@ -88,6 +90,10 @@ export default function App() {
   const [installState, setInstallState] = useState<InstallState>("idle");
   const [installProgress, setInstallProgress] = useState<string | null>(null);
   const [dismissedInstallPrompt, setDismissedInstallPrompt] = useState(false);
+  // HANDOFF_52: мини-IDE (файловый проводник + просмотр кода, см.
+  // src/MiniIde.tsx) - переключатель "Лог / Мини-IDE" рядом с терминалом,
+  // доступен только после успешной декомпиляции (нужен outDir).
+  const [showIde, setShowIde] = useState(false);
   const [updateState, setUpdateState] = useState<UpdateState>("idle");
   const [updateKind, setUpdateKind] = useState<UpdateKind>("none");
   const [updateInfo, setUpdateInfo] = useState<{
@@ -244,9 +250,20 @@ export default function App() {
       setDownloadProgress(null);
       setUpdateState("error");
       setUpdateInfo((prev) => ({ ...(prev ?? {}), error: res.error }));
+      return;
     }
-    // при успехе приложение само закроется через electron/updater.ts -
-    // никакого дальнейшего состояния тут показывать уже не успеем.
+    if (res.manual) {
+      // HANDOFF_51: Linux/macOS - приложение НЕ закрывается само (см.
+      // electron/updater.ts::installClientAndRestart) - открыли страницу
+      // скачивания в браузере, дальше пользователь обновляется вручную.
+      setInstallingClient(false);
+      setDownloadProgress(null);
+      setToast("Страница скачивания открыта в браузере - установите новую версию вручную и перезапустите приложение.");
+      return;
+    }
+    // иначе (Windows) - при успехе приложение само закроется через
+    // electron/updater.ts - никакого дальнейшего состояния тут показывать
+    // уже не успеем.
   }, [updateInfo, installingClient]);
 
   // Плашка "Обновление успешно установлено" - см. HANDOFF_16. Показывается
@@ -369,6 +386,7 @@ export default function App() {
     setLines([]);
     setResultStats(null);
     setStatus("running");
+    setShowIde(false);
     const res = await window.nano.runDecompile(jarPath, resolvedOut);
     setStatus(res.ok ? "ok" : "error");
     if (!res.ok && res.error) {
@@ -385,9 +403,8 @@ export default function App() {
   const installTools = useCallback(async (tools: string[]) => {
     setInstallState("installing");
     setInstallProgress(null);
-    // main.py::_try_handle_install_tools_json принимает "jdk"/"java"/"maven" -
-    // тут ровно те же токены, что печатает check_java_maven() в "Не хватает: ...",
-    // конвертировать не нужно.
+    // cli_main.cpp::run_install_tools_json принимает "jdk"/"java"/"maven" -
+    // тут ровно те же токены (см. toolinstaller.hpp), конвертировать не нужно.
     const only = tools.length === 1 ? (tools[0] as "java" | "maven") : undefined;
     const res = await window.nano.installTools(only as any);
     setInstallState("done");
@@ -688,6 +705,9 @@ export default function App() {
                   >
                     Открыть в VS Code
                   </button>
+                  <button className="btn" onClick={() => setShowIde((v) => !v)}>
+                    {showIde ? "Показать лог" : "Открыть мини-IDE"}
+                  </button>
                 </div>
               )}
             </div>
@@ -704,6 +724,16 @@ export default function App() {
           )}
         </div>
 
+        {showIde && outDir ? (
+          <MiniIde
+            root={outDir}
+            onOpenExternal={async (relPath) => {
+              const full = outDir.replace(/[\\/]+$/, "") + "/" + relPath;
+              const r = await window.nano.openInVSCode(full);
+              if (!r.ok && r.error) await window.nano.openPath(full);
+            }}
+          />
+        ) : (
         <div className="terminal" ref={termRef}>
           {lines.length === 0 ? (
             <div className="empty-terminal">Лог появится здесь после запуска.</div>
@@ -738,6 +768,7 @@ export default function App() {
             ))
           )}
         </div>
+        )}
       </div>
 
       <div className="footer">

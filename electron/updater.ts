@@ -1,4 +1,4 @@
-import { app, ipcMain } from "electron";
+import { app, ipcMain, shell } from "electron";
 import * as https from "https";
 import * as fs from "fs";
 import * as path from "path";
@@ -19,6 +19,25 @@ interface GhRelease {
 interface VersionsJson {
   client: string;
   api: string;
+}
+
+// HANDOFF_51: движок (build-api) пока собирается ТОЛЬКО под Windows (см.
+// .github/workflows/build-and-release.yml, build-api job - не тронут этой
+// сессией, отдельная задача на будущее) - тихий "патч движка на лету"
+// (updateKind "engine") поэтому в принципе доступен только на Windows,
+// где есть подходящий ассет (`NanoDecompilerCLI.exe`). На Linux/macOS
+// cliAsset ниже всегда null -> updateKind никогда не станет "engine" сам
+// по себе (см. update:check) - только "client" (полная переустановка)
+// или "none".
+const ENGINE_ASSET_NAME = process.platform === "win32" ? "NanoDecompilerCLI.exe" : null;
+
+// Регэксп имени клиентского инсталлятора - см. package.json build.*.artifactName
+// по умолчанию (electron-builder) и .github/workflows/build-and-release.yml
+// (там же явно копируется под фиксированное имя перед публикацией).
+function clientAssetPattern(): RegExp {
+  if (process.platform === "win32") return /Setup\.exe$/i;
+  if (process.platform === "darwin") return /\.dmg$/i;
+  return /\.AppImage$/i;
 }
 
 // См. HANDOFF_16/19 - пользователь просил именно 5 сек для ПРОВЕРКИ
@@ -208,6 +227,25 @@ export function registerUpdateHandlers(engineDir: () => string) {
   ipcMain.handle("update:consumeSuccessFlag", async () => consumeUpdateSuccessFlag());
 
   ipcMain.handle("update:installClientAndRestart", async (event, downloadUrl: string) => {
+    // HANDOFF_51: тихая "скачать инсталлятор -> запустить его -> выйти,
+    // инсталлятор сам перезапустит приложение" схема - специфична для
+    // Windows NSIS (silent-install + автозапуск по завершении, см. комментарий
+    // ниже). Для macOS (.dmg - нужно смонтировать образ и вручную
+    // перетащить .app, автоматизировать без доп. библиотек - отдельная
+    // большая задача) и Linux (.AppImage - НЕТ единого "инсталлятора" в
+    // принципе, самообновление AppImage обычно означает подмену файла на
+    // диске и требует знать, ГДЕ пользователь его хранит - не гарантировано)
+    // - вместо притворства, что тут работает то же самое, ЧЕСТНО открываем
+    // страницу скачивания в браузере и просим пользователя обновиться
+    // вручную. НЕ проверялось живьём ни на одной из трёх платформ.
+    if (process.platform !== "win32") {
+      try {
+        await shell.openExternal(downloadUrl);
+        return { ok: true, manual: true };
+      } catch (e) {
+        return { ok: false, error: String(e) };
+      }
+    }
     try {
       const tmpDir = app.getPath("temp");
       const installerPath = path.join(tmpDir, "NanoDecompiler-Client-Setup.exe");
@@ -238,8 +276,8 @@ export function registerUpdateHandlers(engineDir: () => string) {
         `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`
       );
       const versionsAsset = release.assets.find((a) => a.name === "versions.json");
-      const cliAsset = release.assets.find((a) => a.name === "NanoDecompilerCLI.exe");
-      const setupAsset = release.assets.find((a) => /Setup\.exe$/i.test(a.name));
+      const cliAsset = ENGINE_ASSET_NAME ? release.assets.find((a) => a.name === ENGINE_ASSET_NAME) : undefined;
+      const setupAsset = release.assets.find((a) => clientAssetPattern().test(a.name));
 
       const currentClientVersion = app.getVersion();
       const installedApiVersion = readInstalledApiVersion(engineDir());
@@ -269,9 +307,16 @@ export function registerUpdateHandlers(engineDir: () => string) {
       // инсталлятор клиента и так принесёт свежий движок внутри себя (см.
       // build-client в workflow - он теперь сам собирает и встраивает
       // NanoDecompilerCLI.exe).
+      //
+      // HANDOFF_51: "engine"-обновление (тихий патч без переустановки)
+      // доступно ТОЛЬКО на Windows (см. ENGINE_ASSET_NAME выше) - на
+      // Linux/macOS updateKind никогда не "engine", даже если версии
+      // формально разошлись (нечего было бы скачивать) - в этом случае
+      // просто "none" (пользователь всё равно получит свежий движок при
+      // следующем полном обновлении клиента).
       let updateKind: "none" | "engine" | "client" = "none";
       if (clientNeedsUpdate) updateKind = "client";
-      else if (apiNeedsUpdate) updateKind = "engine";
+      else if (apiNeedsUpdate && cliAsset) updateKind = "engine";
 
       return {
         ok: true,
@@ -297,7 +342,7 @@ export function registerUpdateHandlers(engineDir: () => string) {
     // НОВОГО инсталлятора через shell.openExternal, а не сюда.
     try {
       const dir = engineDir();
-      const dest = path.join(dir, "NanoDecompilerCLI.exe");
+      const dest = path.join(dir, ENGINE_ASSET_NAME ?? "NanoDecompilerCLI");
       // Движок вызывается ТОЛЬКО как дочерний процесс (spawn) - см.
       // electron/main.ts::run:decompile/tools:install - между вызовами
       // файл никем не заблокирован. Если apply вызван ПОКА идёт
