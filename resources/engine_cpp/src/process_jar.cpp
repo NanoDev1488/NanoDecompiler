@@ -1,3 +1,4 @@
+#include <iostream>
 // process_jar.cpp - см. process_jar.hpp. Порт process_jar_with_stats() и
 // вспомогательных функций отчётов из main.py (HANDOFF_43).
 #include "process_jar.hpp"
@@ -58,17 +59,17 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     ProjectStats& stats = jr.stats;
 
     // --- 1. Сканирование на подозрительное содержимое (см. HANDOFF_31) ---
-    jr.malware_findings = scan_jar(jar_path);
+    std::cerr << "[DBG] before scan_jar\n"; jr.malware_findings = scan_jar(jar_path); std::cerr << "[DBG] after scan_jar\n";
 
     std::string src_dir = (fs::path(out_dir) / "src" / "main" / "java").string();
     fs::create_directories(src_dir);
 
-    ZipReader zr(jar_path);
+    std::cerr << "[DBG] before ZipReader\n"; ZipReader zr(jar_path); std::cerr << "[DBG] after ZipReader\n";
     std::vector<std::string> all_names = zr.namelist();
     std::vector<std::string> class_names;
     for (auto& n : all_names)
         if (n.size() >= 6 && n.substr(n.size() - 6) == ".class" && n.find("module-info") == std::string::npos) class_names.push_back(n);
-    stats.classes_total = static_cast<int>(class_names.size());
+    stats.classes_total = static_cast<int>(class_names.size()); std::cerr << "[DBG] class_names.size()=" << class_names.size() << "\n";
 
     // --- 2. Разбор .class файлов ---
     std::map<std::string, ClassFile> class_files;
@@ -76,6 +77,7 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     std::optional<std::string> plugin_yml_text;
     std::vector<std::string> class_order;  // порядок появления в jar - нужен find_active_decryptor_in_jar
     for (auto& n : class_names) {
+        std::cerr << "[DBG] parsing class: " << n << "\n";
         try {
             auto data = zr.read(n);
             ClassFile cf(data);
@@ -86,7 +88,7 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
             parse_errors.push_back({n, e.what()});
         }
     }
-    stats.classes_parsed = static_cast<int>(class_files.size());
+    stats.classes_parsed = static_cast<int>(class_files.size()); std::cerr << "[DBG] classes_parsed=" << class_files.size() << "\n";
     stats.parse_errors = parse_errors;
 
     // --- 3. Расшифровщик строк (см. str_decrypt.hpp) - сброс состояния с
@@ -103,7 +105,6 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
             str_decrypt_set_active(active);
         }
     }
-
     // --- 4. pom.xml плагина (если есть) - нужен ДЛЯ relocated_library_prefixes
     // ДО решения, какие классы пропускать (см. lib_filter.hpp/HANDOFF_40). ---
     auto pom_early = find_pom_properties_and_xml(all_names, zr);
@@ -111,7 +112,6 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     auto relocated_prefixes = relocated_library_prefixes(pom_xml_early);
     auto sig_prefixes = signature_relocated_prefixes(all_names);
     relocated_prefixes.insert(relocated_prefixes.end(), sig_prefixes.begin(), sig_prefixes.end());
-
     // --- 5. Известные библиотеки - убираем из class_files (см. HANDOFF_40). ---
     std::vector<std::string> library_internal_names;
     std::set<std::string> library_hit_labels;
@@ -129,7 +129,6 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
         stats.library_classes_skipped = static_cast<int>(library_internal_names.size());
         stats.library_names_hit = library_hit_labels;
     }
-
     // --- 6. Копируем ресурсы (кроме .class и библиотечных путей). ---
     std::vector<std::string> skip_res_prefixes;
     for (auto& e : known_libs()) skip_res_prefixes.push_back(dotted_to_path_prefix(e.prefix));
@@ -139,8 +138,30 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     }
     std::string res_dir = (fs::path(out_dir) / "src" / "main" / "resources").string();
     static const std::regex maven_meta_re(R"(META-INF/maven/([^/]+)/([^/]+)/)");
+    // БАГ-ФИКС: MANIFEST.MF и файлы подписи из META-INF копировались как
+    // обычные ресурсы. MANIFEST.MF - это манифест ИСХОДНОГО jar (Main-Class,
+    // Class-Path на relocated/shaded зависимости, которых после
+    // декомпиляции уже нет) - maven-jar-plugin генерирует свой при сборке,
+    // и старый просто мусорит в структуре, как и жаловался пользователь.
+    // Сигнатурные файлы (*.SF/*.RSA/*.DSA/*.EC под META-INF) хуже: при
+    // пересборке контент меняется, и с ними jar при подписанной проверке
+    // упадёт в рантайме с SecurityException "invalid signature file digest".
+    // META-INF/services/* (SPI) и прочие META-INF-ресурсы (не манифест/не
+    // подпись) по-прежнему копируются - они могут быть нужны рантайму.
+    // БАГ-ФИКС (продолжение MANIFEST.MF-фикса выше): META-INF/maven/*/pom.xml
+    // и pom.properties - метаданные сборки ИСХОДНОГО jar. pom_builder.cpp
+    // уже читает их напрямую из zip (maven_meta_re выше) и генерирует по ним
+    // НАСТОЯЩИЙ pom.xml в корне проекта - сырые копии внутри
+    // resources/META-INF/maven/ ничего не добавляют, а при mvn package
+    // задублируются обратно внутрь пересобранного jar рядом со свежим
+    // корневым pom.xml, создавая ту же путаницу, что и старый MANIFEST.MF.
+    static const std::regex meta_signature_re(R"(^META-INF/[^/]+\.(SF|RSA|DSA|EC)$)", std::regex::icase);
+    static const std::regex meta_maven_re(R"(^META-INF/maven/.*\.(xml|properties)$)");
     for (auto& n : all_names) {
         if ((n.size() >= 6 && n.substr(n.size() - 6) == ".class") || (!n.empty() && n.back() == '/')) continue;
+        if (n == "META-INF/MANIFEST.MF") continue;
+        if (std::regex_match(n, meta_signature_re)) continue;
+        if (std::regex_match(n, meta_maven_re)) continue;
         bool skip = false;
         for (auto& p : skip_res_prefixes)
             if (starts_with(n, p)) {
@@ -205,7 +226,7 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
                 plugin_name_for_check = (b == std::string::npos) ? "" : v.substr(b, e - b + 1);
             }
         }
-        jr.legitimacy = run_legitimacy_check(plugin_name_for_check.value_or(""), plugin_yml_text.value_or(""));
+        jr.legitimacy = run_legitimacy_check(plugin_name_for_check.value_or(""), plugin_yml_text.value_or(""), jar_path);
     }
 
     // --- 10. Renamer (см. HANDOFF_41) + naming_hints (см. HANDOFF_46,

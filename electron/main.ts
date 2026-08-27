@@ -210,9 +210,16 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
   }
 
   return new Promise((resolve) => {
+    // detached: true на POSIX делает proc лидером своей process group -
+    // это позволяет позже убить всю группу (движок + его собственные
+    // подпроцессы вроде curl из toolinstaller.cpp) разом через
+    // process.kill(-pid), а не только сам NanoDecompilerCLI. На Windows
+    // detached не создаёт process group так же, но там дерево убивается
+    // через `taskkill /T` (см. run:cancel ниже).
     const proc = spawn(cmd, args, {
       cwd: engineDir(),
       env: { ...process.env },
+      detached: process.platform !== "win32",
     });
     runningProc = proc;
 
@@ -222,7 +229,14 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
       }
     };
 
-    let buf = "";
+    // БАГ-ФИКС: раньше был ОДИН общий buf для stdout и stderr - Node не
+    // гарантирует порядок доставки данных между разными потоками, так что
+    // кусок строки из stdout мог склеиться с куском из stderr в одну
+    // строку с неверной меткой stream (и теоретически разорвать
+    // многобайтовый UTF-8 символ на границе чанков разных потоков).
+    // Раздельные буферы на каждый поток убирают проблему полностью.
+    let bufOut = "";
+    let bufErr = "";
     // Батчим строки лога вместо отправки КАЖДОЙ отдельным IPC-сообщением -
     // на jar с тысячами методов движок может выдать сотни строк за долю
     // секунды, и раньше каждая строка = отдельный IPC round-trip +
@@ -241,9 +255,12 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
       }, 40);
     };
     const flushLines = (chunk: Buffer, stream: "stdout" | "stderr") => {
-      buf += chunk.toString("utf-8");
-      const lines = buf.split(/\r?\n/);
-      buf = lines.pop() ?? "";
+      const isOut = stream === "stdout";
+      const carried = (isOut ? bufOut : bufErr) + chunk.toString("utf-8");
+      const lines = carried.split(/\r?\n/);
+      const rest = lines.pop() ?? "";
+      if (isOut) bufOut = rest;
+      else bufErr = rest;
       for (const line of lines) pendingLines.push({ line, stream });
       if (pendingLines.length > 0) scheduleFlush();
     };
@@ -252,7 +269,8 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
     proc.stderr.on("data", (d) => flushLines(d, "stderr"));
 
     proc.on("close", (code) => {
-      if (buf) pendingLines.push({ line: buf, stream: "stdout" });
+      if (bufOut) pendingLines.push({ line: bufOut, stream: "stdout" });
+      if (bufErr) pendingLines.push({ line: bufErr, stream: "stderr" });
       if (flushTimer) clearTimeout(flushTimer);
       if (pendingLines.length > 0) send("run:log", { lines: pendingLines });
       runningProc = null;
@@ -303,8 +321,24 @@ ipcMain.handle("jar:summary", async (_e, jarPath: string) => {
 });
 
 ipcMain.handle("run:cancel", async () => {
-  if (runningProc) {
-    runningProc.kill();
+  // БАГ-ФИКС: раньше runningProc.kill() слал SIGTERM только самому
+  // NanoDecompilerCLI. Движок сам вызывает std::system("curl ...") в
+  // toolinstaller.cpp при первом скачивании JDK/Maven - если отмена
+  // происходит именно в этот момент, curl оставался висеть орфаном.
+  // Теперь убиваем всё дерево: на POSIX - всю process group (proc был
+  // заспавнен с detached:true, так что pid == pgid, убиваем -pid); на
+  // Windows - через taskkill /T (рекурсивно по дереву процессов).
+  if (runningProc && runningProc.pid) {
+    const pid = runningProc.pid;
+    if (process.platform === "win32") {
+      spawn("taskkill", ["/PID", String(pid), "/T", "/F"]);
+    } else {
+      try {
+        process.kill(-pid, "SIGTERM");
+      } catch {
+        runningProc.kill();
+      }
+    }
     runningProc = null;
     return true;
   }

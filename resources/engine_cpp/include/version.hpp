@@ -4,5 +4,5 @@
 #pragma once
 
 namespace nd {
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.6";
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.6.1 BETA";
 }

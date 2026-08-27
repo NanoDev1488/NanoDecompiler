@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <functional>
-#include <iostream>
 #include <sstream>
 
 #include "catchclean.hpp"
@@ -209,7 +208,7 @@ void collect_referenced_names_walk(const std::vector<StmtPtr>& lst, std::set<std
     }
 }
 
-std::set<std::string> collect_referenced_names(const std::vector<StmtPtr>& stmts) {
+[[maybe_unused]] std::set<std::string> collect_referenced_names(const std::vector<StmtPtr>& stmts) {
     std::set<std::string> names;
     collect_referenced_names_walk(stmts, names);
     return names;
@@ -234,32 +233,80 @@ std::set<std::string> collect_shallow_referenced_names(const std::vector<StmtPtr
             case StmtKind::ThrowStmt:
                 collect_referenced_names_walk_expr(static_cast<ThrowStmt*>(s.get())->expr, names);
                 break;
-            case StmtKind::IfStmt:
-                collect_referenced_names_walk_expr(static_cast<IfStmt*>(s.get())->cond, names);
+            case StmtKind::IfStmt: {
+                // БАГ-ФИКС (см. HANDOFF_49, "реальный баг"): раньше здесь
+                // смотрелось ТОЛЬКО cond, тела then/else игнорировались -
+                // если escaping-переменная упоминалась исключительно внутри
+                // then/else более позднего if, hoist_escaping_locals() её не
+                // видел и не поднимал объявление наружу -> компилятор потом
+                // не находил символ (переменная объявлена в чужой области
+                // видимости). Теперь заходим и в тела веток тоже.
+                auto* i = static_cast<IfStmt*>(s.get());
+                collect_referenced_names_walk_expr(i->cond, names);
+                auto sub_then = collect_shallow_referenced_names(i->then_body);
+                names.insert(sub_then.begin(), sub_then.end());
+                if (i->else_body.has_value()) {
+                    auto sub_else = collect_shallow_referenced_names(*i->else_body);
+                    names.insert(sub_else.begin(), sub_else.end());
+                }
                 break;
-            case StmtKind::WhileStmt:
-                collect_referenced_names_walk_expr(static_cast<WhileStmt*>(s.get())->cond, names);
+            }
+            case StmtKind::WhileStmt: {
+                auto* w = static_cast<WhileStmt*>(s.get());
+                collect_referenced_names_walk_expr(w->cond, names);
+                auto sub = collect_shallow_referenced_names(w->body);
+                names.insert(sub.begin(), sub.end());
                 break;
-            case StmtKind::DoWhileStmt:
-                collect_referenced_names_walk_expr(static_cast<DoWhileStmt*>(s.get())->cond, names);
+            }
+            case StmtKind::DoWhileStmt: {
+                auto* w = static_cast<DoWhileStmt*>(s.get());
+                collect_referenced_names_walk_expr(w->cond, names);
+                auto sub = collect_shallow_referenced_names(w->body);
+                names.insert(sub.begin(), sub.end());
                 break;
-            case StmtKind::ForStmt:
-                collect_referenced_names_walk_expr(static_cast<ForStmt*>(s.get())->cond, names);
+            }
+            case StmtKind::ForStmt: {
+                auto* f = static_cast<ForStmt*>(s.get());
+                collect_referenced_names_walk_expr(f->cond, names);
+                auto sub = collect_shallow_referenced_names(f->body);
+                names.insert(sub.begin(), sub.end());
                 break;
-            case StmtKind::SyncStmt:
-                collect_referenced_names_walk_expr(static_cast<SyncStmt*>(s.get())->expr, names);
+            }
+            case StmtKind::SyncStmt: {
+                auto* sy = static_cast<SyncStmt*>(s.get());
+                collect_referenced_names_walk_expr(sy->expr, names);
+                auto sub = collect_shallow_referenced_names(sy->body);
+                names.insert(sub.begin(), sub.end());
                 break;
-            case StmtKind::SwitchStmt:
-                collect_referenced_names_walk_expr(static_cast<SwitchStmt*>(s.get())->selector, names);
+            }
+            case StmtKind::SwitchStmt: {
+                auto* sw = static_cast<SwitchStmt*>(s.get());
+                collect_referenced_names_walk_expr(sw->selector, names);
+                for (auto& c : sw->cases) {
+                    auto sub = collect_shallow_referenced_names(c.body);
+                    names.insert(sub.begin(), sub.end());
+                }
                 break;
+            }
             case StmtKind::BlockStmt: {
                 auto sub = collect_shallow_referenced_names(static_cast<BlockStmt*>(s.get())->stmts);
                 names.insert(sub.begin(), sub.end());
                 break;
             }
             case StmtKind::TryStmt: {
-                auto sub = collect_shallow_referenced_names(static_cast<TryStmt*>(s.get())->body);
+                // Раньше только body - catch/finally тоже игнорировались,
+                // та же категория бага, что и с if/while/for/switch выше.
+                auto* t = static_cast<TryStmt*>(s.get());
+                auto sub = collect_shallow_referenced_names(t->body);
                 names.insert(sub.begin(), sub.end());
+                for (auto& c : t->catches) {
+                    auto sub_c = collect_shallow_referenced_names(c.body);
+                    names.insert(sub_c.begin(), sub_c.end());
+                }
+                if (t->finally_body.has_value()) {
+                    auto sub_f = collect_shallow_referenced_names(*t->finally_body);
+                    names.insert(sub_f.begin(), sub_f.end());
+                }
                 break;
             }
             default:

@@ -85,6 +85,19 @@ const std::regex& bstats_candidate_pattern() { static const std::regex re(R"(^(.
 // вариант не ловился ни первой bStats-сигнатурой (нет bukkit/charts
 // подпапок), ни pom.xml-релокацией (pom.xml вообще не забандлен).
 const std::regex& bstats_legacy_candidate_pattern() { static const std::regex re(R"(^(.*)/Metrics\.class$)"); return re; }
+// OrmLite - см. FunItem-1.21.4.jar пользователя: com.j256.ormlite релоцирован
+// в com.kamina.funitems.lib.ormlite (произвольный shade-префикс, как
+// Gson/bStats выше) - 290 классов, НИ ОДНОГО признака в KNOWN_LIBS-совместимом
+// виде. Без этого фикса эти классы уходили в декомпиляцию, и один из них
+// (DatabaseFieldConfigLoader.writeConfig - длинная последовательность
+// независимых if без else, 600 инструкций/83 блока) уводил Structurer в
+// многоминутное зависание - см. диагностику с find_forward_merge/ipdom_ в
+// этой сессии (сама причина зависания НЕ исправлена и остаётся риском для
+// плагинского кода с похожим паттерном - см. TODO ниже HANDOFF-файла) -
+// но раз OrmLite вообще не должен декомпилироваться (см. HANDOFF_39,
+// "СРОЧНАЯ ЗАДАЧА ОТ ПОЛЬЗОВАТЕЛЯ"), правильный фикс - не подпускать эти
+// классы к Structurer вообще, а не чинить сам алгоритм.
+const std::regex& ormlite_candidate_pattern() { static const std::regex re(R"(^(.*)/field/DatabaseFieldConfig\.class$)"); return re; }
 }  // namespace
 
 std::vector<std::pair<std::string, LibCoords>> signature_relocated_prefixes(const std::vector<std::string>& all_names) {
@@ -132,6 +145,18 @@ std::vector<std::pair<std::string, LibCoords>> signature_relocated_prefixes(cons
         if (prefix.has_value()) {
             out.emplace_back(*prefix, bstats_coords);
             seen_coords.insert({bstats_coords.group, bstats_coords.artifact});
+        }
+    }
+
+    // OrmLite - подтверждаем структуру table/DatabaseTableConfig.class рядом
+    // с field/DatabaseFieldConfig.class (обе подпапки всегда присутствуют
+    // вместе в реальной OrmLite, независимо от shade-префикса).
+    const LibCoords ormlite_coords{"com.j256.ormlite", "ormlite-jdbc", "релоцирован без бандла relocations в pom.xml, см. эту сессию"};
+    if (!seen_coords.count({ormlite_coords.group, ormlite_coords.artifact})) {
+        auto prefix = detect_prefixed_signature(all_names, ormlite_candidate_pattern(), {"/table/DatabaseTableConfig.class"});
+        if (prefix.has_value()) {
+            out.emplace_back(*prefix, ormlite_coords);
+            seen_coords.insert({ormlite_coords.group, ormlite_coords.artifact});
         }
     }
 

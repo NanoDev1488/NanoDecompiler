@@ -333,7 +333,7 @@ bool contains_local_ref_stmt(const StmtPtr& s, const std::string& name) {
     return false;
 }
 
-bool contains_local_ref_list(const std::vector<StmtPtr>& stmts, const std::string& name) {
+[[maybe_unused]] bool contains_local_ref_list(const std::vector<StmtPtr>& stmts, const std::string& name) {
     for (auto& s : stmts) if (contains_local_ref_stmt(s, name)) return true;
     return false;
 }
@@ -633,7 +633,23 @@ Structurer::JumpKind Structurer::resolve_jump_stmt(int64_t target, const std::se
         (!results_.count(target) || results_.at(target).stmts.empty())) {
         return JumpKind::ContinueLinearly;
     }
-    throw DecompileAbort("нередуцируемый goto -> " + std::to_string(target));
+    // HANDOFF: было throw DecompileAbort(...) здесь - ЛЮБОЙ нередуцируемый
+    // goto откатывал ВЕСЬ метод целиком к сырому байткоду, даже если он
+    // встречался в одном редком побочном ответвлении (напр. один case
+    // switch'а или редкая ветка catch), а остальной метод прекрасно
+    // структурировался. Полноценный node-splitting - отдельная большая
+    // задача (см. HANDOFF_49), НЕ делаем это здесь наспех. Вместо этого -
+    // локальная деградация: GotoStmt уже существовал в AST/emit.cpp
+    // (печатается как некомпилируемый комментарий-маркер), но никогда не
+    // конструировался - throw происходил раньше, чем до него доходило
+    // дело. Теперь именно ЭТА ветка перехода превращается в маркер, а не
+    // весь метод - при малом числе таких переходов итоговый метод почти
+    // весь остаётся читаемым структурированным Java (маркер явно виден
+    // и не выдаётся за компилируемый код), вместо полного отката.
+    // Осторожность: не трогаем ContinueLinearly-путь и loop/break-резолвы
+    // выше - только этот последний, ранее фатальный, случай.
+    out_stmt = std::make_shared<GotoStmt>(std::to_string(target));
+    return JumpKind::Stmt;
 }
 
 StmtPtr Structurer::try_resolve_special_target(int64_t target) {
@@ -926,8 +942,17 @@ std::pair<StmtPtr, std::optional<int64_t>> Structurer::build_try(int64_t pc, con
         seen_handlers.insert(handler_pc);
         catch_var_ctr_ += 1;
         std::string disp_type = catch_type.has_value() ? ctx_.owner_display(*catch_type) : "Throwable";
+        // Переписано на явный if/else вместо тернарника - функционально
+        // идентично, но убирает шумовой -Wmaybe-uninitialized от GCC
+        // (ложное срабатывание: значение всегда либо валидное, либо
+        // nullopt, но GCC не может доказать это через тернарник).
         auto merge2_it = ipdom_.find(handler_pc);
-        std::optional<int64_t> merge2 = (merge2_it != ipdom_.end()) ? merge2_it->second : std::nullopt;
+        std::optional<int64_t> merge2;
+        if (merge2_it != ipdom_.end()) {
+            merge2 = merge2_it->second;
+        } else {
+            merge2 = std::nullopt;
+        }
         std::set<int64_t> local_stop = stop_addrs;
         if (merge2.has_value()) local_stop.insert(*merge2);
         auto cbody = region(handler_pc, local_stop);

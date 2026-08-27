@@ -79,10 +79,16 @@ std::string legitimacy_source_json(const LegitimacySourceResult& r) {
     for (size_t i = 0; i < r.candidates.size(); ++i) {
         if (i) out += ",";
         auto& c = r.candidates[i];
-        out += "{\"full_name\":" + js(c.full_name) + ",\"url\":" + js(c.url) + ",\"stars\":" + std::to_string(c.stars) + "}";
+        out += "{\"full_name\":" + js(c.full_name) + ",\"url\":" + js(c.url) + ",\"stars\":" + std::to_string(c.stars) +
+               ",\"sha256_hex\":" + jn(c.sha256_hex) + "}";
     }
     out += "]}";
     return out;
+}
+
+std::string hash_comparison_json(const std::optional<HashComparisonResult>& hc) {
+    if (!hc.has_value()) return "null";
+    return "{\"matching\":" + strarr(hc->matching) + ",\"mismatching\":" + strarr(hc->mismatching) + "}";
 }
 
 std::string legitimacy_json(const std::optional<LegitimacyCheckResult>& leg) {
@@ -94,6 +100,7 @@ std::string legitimacy_json(const std::optional<LegitimacyCheckResult>& leg) {
     out += ",\"modrinth\":" + legitimacy_source_json(leg->modrinth);
     out += ",\"spigot\":" + legitimacy_source_json(leg->spigot);
     out += ",\"ruspigot\":" + legitimacy_source_json(leg->ruspigot);
+    out += ",\"hash_comparison\":" + hash_comparison_json(leg->hash_comparison);
     out += "}";
     return out;
 }

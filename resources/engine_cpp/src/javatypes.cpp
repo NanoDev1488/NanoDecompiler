@@ -15,7 +15,7 @@ const std::map<char, std::string> PRIMS = {
     {'S', "short"}, {'I', "int"}, {'J', "long"}, {'F', "float"}, {'D', "double"},
 };
 
-bool is_prim(char c) { return PRIMS.count(c) != 0; }
+[[maybe_unused]] bool is_prim(char c) { return PRIMS.count(c) != 0; }
 
 // Аналог str.split(sep) в Python (без maxsplit) - разбивает по КАЖДОМУ
 // вхождению разделителя, сохраняя пустые сегменты.

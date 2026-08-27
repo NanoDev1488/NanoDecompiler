@@ -238,7 +238,19 @@ std::string random_hex(int n) {
 // Maven Central), не для произвольного пользовательского ввода.
 std::string shell_quote(const std::string& s) {
 #ifdef _WIN32
-    return "\"" + s + "\"";
+    // БАГ-ФИКС: раньше просто оборачивалось в кавычки без экранирования
+    // внутренних " - если бы s содержал ", можно было вырваться из
+    // аргумента cmd.exe. Удваиваем " (стандартное экранирование для
+    // cmd.exe /C и большинства Win32-парсеров командной строки).
+    std::string out = "\"";
+    for (char c : s) {
+        if (c == '"')
+            out += "\"\"";
+        else
+            out += c;
+    }
+    out += "\"";
+    return out;
 #else
     std::string out = "'";
     for (char c : s) {

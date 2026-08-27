@@ -1,6 +1,6 @@
 {
   "name": "nano-decompiler-gui",
-  "version": "1.6.0",
+  "version": "1.6.2",
   "description": "NanoDecompiler — Electron/React GUI поверх C++ движка декомпиляции",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -12,22 +12,23 @@
     "dist": "npm run build && electron-builder --publish=never"
   },
   "devDependencies": {
-    "@types/node": "^20.14.9",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.1",
+    "@types/node": "22.19.17",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "5.1.1",
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3",
-    "typescript": "^5.5.3",
-    "vite": "^5.3.1"
+    "typescript": "5.9.3",
+    "vite": "7.3.2",
+    "@tailwindcss/vite": "4.1.17",
+    "tailwindcss": "4.1.17"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "@uiw/react-codemirror": "^4.23.6",
-    "@codemirror/lang-java": "^6.0.1",
-    "@codemirror/lang-xml": "^6.1.0",
-    "@codemirror/lang-yaml": "^6.1.2"
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "clsx": "2.1.1",
+    "lucide-react": "^1.34.0",
+    "tailwind-merge": "3.4.0"
   },
   "build": {
     "appId": "com.nanodecompiler.app",

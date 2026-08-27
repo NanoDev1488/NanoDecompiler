@@ -563,8 +563,7 @@ void ClassFile::parse(const std::vector<uint8_t>& data) {
                 uint64_t v = (uint64_t(hi) << 32) | uint64_t(lo);
                 e.int_value = static_cast<int64_t>(v);
                 pool[i] = e;
-                i += 1;  // Long занимает 2 слота constant pool (JVM spec)
-                i += 1;
+                i += 2;  // Long занимает 2 слота constant pool (JVM spec)
                 continue;
             }
             case CpTag::Double: {
@@ -574,8 +573,7 @@ void ClassFile::parse(const std::vector<uint8_t>& data) {
                 std::memcpy(&d, &bits, sizeof(d));
                 e.float_value = d;
                 pool[i] = e;
-                i += 1;  // Double тоже занимает 2 слота
-                i += 1;
+                i += 2;  // Double тоже занимает 2 слота
                 continue;
             }
             case CpTag::NameAndType: {

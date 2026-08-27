@@ -92,6 +92,10 @@ const std::vector<KnownLibEntry>& known_libs() {
         {"org.h2", "com.h2database", "h2",
          "добавлено HANDOFF_40 - отсутствовало в таблице, хотя явно названо в HANDOFF_39 как "
          "требующее фильтрации (1049 классов в Salaires-3_4_1.jar пользователя не отфильтровывались)"},
+        {"com.j256.ormlite", "com.j256.ormlite", "ormlite-jdbc",
+         "добавлено в этой сессии - см. FunItem-1.21.4.jar пользователя (обычно релоцируется, см. "
+         "signature_relocated_prefixes/ormlite_candidate_pattern в lib_filter.cpp, но эта запись ловит "
+         "нешейденный случай, когда пакет остаётся com.j256.ormlite как есть)"},
         {"io.netty", "io.netty", "netty-all", ""},
         {"org.jetbrains.annotations", "org.jetbrains", "annotations", ""},
         {"org.intellij.lang.annotations", "org.jetbrains", "annotations",

@@ -1,0 +1,30 @@
+[
+  {
+    "label": "GitHub",
+    "kind": "github_api",
+    "site": "github.com",
+    "query": "https://api.github.com/search/repositories?q={plugin_name}+in:name&per_page=5",
+    "release_query": "https://api.github.com/repos/{full_name}/releases/latest"
+  },
+  {
+    "label": "Modrinth",
+    "kind": "modrinth_api",
+    "site": "modrinth.com",
+    "query": "https://api.modrinth.com/v2/search?query={plugin_name}&limit=5",
+    "release_query": "https://api.modrinth.com/v2/project/{slug}/version"
+  },
+  {
+    "label": "SpigotMC",
+    "kind": "spiget_api",
+    "site": "spigotmc.org",
+    "query": "https://api.spiget.org/v2/search/resources/{plugin_name}?field=name&size=5",
+    "release_query": null
+  },
+  {
+    "label": "RuSpigot",
+    "kind": "html_search",
+    "site": "spigotmc.ru",
+    "query": "https://spigotmc.ru/resources/?q={plugin_name}",
+    "release_query": null
+  }
+]

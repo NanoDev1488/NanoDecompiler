@@ -73,7 +73,7 @@ jobs:
           fi
           echo "version=v$DISPLAY" >> "$GITHUB_OUTPUT"
 
-  build-client:
+  build-client-windows:
     needs: [resolve-version]
     runs-on: windows-latest
     env:
@@ -81,127 +81,280 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # См. HANDOFF_7/11 - КРИТИЧНО: без этого блока клиент на свежей
-      # установке требовал бы Python на машине конечного пользователя
-      # (electron/main.ts::engineInvocation() падает на python3/main.py,
-      # если рядом нет NanoDecompilerCLI.exe - а раньше exe появлялся
-      # ТОЛЬКО после первого клика "Обновить" в уже запущенном клиенте).
-      # Для обычного пользователя без Python это означало "приложение не
-      # работает из коробки". Собираем exe ЗДЕСЬ, кладём его ПРЯМО в
+      # HANDOFF_54: раньше это была ОДНА job с matrix (windows/linux/macos) -
+      # разбито на 3 ЯВНЫЕ отдельные job (build-client-windows/-linux/-macos)
+      # по прямой просьбе пользователя ("сделай доп джобы под этим") - matrix
+      # в интерфейсе GitHub Actions сворачивает все три платформы под одной
+      # строкой "build-client", что затрудняет понять, какая ИМЕННО
+      # платформа реально упала, если артефакт не появился в релизе. Явные
+      # job видны по отдельности сразу в списке workflow. См. HANDOFF_51 за
+      # оригинальной версией (matrix), если понадобится сравнить.
+      #
+      # См. HANDOFF_7/11/46/51/54 - КРИТИЧНО: без сборки движка здесь клиент
+      # на свежей установке вообще не смог бы его запустить
+      # (electron/main.ts::engineInvocation() бросает явную ошибку, если
+      # рядом нет бинарника). Собираем движок ЗДЕСЬ, кладём ПРЯМО в
       # resources/engine/ (плоско, не в dist/) ДО того, как electron-builder
-      # упакует extraResources - тогда engineInvocation() увидит его сразу
-      # при самом первом запуске, без Python вообще. Заодно пишем
-      # .engine-api-version с текущим API_VERSION - без этого свежая
-      # установка при первой проверке апдейтера всегда показывала бы
-      # "доступно обновление", даже если exe уже самый новый (см.
-      # electron/updater.ts - сравнение идёт именно по этому файлу).
-      - uses: actions/setup-python@v5
+      # упакует extraResources.
+      - uses: msys2/setup-msys2@v2
         with:
-          python-version: "3.12"
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-make
 
-      - name: Установить PyInstaller
-        run: pip install pyinstaller
+      - name: Собрать NanoDecompilerCLI.exe
+        shell: msys2 {0}
+        working-directory: resources/engine_cpp
+        run: |
+          cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+          cp build/NanoDecompilerCLI.exe ../engine/NanoDecompilerCLI.exe
 
-      - name: Собрать NanoDecompilerCLI.exe и встроить в клиент
+      - name: Записать .engine-api-version (см. electron/updater.ts)
+        shell: bash
         working-directory: resources/engine
-        shell: pwsh
-        run: |
-          pyinstaller --onefile --name NanoDecompilerCLI --icon=icon.ico main.py
-          Move-Item -Force dist/NanoDecompilerCLI.exe NanoDecompilerCLI.exe
-          Remove-Item -Recurse -Force dist, build, NanoDecompilerCLI.spec
-          Set-Content -Path .engine-api-version -Value $env:API_VERSION -NoNewline
+        run: printf '%s' "$API_VERSION" > .engine-api-version
 
-      - name: Проверка - встроенный exe реально работает
-        shell: pwsh
+      - name: Проверка - собранный движок реально работает
+        shell: bash
         run: |
-          resources/engine/NanoDecompilerCLI.exe test_jars/EryBuyer-v1.jar out_check_client_cli --headless
-          if (-not (Test-Path "out_check_client_cli")) { throw "CLI.exe (для клиента): out_dir не создан" }
+          resources/engine/NanoDecompilerCLI.exe test_jars/EryBuyer-v1.jar out_check_client_cli --no-legitimacy-check
+          if [ ! -d "out_check_client_cli" ]; then echo "движок: out_dir не создан"; exit 1; fi
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
 
       - name: npm install
-        # npm ci требует уже существующий package-lock.json - у нас его нет
-        # (собирался package.json руками, без доступа в сеть, чтобы сгенерировать
-        # настоящий lock-файл). npm install подходит и без лока, но НЕ
-        # детерминирован между запусками так же строго - см. заметку в конце
-        # workflow про то, как закрепить package-lock.json на будущее.
         run: npm install
 
       - name: Собрать Electron-инсталлятор (npm run dist)
         run: npm run dist
 
-      - name: Найти собранный .exe (electron-builder кладёт в dist/, ищем
-          явно вместо жёсткого имени - оно зависит от productName+version)
-        id: find_installer
-        shell: pwsh
+      - name: Найти собранный инсталлятор
+        shell: bash
         run: |
-          $exe = Get-ChildItem -Path "dist" -Filter "*.exe" -File |
-                 Where-Object { $_.Name -match "Setup" } |
-                 Select-Object -First 1
-          if (-not $exe) {
-            # запасной вариант - ИСКЛЮЧАЕМ win-unpacked/ (сырой распакованный
-            # .exe приложения, не инсталлятор) и elevate.exe (хелпер NSIS)
-            $exe = Get-ChildItem -Path "dist" -Recurse -Filter "*.exe" -File |
-                   Where-Object { $_.FullName -notmatch "win-unpacked" -and $_.Name -ne "elevate.exe" } |
-                   Select-Object -First 1
-          }
-          if (-not $exe) { throw "Собранный .exe инсталлятора не найден - смотри логи electron-builder выше" }
-          Copy-Item $exe.FullName -Destination "NanoDecompiler-Client-Setup.exe"
+          FILE=$(find dist -maxdepth 1 -iname "*.exe" ! -iname "elevate.exe" | grep -i "setup" | head -1)
+          [ -z "$FILE" ] && FILE=$(find dist -iname "*.exe" ! -path "*win-unpacked*" ! -iname "elevate.exe" | head -1)
+          if [ -z "$FILE" ]; then echo "Собранный .exe инсталлятора не найден - смотри логи electron-builder выше"; exit 1; fi
+          cp "$FILE" "NanoDecompiler-Client-Setup.exe"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: client-artifact
+          name: client-artifact-win
           path: NanoDecompiler-Client-Setup.exe
           if-no-files-found: error
 
-  build-api:
+  build-client-linux:
+    needs: [resolve-version]
+    runs-on: ubuntu-latest
+    env:
+      API_VERSION: ${{ needs.resolve-version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установить zlib dev-заголовки
+        run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
+
+      - name: Собрать NanoDecompilerCLI
+        working-directory: resources/engine_cpp
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+          cp build/NanoDecompilerCLI ../engine/NanoDecompilerCLI
+          chmod +x ../engine/NanoDecompilerCLI
+
+      - name: Записать .engine-api-version (см. electron/updater.ts)
+        working-directory: resources/engine
+        run: printf '%s' "$API_VERSION" > .engine-api-version
+
+      - name: Проверка - собранный движок реально работает
+        run: |
+          resources/engine/NanoDecompilerCLI test_jars/EryBuyer-v1.jar out_check_client_cli --no-legitimacy-check
+          if [ ! -d "out_check_client_cli" ]; then echo "движок: out_dir не создан"; exit 1; fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: npm install
+        run: npm install
+
+      - name: Собрать Electron-инсталлятор (npm run dist)
+        run: npm run dist
+
+      - name: Найти собранный AppImage
+        run: |
+          FILE=$(find dist -maxdepth 1 -iname "*.AppImage" | head -1)
+          if [ -z "$FILE" ]; then echo "Собранный .AppImage не найден - смотри логи electron-builder выше"; exit 1; fi
+          cp "$FILE" "NanoDecompiler-Client.AppImage"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-artifact-linux
+          path: NanoDecompiler-Client.AppImage
+          if-no-files-found: error
+
+  build-client-macos:
+    needs: [resolve-version]
+    runs-on: macos-latest
+    env:
+      API_VERSION: ${{ needs.resolve-version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Убедиться, что cmake есть (обычно уже стоит на macos-latest,
+          но не гарантированно на каждом образе раннера - не фатально, если
+          brew скажет "уже установлено")
+        run: brew install cmake --quiet || true
+
+      - name: Собрать NanoDecompilerCLI
+        working-directory: resources/engine_cpp
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+          cp build/NanoDecompilerCLI ../engine/NanoDecompilerCLI
+          chmod +x ../engine/NanoDecompilerCLI
+
+      - name: Записать .engine-api-version (см. electron/updater.ts)
+        working-directory: resources/engine
+        run: printf '%s' "$API_VERSION" > .engine-api-version
+
+      - name: Проверка - собранный движок реально работает
+        run: |
+          resources/engine/NanoDecompilerCLI test_jars/EryBuyer-v1.jar out_check_client_cli --no-legitimacy-check
+          if [ ! -d "out_check_client_cli" ]; then echo "движок: out_dir не создан"; exit 1; fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: npm install
+        run: npm install
+
+      - name: Собрать Electron-инсталлятор (npm run dist)
+        # БЕЗ подписи (нет сертификата Apple Developer в секретах) -
+        # electron-builder соберёт .dmg как есть, с предупреждением в логе.
+        # Конечным пользователям придётся снять Gatekeeper-карантин вручную
+        # (правый клик -> Открыть, или `xattr -cr NanoDecompiler.app`).
+        run: npm run dist
+
+      - name: Найти собранный dmg
+        run: |
+          FILE=$(find dist -maxdepth 1 -iname "*.dmg" | head -1)
+          if [ -z "$FILE" ]; then echo "Собранный .dmg не найден - смотри логи electron-builder выше"; exit 1; fi
+          cp "$FILE" "NanoDecompiler-Client.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-artifact-mac
+          path: NanoDecompiler-Client.dmg
+          if-no-files-found: error
+
+  # HANDOFF_46: CLI и API уже слиты в ОДИН бинарник (cli_main.cpp
+  # поддерживает обычный режим, --json-output И --api-server сразу). По
+  # прямой просьбе пользователя объединено и на уровне релиза - один
+  # артефакт "ClApi" на ОС (не два файла-дубликата под разными именами) -
+  # 3 job'а, зеркально build-client-*, явно (не matrix), той же причине,
+  # что и клиенты (HANDOFF_54 - видно, какая ОС упала).
+  build-clapi-windows:
     needs: [resolve-version]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - uses: msys2/setup-msys2@v2
         with:
-          python-version: "3.12"
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-make
 
-      - name: Установить PyInstaller
-        run: pip install pyinstaller
-
-      # gui.py/gui_raw.py/gui_neon.py/gui_md3.py удалены из движка совсем -
-      # Electron-клиент теперь единственный GUI, эти файлы были мёртвым
-      # весом (см. main.py::main() - там теперь просто usage-сообщение
-      # вместо попытки их импортировать).
-      - name: Собрать NanoDecompilerCLI.exe (полный движок, main.py)
-        working-directory: resources/engine
-        run: pyinstaller --onefile --name NanoDecompilerCLI --icon=icon.ico main.py
-
-      # api_cli.py нигде не упоминает gui.py даже транзитивно - PyInstaller
-      # не включит tkinter/customtkinter/flet вообще, собранный exe
-      # физически не способен открыть окно.
-      - name: Собрать NanoDecompilerAPI.exe (голый API, api_cli.py)
-        working-directory: resources/engine
-        run: pyinstaller --onefile --name NanoDecompilerAPI --icon=icon.ico api_cli.py
-
-      - name: Проверка - оба exe реально работают
-        shell: pwsh
+      - name: Собрать движок (Windows)
+        shell: msys2 {0}
+        working-directory: resources/engine_cpp
         run: |
-          resources/engine/dist/NanoDecompilerCLI.exe test_jars/EryBuyer-v1.jar out_check_cli --api
-          if (-not (Test-Path "out_check_cli")) { throw "CLI: out_dir не создан" }
-          resources/engine/dist/NanoDecompilerAPI.exe test_jars/EryBuyer-v1.jar out_check_api
-          if (-not (Test-Path "out_check_api")) { throw "API: out_dir не создан" }
+          cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+          cp build/NanoDecompilerCLI.exe ../../NanoDecompilerClApi.exe
+
+      - name: Проверка - exe реально работает (обычный режим и --json-output)
+        shell: pwsh
+        working-directory: .
+        run: |
+          .\NanoDecompilerClApi.exe test_jars\EryBuyer-v1.jar out_check_cli --no-legitimacy-check
+          if (-not (Test-Path "out_check_cli")) { throw "ClApi: out_dir (обычный режим) не создан" }
+          $json = .\NanoDecompilerClApi.exe test_jars\EryBuyer-v1.jar out_check_cli_json --json-output --no-legitimacy-check | ConvertFrom-Json
+          if ($json.status -ne "ok") { throw "ClApi: --json-output вернул status != ok" }
 
       - uses: actions/upload-artifact@v4
         with:
-          name: api-artifacts
-          path: |
-            resources/engine/dist/NanoDecompilerCLI.exe
-            resources/engine/dist/NanoDecompilerAPI.exe
+          name: clapi-artifacts-windows
+          path: NanoDecompilerClApi.exe
+          if-no-files-found: error
+
+  build-clapi-linux:
+    needs: [resolve-version]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Установить зависимости сборки
+        run: sudo apt-get update && sudo apt-get install -y build-essential zlib1g-dev
+
+      - name: Собрать движок (Linux)
+        working-directory: resources/engine_cpp
+        run: g++ -std=c++17 -O2 -Iinclude src/*.cpp -lz -o ../../NanoDecompilerClApi
+
+      - name: Проверка - бинарник реально работает
+        run: |
+          chmod +x NanoDecompilerClApi
+          ./NanoDecompilerClApi test_jars/EryBuyer-v1.jar out_check_cli --no-legitimacy-check
+          test -d out_check_cli || { echo "ClApi: out_dir не создан"; exit 1; }
+          JSON=$(./NanoDecompilerClApi test_jars/EryBuyer-v1.jar out_check_cli_json --json-output --no-legitimacy-check)
+          echo "$JSON" | grep -q '"status":"ok"' || { echo "ClApi: --json-output вернул status != ok"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clapi-artifacts-linux
+          path: NanoDecompilerClApi
+          if-no-files-found: error
+
+  build-clapi-macos:
+    needs: [resolve-version]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Собрать движок (macOS)
+        working-directory: resources/engine_cpp
+        run: g++ -std=c++17 -O2 -Iinclude src/*.cpp -lz -o ../../NanoDecompilerClApi
+
+      - name: Проверка - бинарник реально работает
+        run: |
+          chmod +x NanoDecompilerClApi
+          ./NanoDecompilerClApi test_jars/EryBuyer-v1.jar out_check_cli --no-legitimacy-check
+          test -d out_check_cli || { echo "ClApi: out_dir не создан"; exit 1; }
+          JSON=$(./NanoDecompilerClApi test_jars/EryBuyer-v1.jar out_check_cli_json --json-output --no-legitimacy-check)
+          echo "$JSON" | grep -q '"status":"ok"' || { echo "ClApi: --json-output вернул status != ok"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clapi-artifacts-macos
+          path: NanoDecompilerClApi
           if-no-files-found: error
 
   publish-release:
-    needs: [resolve-version, build-client, build-api]
+    # HANDOFF_54: явно перечислены ВСЕ шесть клиентских/ClApi job'ов - по
+    # умолчанию GitHub Actions требует УСПЕХА каждого из needs, иначе
+    # publish-release вообще не запустится - релиз ГАРАНТИРОВАННО либо
+    # содержит все платформы сразу (3 клиента + 3 ClApi), либо не
+    # публикуется вовсе.
+    needs: [resolve-version, build-client-windows, build-client-linux, build-client-macos, build-clapi-windows, build-clapi-linux, build-clapi-macos]
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: ${{ needs.resolve-version.outputs.version }}
@@ -210,13 +363,29 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: client-artifact
+          pattern: client-artifact-*
           path: release-files
+          merge-multiple: true
 
       - uses: actions/download-artifact@v4
         with:
-          name: api-artifacts
-          path: release-files
+          name: clapi-artifacts-windows
+          path: release-files-tmp/windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: clapi-artifacts-linux
+          path: release-files-tmp/linux
+      - uses: actions/download-artifact@v4
+        with:
+          name: clapi-artifacts-macos
+          path: release-files-tmp/macos
+
+      - name: Разложить ClApi-бинарники по ОС-специфичным именам релиза
+        shell: bash
+        run: |
+          mv release-files-tmp/windows/NanoDecompilerClApi.exe release-files/NanoDecompilerClApi-windows.exe
+          mv release-files-tmp/linux/NanoDecompilerClApi release-files/NanoDecompilerClApi-linux
+          mv release-files-tmp/macos/NanoDecompilerClApi release-files/NanoDecompilerClApi-macos
 
       # См. HANDOFF_7/16 - без этого файла апдейтер (electron/updater.ts)
       # не может отличить "поменялся только движок" (можно тихо подменить
@@ -228,7 +397,6 @@ jobs:
       - name: Сгенерировать versions.json (для апдейтера - client vs api)
         shell: bash
         run: |
-          mkdir -p release-files
           printf '{"client":"%s","api":"%s"}' "$CLIENT_VERSION" "$API_VERSION" > release-files/versions.json
 
       - name: Публикация ОДНОГО релиза со всеми файлами и текстом
@@ -246,13 +414,22 @@ jobs:
 
             | Файл | Что это | Версия |
             |------|---------|--------|
-            | `NanoDecompiler-Client-Setup.exe` | Клиентское приложение (Electron+React, полноценный GUI) - обычный инсталлятор, поставить и пользоваться | ${{ env.CLIENT_VERSION }} |
-            | `NanoDecompilerAPI.exe` | Голый API, без GUI и без консоли - для встраивания в другие проекты: `NanoDecompilerAPI.exe plugin.jar [out_dir]`, ответ - JSON в stdout | ${{ env.API_VERSION }} |
-            | `NanoDecompilerCLI.exe` | Тот же движок, что и в клиенте, но как отдельный консольный инструмент (флаги `--api`/`--json-output`/`--api-server`/`--install-tools`) | ${{ env.API_VERSION }} |
+            | `NanoDecompiler-Client-Setup.exe` | Клиент для Windows (Electron+React, GUI) - обычный инсталлятор | ${{ env.CLIENT_VERSION }} |
+            | `NanoDecompiler-Client.AppImage` | Клиент для Linux - скачать, `chmod +x`, запустить | ${{ env.CLIENT_VERSION }} |
+            | `NanoDecompiler-Client.dmg` | Клиент для macOS - образ диска. Сборка НЕ подписана сертификатом Apple Developer (нет в секретах репозитория) - при первом запуске может понадобиться правый клик -> Открыть, либо `xattr -cr` на распакованное приложение, чтобы обойти Gatekeeper | ${{ env.CLIENT_VERSION }} |
+            | `NanoDecompilerClApi-windows.exe` | Голый движок для Windows - CLI и API-сервер в одном бинарнике (см. HANDOFF_44/46): `NanoDecompilerClApi-windows.exe plugin.jar [out_dir] [--json-output]`, есть также `--api-server` (HTTP) и `--jar-summary` | ${{ env.API_VERSION }} |
+            | `NanoDecompilerClApi-linux` | То же самое для Linux | ${{ env.API_VERSION }} |
+            | `NanoDecompilerClApi-macos` | То же самое для macOS | ${{ env.API_VERSION }} |
             | `versions.json` | Машиночитаемые версии client/api - для автообновления клиента, не для ручного использования | - |
 
             ### Как проверялось
 
-            Оба API/CLI-exe перед публикацией прогонялись на тестовом
+            Все три клиентских сборки (Windows/Linux/macOS) и все три
+            ClApi-бинарника перед публикацией прогонялись на тестовом
             `.jar`-плагине прямо в этом workflow - если декомпиляция не
             создавала папку с результатом, релиз не публикуется вообще.
+            Живой запуск самих установленных GUI-приложений (клик по
+            инсталлятору, открытие окна) НЕ проверялся ни на одной из трёх
+            ОС - в среде, где собирался этот workflow, нет доступа к GitHub
+            Actions вообще (см. HANDOFF_51) - если что-то не запустится,
+            откройте issue.
