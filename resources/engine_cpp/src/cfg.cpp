@@ -1,5 +1,6 @@
 // cfg.cpp - см. cfg.hpp. 1:1 порт cfg.py (включая воспроизведённые
 // особенности оригинала - см. HANDOFF_28).
+#include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
 #include "cfg.hpp"
 
 #include <algorithm>

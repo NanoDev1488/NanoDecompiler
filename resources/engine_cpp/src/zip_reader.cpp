@@ -2,6 +2,7 @@
 // конца файла (End Of Central Directory), затем локальные заголовки по
 // смещениям оттуда - стандартный подход (тот же, что использует Python
 // `zipfile`). Распаковка DEFLATE - через системную zlib.
+#include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
 #include "zip_reader.hpp"
 
 #include <cstdio>

@@ -7,6 +7,7 @@
 //   - buildCipher(h, l): 8 байт (big-endian h, потом big-endian l) ->
 //     SHA-256 -> первые 16 байт как AES-128 ключ.
 //   - Расшифровка: строка на входе - Base64, AES-128-ECB, PKCS7-паддинг.
+#include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
 #include "str_decrypt.hpp"
 
 #include "aes128.hpp"

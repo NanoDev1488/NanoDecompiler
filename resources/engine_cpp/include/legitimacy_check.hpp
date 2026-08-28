@@ -14,6 +14,7 @@
 // офлайн против оригинала (см. HANDOFF_32).
 #pragma once
 
+#include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
 #include <optional>
 #include <string>
 #include <vector>

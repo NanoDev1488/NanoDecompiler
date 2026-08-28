@@ -1,4 +1,5 @@
 // classfile.cpp - см. classfile.hpp. Порт classfile.py, 1:1 по семантике.
+#include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
 #include "classfile.hpp"
 
 #include <charconv>

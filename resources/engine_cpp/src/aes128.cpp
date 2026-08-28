@@ -1,4 +1,5 @@
 // aes128.cpp - см. aes128.hpp. 1:1 порт aes128.py.
+#include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
 #include "aes128.hpp"
 
 namespace nd {

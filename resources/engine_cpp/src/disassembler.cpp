@@ -1,4 +1,5 @@
 // disassembler.cpp - см. disassembler.hpp. 1:1 порт disassembler.py.
+#include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
 #include "disassembler.hpp"
 
 #include <cstdio>

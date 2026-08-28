@@ -2,6 +2,7 @@
 // format_type_dotted()/_format_annotation()/_format_annotation_value()/
 // format_field_constant() из main.py (HANDOFF_42). Комментарии по месту
 // отмечают КАЖДОЕ сознательное отличие от оригинала.
+#include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
 #include "render_class.hpp"
 
 #include <algorithm>

@@ -1,4 +1,5 @@
 // api.cpp - см. api.hpp.
+#include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
 #include "api.hpp"
 
 #include <chrono>
@@ -92,7 +93,12 @@ std::string url_decode(const std::string& s) {
     std::string out;
     for (size_t i = 0; i < s.size(); ++i) {
         if (s[i] == '%' && i + 2 < s.size()) {
-            int v = 0;
+            // БАГ-ФИКС: sscanf("%x", ...) требует unsigned int*, а
+            // передавался int* - несовпадение типов (UB по стандарту C,
+            // -Wformat под -pedantic). unsigned int совпадает по размеру
+            // и представлению с int здесь, поведение не менялось, но явный
+            // тип убирает предупреждение и саму UB-гарантию.
+            unsigned int v = 0;
             std::sscanf(s.substr(i + 1, 2).c_str(), "%x", &v);
             out += static_cast<char>(v);
             i += 2;

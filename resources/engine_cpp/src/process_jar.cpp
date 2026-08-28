@@ -1,3 +1,4 @@
+#include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
 #include <iostream>
 // process_jar.cpp - см. process_jar.hpp. Порт process_jar_with_stats() и
 // вспомогательных функций отчётов из main.py (HANDOFF_43).

@@ -3,6 +3,7 @@
 // инструкции стек-машины в дерево выражений (Expr) и список операторов (Stmt).
 #pragma once
 
+#include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
 #include <array>
 #include <map>
 #include <memory>

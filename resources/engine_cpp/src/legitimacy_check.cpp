@@ -1,5 +1,6 @@
 // legitimacy_check.cpp - см. legitimacy_check.hpp (и ОБЯЗАТЕЛЬНО оговорку
 // там же про отсутствие живого сетевого тестирования в этой сессии).
+#include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
 #include "legitimacy_check.hpp"
 
 #include <array>

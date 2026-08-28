@@ -1,4 +1,5 @@
 // sha256.cpp - см. sha256.hpp. Стандартный алгоритм FIPS-180-4.
+#include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
 #include "sha256.hpp"
 
 #include <cstring>

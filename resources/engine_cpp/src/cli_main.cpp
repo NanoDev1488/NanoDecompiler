@@ -18,6 +18,7 @@
 //    (см. process_jar.hpp), CLI печатает только финальные вехи.
 //  - Прогресс скачивания JDK/Maven - 2 события на файл (0%/100%), не
 //    потоковый процент - см. toolinstaller.hpp (HTTPS через системный curl).
+#include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>

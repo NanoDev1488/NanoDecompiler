@@ -1,4 +1,5 @@
 // engine.cpp - см. engine.hpp. 1:1 порт engine.py.
+#include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
 #include "engine.hpp"
 
 #include <algorithm>
