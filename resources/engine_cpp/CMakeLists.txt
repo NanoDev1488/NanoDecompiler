@@ -5,9 +5,10 @@
 #
 # Собрано и проверено (g++ 13, Linux, см. HANDOFF_44/45) через:
 #   g++ -std=c++17 -O2 -Iinclude src/*.cpp -lz -o NanoDecompilerCLI
-# Этот CMakeLists.txt - обёртка над тем же самым набором файлов и флагов,
-# НЕ проверялась live-сборкой (в песочнице сессии нет cmake) - если что-то
-# не соберётся, сверьтесь с прямой g++ командой выше, она 100% рабочая.
+# Этот CMakeLists.txt используется для Windows-сборки в CI
+# (.github/workflows/build-and-release.yml, MinGW) - первый реальный
+# прогон на GitHub Actions поймал недостающую линковку ws2_32 (см. ниже,
+# исправлено по логу реальной ошибки линковщика, не вслепую).
 cmake_minimum_required(VERSION 3.16)
 project(NanoDecompiler CXX)
 
@@ -31,4 +32,10 @@ target_link_libraries(NanoDecompilerCLI PRIVATE ZLIB::ZLIB)
 # extraResources, никакого установщика рядом с ним нет).
 if(MINGW)
   target_link_options(NanoDecompilerCLI PRIVATE -static -static-libgcc -static-libstdc++)
+  # БАГ-ФИКС: api.cpp использует Winsock (WSAStartup/socket/bind/... для
+  # --api-server) под #ifdef _WIN32, но ws2_32 нигде не линковалась - на
+  # MinGW линкер не подтягивает системные .lib неявно (в отличие от
+  # MSVC + #pragma comment(lib,...), которого здесь и нет) - "undefined
+  # reference to __imp_WSAStartup" и т.п. на реальной сборке в CI.
+  target_link_libraries(NanoDecompilerCLI PRIVATE ws2_32)
 endif()
