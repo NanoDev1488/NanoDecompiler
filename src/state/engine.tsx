@@ -60,8 +60,14 @@ interface EngineApi {
   logFilter: LogFilter;
   settings: Settings;
   settingsOpen: boolean;
+  updateModalOpen: boolean;
   paletteOpen: boolean;
   envIssue: boolean;
+  engineVersion: string | null;
+  guiVersion: string | null;
+  javaEnv: { ok: boolean; text?: string } | null;
+  mavenEnv: { ok: boolean; text?: string } | null;
+  updateInfo: UpdateInfo;
   toasts: Toast[];
   queuedCount: number;
 
@@ -81,10 +87,15 @@ interface EngineApi {
   copyText(text: string, what: string): void;
   openOutput(job: Job): void;
   setSettingsOpen(open: boolean): void;
+  setUpdateModalOpen(open: boolean): void;
   saveSettings(next: Settings): void;
   setPaletteOpen(open: boolean): void;
   toggleEnvIssue(): void;
   resolveEnvIssue(): void;
+  checkForUpdates(silent?: boolean): void;
+  applyEngineUpdate(): void;
+  openClientDownload(): void;
+  checkEnv(): void;
   toast(msg: string, kind?: ToastKind): void;
   dismissToast(id: number): void;
 }
@@ -98,7 +109,20 @@ const DEFAULT_SETTINGS: Settings = {
   keepLineNumbers: true,
   openFolderOnDone: false,
   legitimacyCheck: true,
+  autoUpdateCheck: true,
 };
+
+export interface UpdateInfo {
+  checking: boolean;
+  applying: boolean;
+  kind: "none" | "engine" | "client" | null;
+  currentVersion?: string;
+  latestVersion?: string;
+  downloadUrl?: string | null;
+  clientDownloadUrl?: string | null;
+  releaseUrl?: string;
+  error?: string;
+}
 
 export function EngineProvider({ children }: { children: ReactNode }) {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -110,8 +134,22 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const [terminalOpen, setTerminalOpen] = useState(true);
   const [logFilter, setLogFilter] = useState<LogFilter>("all");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [envIssue, setEnvIssue] = useState(false);
+  // БАГ-ФИКС: engineVersion раньше была захардкожена заглушкой "2.4.1" в
+  // каждом компоненте отдельно (SettingsModal/AppHeader/Titlebar/
+  // StatusBar) - один запрос здесь на старте приложения, все читают из
+  // контекста вместо своего собственного дублирующего IPC-вызова.
+  const [engineVersion, setEngineVersion] = useState<string | null>(null);
+  const [guiVersion, setGuiVersion] = useState<string | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo>({ checking: false, applying: false, kind: null });
+  // БАГ-ФИКС: раньше envIssue переключался вручную (toggleEnvIssue), без
+  // единой реальной проверки java/mvn (см. env:check в main.ts). javaEnv/
+  // mavenEnv - настоящий результат "java -version"/"mvn -version" через
+  // дочерний процесс.
+  const [javaEnv, setJavaEnv] = useState<{ ok: boolean; text?: string } | null>(null);
+  const [mavenEnv, setMavenEnv] = useState<{ ok: boolean; text?: string } | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [runningElapsed, setRunningElapsed] = useState<number | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
@@ -122,29 +160,6 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const logIdRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const unsubscribeLogRef = useRef<(() => void) | null>(null);
-
-  // Из main-процесса персистится ТОЛЬКО legitimacyCheck/autoUpdateCheck
-  // (см. AppSettings в preload.ts) - остальные поля Settings живут только
-  // в рендерере на время сессии.
-  useEffect(() => {
-    let cancelled = false;
-    window.nano
-      .getSettings()
-      .then(s => {
-        if (!cancelled) setSettings(prev => ({ ...prev, legitimacyCheck: s.legitimacyCheck }));
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
-      unsubscribeLogRef.current?.();
-    };
-  }, []);
 
   const dismissToast = useCallback((id: number) => {
     setToasts(prev => prev.filter(t => t.id !== id));
@@ -158,6 +173,147 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     },
     [dismissToast],
   );
+
+  const checkEnv = useCallback(() => {
+    window.nano
+      .checkEnv()
+      .then(r => {
+        setJavaEnv(r.java);
+        setMavenEnv(r.maven);
+        // Java нужна ТОЛЬКО для верификации через mvn recompile (см.
+        // verify.cpp) - сама декомпиляция чисто C++ и Java не требует, но
+        // envIssue исторически завязан именно на Java (UI формулирует это
+        // как "движок не запустится" - неточно, но пусть решается
+        // отдельно от этого фикса, чтобы не расширять объём правки).
+        setEnvIssue(!r.java.ok);
+      })
+      .catch(() => {
+        setJavaEnv({ ok: false });
+        setMavenEnv({ ok: false });
+      });
+  }, []);
+
+  const checkForUpdates = useCallback((silent = false) => {
+    setUpdateInfo(u => ({ ...u, checking: true, error: undefined }));
+    window.nano
+      .checkUpdate()
+      .then(r => {
+        if (!r.ok) {
+          setUpdateInfo(u => ({ ...u, checking: false, error: r.error }));
+          if (!silent) toast(r.error ?? "Не удалось проверить обновления", "err");
+          return;
+        }
+        setUpdateInfo({
+          checking: false,
+          applying: false,
+          kind: r.updateKind ?? "none",
+          currentVersion: r.currentVersion,
+          latestVersion: r.latestVersion,
+          downloadUrl: r.downloadUrl,
+          clientDownloadUrl: r.clientDownloadUrl,
+          releaseUrl: r.releaseUrl,
+        });
+        if (!silent) {
+          if (r.updateKind === "none") toast("У вас последняя версия", "ok");
+          else if (r.updateKind === "engine") toast(`Доступно обновление движка: ${r.latestVersion}`, "info");
+          else if (r.updateKind === "client") toast(`Доступно обновление приложения: ${r.latestVersion}`, "info");
+        }
+      })
+      .catch(e => {
+        setUpdateInfo(u => ({ ...u, checking: false, error: String(e) }));
+        if (!silent) toast("Не удалось проверить обновления", "err");
+      });
+  }, [toast]);
+
+  const applyEngineUpdate = useCallback(() => {
+    if (!updateInfo.downloadUrl) return;
+    setUpdateInfo(u => ({ ...u, applying: true }));
+    window.nano
+      .applyUpdate(updateInfo.downloadUrl, updateInfo.latestVersion)
+      .then(r => {
+        setUpdateInfo(u => ({ ...u, applying: false }));
+        if (r.ok) {
+          toast("Движок обновлён", "ok");
+          setUpdateInfo(u => ({ ...u, kind: "none" }));
+        } else {
+          toast(r.error ?? "Не удалось обновить движок", "err");
+        }
+      })
+      .catch(() => {
+        setUpdateInfo(u => ({ ...u, applying: false }));
+        toast("Не удалось обновить движок", "err");
+      });
+  }, [toast, updateInfo.downloadUrl, updateInfo.latestVersion]);
+
+  const openClientDownload = useCallback(() => {
+    const url = updateInfo.clientDownloadUrl ?? updateInfo.releaseUrl;
+    if (url) window.nano.openExternal(url).catch(() => toast("Не удалось открыть ссылку", "err"));
+  }, [toast, updateInfo.clientDownloadUrl, updateInfo.releaseUrl]);
+
+
+  // Из main-процесса персистится ТОЛЬКО legitimacyCheck/autoUpdateCheck
+  // (см. AppSettings в preload.ts) - остальные поля Settings живут только
+  // в рендерере на время сессии.
+  useEffect(() => {
+    let cancelled = false;
+    window.nano
+      .getSettings()
+      .then(s => {
+        if (cancelled) return;
+        setSettings(prev => ({ ...prev, legitimacyCheck: s.legitimacyCheck, autoUpdateCheck: s.autoUpdateCheck }));
+        // Автопроверка обновлений при старте - только ПОСЛЕ того, как
+        // узнали настоящее значение из настроек (не дефолт), иначе
+        // выключенная пользователем автопроверка на миг игнорировалась бы.
+        if (s.autoUpdateCheck) checkForUpdates(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Настоящая версия движка вместо хардкода - см. engine:version в
+  // main.ts / --version в cli_main.cpp. Молча остаётся null при ошибке
+  // (движок не найден и т.п.) - UI показывает "—" вместо версии, это
+  // видимо и достаточно, отдельный toast здесь не нужен.
+  useEffect(() => {
+    let cancelled = false;
+    window.nano
+      .getEngineVersion()
+      .then(r => {
+        if (!cancelled && r.ok && r.version) setEngineVersion(r.version);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    checkEnv();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    window.nano
+      .getGuiVersion()
+      .then(v => {
+        if (!cancelled) setGuiVersion(v);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
+      unsubscribeLogRef.current?.();
+    };
+  }, []);
 
   const pushLog = useCallback((jobId: string, level: LogLevel, tag: string, msg: string) => {
     setLog(prev => {
@@ -402,8 +558,8 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const openFileDialog = useCallback(() => {
     window.nano
       .selectJar()
-      .then(p => {
-        if (p) addJarPaths([p]);
+      .then(paths => {
+        if (paths.length) addJarPaths(paths);
       })
       .catch(() => toast("Диалог выбора файла недоступен", "err"));
   }, [addJarPaths, toast]);
@@ -498,20 +654,35 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     (next: Settings) => {
       setSettings(next);
       setSettingsOpen(false);
-      window.nano.setSettings({ legitimacyCheck: next.legitimacyCheck }).catch(() => {});
+      window.nano.setSettings({ legitimacyCheck: next.legitimacyCheck, autoUpdateCheck: next.autoUpdateCheck }).catch(() => {});
       toast("Настройки сохранены", "ok");
     },
     [toast],
   );
 
+  // Сообщение об успешном обновлении, если предыдущий запуск закончился
+  // рестартом ради применения апдейта клиента (см.
+  // update:installClientAndRestart в updater.ts - молча флагом на диске,
+  // здесь просто "потребляем" его).
+  useEffect(() => {
+    window.nano
+      .consumeUpdateSuccessFlag()
+      .then(was => {
+        if (was) toast("Приложение успешно обновлено", "ok");
+      })
+      .catch(() => {});
+  }, [toast]);
+
   const toggleEnvIssue = useCallback(() => {
     setEnvIssue(v => !v);
   }, []);
 
+  // БАГ-ФИКС: раньше молча ставил envIssue=false без единой реальной
+  // проверки ("окружение проверено" было ложью) - теперь реально
+  // перезапрашивает java/mvn через checkEnv().
   const resolveEnvIssue = useCallback(() => {
-    setEnvIssue(false);
-    toast("Окружение проверено", "ok");
-  }, [toast]);
+    checkEnv();
+  }, [checkEnv]);
 
   // глобальные горячие клавиши
   useEffect(() => {
@@ -532,6 +703,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       } else if (e.key === "Escape") {
         setPaletteOpen(false);
         setSettingsOpen(false);
+        setUpdateModalOpen(false);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -547,11 +719,11 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
   const api: EngineApi = {
     jobs, log, runningJob, runningElapsed, selectedJobId, selectedJob, openFileByJob,
-    terminalOpen, logFilter, settings, settingsOpen, paletteOpen, envIssue, toasts, queuedCount,
+    terminalOpen, logFilter, settings, settingsOpen, updateModalOpen, paletteOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, updateInfo, toasts, queuedCount,
     addFiles, openFileDialog, startQueue, stopRunning, cancelJob, removeJob, clearQueue,
     selectJob, selectFile, setLogFilter, toggleTerminal, clearLog, copyLog, copyText,
-    openOutput, setSettingsOpen, saveSettings, setPaletteOpen,
-    toggleEnvIssue, resolveEnvIssue, toast, dismissToast,
+    openOutput, setSettingsOpen, setUpdateModalOpen, saveSettings, setPaletteOpen,
+    toggleEnvIssue, resolveEnvIssue, checkForUpdates, applyEngineUpdate, openClientDownload, checkEnv, toast, dismissToast,
   };
 
   return (

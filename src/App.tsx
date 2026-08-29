@@ -7,11 +7,12 @@ import { Workspace } from "./components/Workspace";
 import { Terminal } from "./components/Terminal";
 import { StatusBar } from "./components/StatusBar";
 import { SettingsModal } from "./components/SettingsModal";
+import { UpdateModal } from "./components/UpdateModal";
 import { CommandPalette } from "./components/CommandPalette";
 import { Toasts } from "./components/Toasts";
 
 function Shell() {
-  const { settingsOpen, paletteOpen } = useEngine();
+  const { settingsOpen, updateModalOpen, paletteOpen } = useEngine();
 
   // браузер иначе открывает перетащенный файл как страницу
   useEffect(() => {
@@ -38,6 +39,7 @@ function Shell() {
       <StatusBar />
 
       {settingsOpen && <SettingsModal />}
+      {updateModalOpen && <UpdateModal />}
       {paletteOpen && <CommandPalette />}
       <Toasts />
     </div>

@@ -14,7 +14,7 @@ function LogoMark() {
 }
 
 export function Titlebar() {
-  const { runningJob, selectedJob, toast } = useEngine();
+  const { runningJob, selectedJob, toast, guiVersion } = useEngine();
 
   const center = runningJob
     ? `декомпиляция: ${runningJob.fileName}`
@@ -31,7 +31,7 @@ export function Titlebar() {
         <span className="mono text-[12px] font-semibold tracking-tight text-ink">
           NanoDecompiler
         </span>
-        <span className="chip h-[18px] px-1.5 text-[10px]">GUI v2.1</span>
+        <span className="chip h-[18px] px-1.5 text-[10px]">GUI v{guiVersion ?? "…"}</span>
       </div>
 
       <div className="mono flex-1 truncate text-center text-[11px] text-faint">{center}</div>

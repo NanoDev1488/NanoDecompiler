@@ -25,6 +25,7 @@
 
 #include "legitimacy_check.hpp"
 #include "malware_scan.hpp"
+#include "platform_detect.hpp"
 #include "renamer.hpp"
 #include "verify.hpp"
 
@@ -38,6 +39,14 @@ struct JarProcessResult {
     int decrypted_strings_count = 0;
     // nullopt эквивалентно skip_legitimacy=true (проверка не выполнялась).
     std::optional<LegitimacyCheckResult> legitimacy;
+    // Платформа jar'а (см. platform_detect.hpp) - Bukkit/Paper/Velocity/
+    // Bungee/мод/неизвестно. mod_rejected=true - декомпиляция ПРЕРВАНА
+    // сразу после определения платформы (см. process_jar_with_stats,
+    // раздел 1.5) - остальные поля JarProcessResult в этом случае пустые/
+    // неактуальные, единственное, что нужно смотреть - mod_rejected_reason.
+    PlatformInfo platform;
+    bool mod_rejected = false;
+    std::optional<std::string> mod_rejected_reason;
 };
 
 // Бросает std::runtime_error, если jar_path не открывается (битый zip и т.п.) -

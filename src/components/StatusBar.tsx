@@ -1,10 +1,11 @@
-import { Check, TriangleAlert } from "lucide-react";
+import { Check, Loader2, TriangleAlert } from "lucide-react";
 import { useEngine } from "../state/engine";
 import { fmtNum, fmtSeconds } from "../lib/model";
 import { cn } from "../utils/cn";
 
 export function StatusBar() {
-  const { runningJob, runningElapsed, selectedJob, envIssue, resolveEnvIssue, settings } = useEngine();
+  const { runningJob, runningElapsed, selectedJob, envIssue, resolveEnvIssue, javaEnv, mavenEnv, guiVersion, settings } =
+    useEngine();
 
   const pct = runningJob ? Math.round(runningJob.progress * 100) : 0;
 
@@ -12,7 +13,12 @@ export function StatusBar() {
     <footer className="mono flex h-7 flex-none items-center gap-4 border-t border-line bg-surface px-3 text-[11px] text-faint select-none">
       {/* окружение */}
       <div className="flex items-center gap-3">
-        {envIssue ? (
+        {javaEnv === null ? (
+          <span className="flex items-center gap-1 opacity-60">
+            <Loader2 size={11} className="animate-spin" />
+            java: проверяю…
+          </span>
+        ) : envIssue ? (
           <button
             onClick={resolveEnvIssue}
             className="flex items-center gap-1 text-err hover:text-ink"
@@ -22,14 +28,14 @@ export function StatusBar() {
             java: не найдена
           </button>
         ) : (
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1" title={javaEnv.text}>
             <Check size={11} className="text-acid" />
-            java 21.0.3
+            {javaEnv.text ?? "java"}
           </span>
         )}
-        <span className={cn("flex items-center gap-1", envIssue && "opacity-40")}>
-          <Check size={11} className={envIssue ? "text-faint" : "text-acid"} />
-          maven 3.9.6
+        <span className={cn("flex items-center gap-1", !mavenEnv?.ok && "opacity-40")} title={mavenEnv?.text}>
+          <Check size={11} className={mavenEnv?.ok ? "text-acid" : "text-faint"} />
+          {mavenEnv?.ok ? (mavenEnv.text ?? "maven") : "maven: не найден"}
         </span>
         <span className="hidden text-line-strong xl:inline">|</span>
         <span className="hidden max-w-[220px] truncate xl:inline">{settings.outputDir}</span>
@@ -64,7 +70,12 @@ export function StatusBar() {
         </span>
       </span>
 
-      <span className="hidden md:inline">GUI v2.1.0 · build a3f9c2</span>
+      {/* БАГ-ФИКС: "GUI v2.1.0 · build a3f9c2" было захардкожено демо-
+          заглушкой, включая полностью выдуманный git-хэш, который взять
+          неоткуда без доступа к реальному репозиторию - честнее показать
+          только реальную версию (app.getVersion(), см. gui:version в
+          main.ts), без придуманного build-хэша. */}
+      <span className="hidden md:inline">GUI v{guiVersion ?? "…"}</span>
     </footer>
   );
 }

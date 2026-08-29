@@ -109,7 +109,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  registerUpdateHandlers(engineDir);
+  registerUpdateHandlers(engineDir, engineInvocation);
   createWindow();
 });
 
@@ -126,13 +126,18 @@ ipcMain.handle("settings:set", async (_e, partial: Partial<Settings>): Promise<S
 });
 
 ipcMain.handle("dialog:selectJar", async () => {
+  // БАГ-ФИКС: раньше был только openFile (без multiSelections) и
+  // возвращался res.filePaths[0] - первый выбранный файл, остальные
+  // молча терялись. Очередь (state/engine.tsx: jobs: Job[],
+  // addJarPaths(paths: string[])) уже умела принимать несколько jar'ов
+  // разом - drag&drop это уже использовал, диалог выбора файла - нет.
   const res = await dialog.showOpenDialog(mainWindow!, {
-    title: "Выбери .jar плагина",
-    properties: ["openFile"],
+    title: "Выбери .jar плагина (можно несколько)",
+    properties: ["openFile", "multiSelections"],
     filters: [{ name: "Java Archive", extensions: ["jar"] }],
   });
-  if (res.canceled || res.filePaths.length === 0) return null;
-  return res.filePaths[0];
+  if (res.canceled || res.filePaths.length === 0) return [];
+  return res.filePaths;
 });
 
 ipcMain.handle("dialog:selectOutDir", async (_e, defaultPath?: string) => {
@@ -237,6 +242,14 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
     // Раздельные буферы на каждый поток убирают проблему полностью.
     let bufOut = "";
     let bufErr = "";
+    // БАГ-ФИКС: раньше при code !== 0 в resolve() не передавался error
+    // вообще - GUI показывал обезличенное "движок завершился с кодом N",
+    // хотя сам движок уже печатает понятную причину строкой "[!] <текст>"
+    // перед выходом (run_decompile_console в cli_main.cpp - например,
+    // "Обнаружен Fabric mod ... - временно моды не декомпилируются").
+    // Запоминаем последнюю такую строку, чтобы отдать её как реальный
+    // error вместо generic-сообщения.
+    let lastReasonLine: string | null = null;
     // Батчим строки лога вместо отправки КАЖДОЙ отдельным IPC-сообщением -
     // на jar с тысячами методов движок может выдать сотни строк за долю
     // секунды, и раньше каждая строка = отдельный IPC round-trip +
@@ -261,7 +274,10 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
       const rest = lines.pop() ?? "";
       if (isOut) bufOut = rest;
       else bufErr = rest;
-      for (const line of lines) pendingLines.push({ line, stream });
+      for (const line of lines) {
+        if (line.startsWith("[!] ")) lastReasonLine = line.slice(4);
+        pendingLines.push({ line, stream });
+      }
       if (pendingLines.length > 0) scheduleFlush();
     };
 
@@ -274,13 +290,83 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
       if (flushTimer) clearTimeout(flushTimer);
       if (pendingLines.length > 0) send("run:log", { lines: pendingLines });
       runningProc = null;
-      resolve({ ok: code === 0, code, outDir });
+      resolve({ ok: code === 0, code, outDir, error: code !== 0 ? (lastReasonLine ?? undefined) : undefined });
     });
 
     proc.on("error", (err) => {
       runningProc = null;
       resolve({ ok: false, error: String(err) });
     });
+  });
+});
+
+// БАГ-ФИКС: раньше версия движка в GUI (SettingsModal "Проверить" /
+// AppHeader / Titlebar / StatusBar) была захардкожена заглушкой "2.4.1" из
+// демо-прототипа - реальная версия (version.hpp -> --version) никогда не
+// спрашивалась. Кэшируется на время жизни процесса - версия не меняется
+// без перезапуска приложения, спрашивать движок заново на каждый клик
+// "Проверить" незачем.
+let cachedEngineVersion: string | null = null;
+// GUI-версия (Electron-обвязка) - реальная, из package.json через
+// app.getVersion() (Electron делает это сам), не отдельный хардкод рядом
+// с версией движка. sync-обработчик - значение уже в памяти при старте,
+// незачем гонять Promise ради одной строки.
+// БАГ-ФИКС: "java 21.0.3"/"maven 3.9.6" в StatusBar.tsx и "Окружение" в
+// SettingsModal были захардкожены заглушками, вообще ничем не
+// подкреплёнными - toggleEnvIssue() был просто ручным UI-тумблером без
+// единого реального вызова java/mvn где-либо в проекте. Настоящая
+// проверка через дочерний процесс - оба инструмента при --version часто
+// пишут в stderr (особенно java), поэтому собираем оба потока.
+function checkVersionCmd(cmd: string, args: string[]): Promise<{ ok: boolean; text?: string }> {
+  return new Promise((resolve) => {
+    let out = "";
+    let settled = false;
+    const proc = spawn(cmd, args, { env: { ...process.env } });
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve({ ok, text: ok ? out.split(/\r?\n/)[0]?.trim() : undefined });
+    };
+    proc.stdout.on("data", (d) => (out += d.toString("utf-8")));
+    proc.stderr.on("data", (d) => (out += d.toString("utf-8")));
+    proc.on("close", (code) => finish(code === 0 && out.trim().length > 0));
+    proc.on("error", () => finish(false));
+  });
+}
+
+ipcMain.handle("env:check", async () => {
+  const [java, maven] = await Promise.all([
+    checkVersionCmd("java", ["-version"]),
+    checkVersionCmd("mvn", ["-version"]),
+  ]);
+  return { java, maven };
+});
+
+ipcMain.handle("gui:version", async () => app.getVersion());
+
+ipcMain.handle("engine:version", async () => {
+  if (cachedEngineVersion) return { ok: true, version: cachedEngineVersion };
+  let cmd: string, args: string[];
+  try {
+    ({ cmd, args } = engineInvocation(["--version"]));
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  return new Promise((resolve) => {
+    let out = "";
+    const proc = spawn(cmd, args, { cwd: engineDir(), env: { ...process.env } });
+    proc.stdout.on("data", (d) => (out += d.toString("utf-8")));
+    proc.on("close", () => {
+      try {
+        const parsed = JSON.parse(out.trim());
+        cachedEngineVersion = parsed.version ?? null;
+        if (cachedEngineVersion) resolve({ ok: true, version: cachedEngineVersion });
+        else resolve({ ok: false, error: "движок не вернул версию" });
+      } catch {
+        resolve({ ok: false, error: "не удалось разобрать ответ движка" });
+      }
+    });
+    proc.on("error", (e) => resolve({ ok: false, error: e.message }));
   });
 });
 

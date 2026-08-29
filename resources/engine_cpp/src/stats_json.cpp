@@ -154,6 +154,19 @@ std::string stats_body_json(const ProjectStats& stats) {
 }  // namespace
 
 std::string jar_process_result_to_json(const JarProcessResult& jr, const std::string& out_dir, double elapsed_sec) {
+    // Отдельная ветка ДО обычного "ok" - мод распознан и декомпиляция
+    // намеренно не выполнялась (см. process_jar.cpp, раздел 1.5), это не
+    // ошибка движка и не "ok" (jr.stats тут пустая/неактуальная - методы
+    // не разбирались вообще). status:"mod_rejected" - отдельная строка,
+    // не "ok"/"error", чтобы GUI мог показать точно нужное сообщение
+    // ("временно моды не декомпилируются"), а не общий текст ошибки.
+    if (jr.mod_rejected) {
+        std::ostringstream mo;
+        mo << "{\"status\":\"mod_rejected\",\"out_dir\":" << js(out_dir) << ",\"elapsed_sec\":" << round2(elapsed_sec)
+           << ",\"platform\":" << js(jr.platform.kind_label())
+           << ",\"reason\":" << js(jr.mod_rejected_reason.value_or("")) << "}";
+        return mo.str();
+    }
     std::ostringstream o;
     o << "{\"status\":\"ok\",\"out_dir\":" << js(out_dir) << ",\"elapsed_sec\":" << round2(elapsed_sec) << ",\"stats\":{";
     // stats_body_json уже возвращает полный {...} - вставляем его поля без
@@ -165,6 +178,7 @@ std::string jar_process_result_to_json(const JarProcessResult& jr, const std::st
     o << ",\"decrypted_strings_owner\":" << jn(jr.decrypted_strings_owner);
     o << ",\"decrypted_strings_count\":" << jr.decrypted_strings_count;
     o << ",\"legitimacy\":" << legitimacy_json(jr.legitimacy);
+    o << ",\"platform\":" << js(jr.platform.kind_label());
     o << "}}";
     return o.str();
 }

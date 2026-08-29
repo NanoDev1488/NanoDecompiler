@@ -3,7 +3,6 @@ import { useState, type ReactNode } from "react";
 import { useEngine } from "../state/engine";
 import { Toggle, Kbd } from "./ui";
 import { cn } from "../utils/cn";
-import { smallCaps } from "../utils/smallCaps";
 
 function Row({ label, hint, control }: { label: string; hint?: string; control: ReactNode }) {
   return (
@@ -43,17 +42,39 @@ function TelegramCredit({ handle, role }: { handle: string; role: string }) {
 type Tab = "general" | "about";
 
 export function SettingsModal() {
-  const { settings, saveSettings, setSettingsOpen, envIssue, resolveEnvIssue, toast } = useEngine();
+  const {
+    settings,
+    saveSettings,
+    setSettingsOpen,
+    envIssue,
+    resolveEnvIssue,
+    engineVersion,
+    guiVersion,
+    javaEnv,
+    mavenEnv,
+    toast,
+  } = useEngine();
   const [draft, setDraft] = useState(settings);
   const [checking, setChecking] = useState<"idle" | "busy" | "ok">("idle");
   const [tab, setTab] = useState<Tab>("general");
 
   const checkEngine = () => {
     setChecking("busy");
-    window.setTimeout(() => {
-      setChecking("ok");
-      toast("Движок отвечает: NanoDecompilerCLI 2.4.1", "ok");
-    }, 750);
+    window.nano
+      .getEngineVersion()
+      .then(r => {
+        if (r.ok && r.version) {
+          setChecking("ok");
+          toast(`Движок отвечает: ${r.version}`, "ok");
+        } else {
+          setChecking("idle");
+          toast(r.error ?? "Движок не отвечает", "err");
+        }
+      })
+      .catch(() => {
+        setChecking("idle");
+        toast("Движок не отвечает", "err");
+      });
   };
 
   return (
@@ -86,7 +107,7 @@ export function SettingsModal() {
             )}
             onClick={() => setTab("general")}
           >
-            {smallCaps("Основные")}
+            Основные
           </button>
           <button
             className={cn(
@@ -95,7 +116,7 @@ export function SettingsModal() {
             )}
             onClick={() => setTab("about")}
           >
-            {smallCaps("О сервисе")}
+            О сервисе
           </button>
         </div>
 
@@ -117,7 +138,11 @@ export function SettingsModal() {
                     ) : checking === "ok" ? (
                       <Check size={12} />
                     ) : null}
-                    {checking === "busy" ? "проверяю…" : checking === "ok" ? "ok · 2.4.1" : "Проверить"}
+                    {checking === "busy"
+                      ? "проверяю…"
+                      : checking === "ok"
+                        ? `ok · ${engineVersion?.replace(/^NanoDecompiler /, "") ?? "?"}`
+                        : "Проверить"}
                   </button>
                 }
               />
@@ -125,9 +150,11 @@ export function SettingsModal() {
               <Row
                 label="Java"
                 hint={
-                  envIssue
-                    ? "JRE не найдена в PATH — движок не запустится"
-                    : "21.0.3 · Temurin · /usr/lib/jvm/temurin-21"
+                  javaEnv === null
+                    ? "проверяю…"
+                    : envIssue
+                      ? "JRE не найдена в PATH — движок не запустится"
+                      : (javaEnv.text ?? "найдена")
                 }
                 control={
                   envIssue ? (
@@ -145,11 +172,17 @@ export function SettingsModal() {
               <div className="h-px bg-line" />
               <Row
                 label="Maven"
-                hint="3.9.6 · нужен для подтягивания Spigot API при верификации"
+                hint={
+                  mavenEnv === null
+                    ? "проверяю…"
+                    : mavenEnv.ok
+                      ? (mavenEnv.text ?? "найден") + " · нужен для верификации через recompile"
+                      : "не найден — верификация через recompile недоступна"
+                }
                 control={
-                  <span className={cn("chip", envIssue ? "opacity-40" : "border-acid/35 text-acid")}>
-                    {!envIssue && <span className="dot bg-acid" />}
-                    {envIssue ? "не проверен" : "найден"}
+                  <span className={cn("chip", !mavenEnv?.ok ? "opacity-40" : "border-acid/35 text-acid")}>
+                    {mavenEnv?.ok && <span className="dot bg-acid" />}
+                    {mavenEnv?.ok ? "найден" : "не найден"}
                   </span>
                 }
               />
@@ -260,7 +293,7 @@ export function SettingsModal() {
           </div>
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-            <p className="kicker pt-1 pb-2">{smallCaps("Что это")}</p>
+            <p className="kicker pt-1 pb-2">Что это</p>
             <div className="rounded-xl border border-line bg-bg px-3.5 py-3 text-[12.5px] leading-relaxed text-ink/85">
               <p>
                 <span className="font-semibold text-ink">NanoDecompiler</span> — декомпилятор Java-байткода (.class/.jar)
@@ -276,7 +309,7 @@ export function SettingsModal() {
               </p>
             </div>
 
-            <p className="kicker pt-4 pb-2">{smallCaps("Возможности")}</p>
+            <p className="kicker pt-4 pb-2">Возможности</p>
             <div className="rounded-xl border border-line bg-bg px-3.5 py-3">
               <ul className="space-y-1.5 text-[12px] leading-relaxed text-ink/80">
                 <li>— восстановление структурного control-flow (if/while/for/switch/try-catch, а не плоский байткод с goto)</li>
@@ -288,7 +321,7 @@ export function SettingsModal() {
               </ul>
             </div>
 
-            <p className="kicker pt-4 pb-2">{smallCaps("Команда")}</p>
+            <p className="kicker pt-4 pb-2">Команда</p>
             <div className="space-y-2">
               <TelegramCredit handle="radoqi" role="Кодер, основатель проекта" />
               <TelegramCredit handle="dyrachuna" role="GUI-разработчик" />
@@ -297,7 +330,9 @@ export function SettingsModal() {
         )}
 
         <div className="flex h-12 flex-none items-center gap-2 border-t border-line px-4">
-          <span className="mono text-[10.5px] text-faint">engine 2.4.1 · GUI v2.1.0</span>
+          <span className="mono text-[10.5px] text-faint">
+            engine {engineVersion?.replace(/^NanoDecompiler /, "") ?? "…"} · GUI v{guiVersion ?? "…"}
+          </span>
           <div className="flex-1" />
           <button className="btn btn-ghost" onClick={() => setSettingsOpen(false)}>
             Отмена

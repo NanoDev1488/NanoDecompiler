@@ -2,6 +2,7 @@ import { app, ipcMain, shell } from "electron";
 import * as https from "https";
 import * as fs from "fs";
 import * as path from "path";
+import { spawn } from "child_process";
 
 // Подтверждено пользователем: реальный владелец/репозиторий (не заглушка).
 const GITHUB_OWNER = "NanoDev1488";
@@ -21,15 +22,22 @@ interface VersionsJson {
   api: string;
 }
 
-// HANDOFF_51: движок (build-api) пока собирается ТОЛЬКО под Windows (см.
-// .github/workflows/build-and-release.yml, build-api job - не тронут этой
-// сессией, отдельная задача на будущее) - тихий "патч движка на лету"
-// (updateKind "engine") поэтому в принципе доступен только на Windows,
-// где есть подходящий ассет (`NanoDecompilerCLI.exe`). На Linux/macOS
-// cliAsset ниже всегда null -> updateKind никогда не станет "engine" сам
-// по себе (см. update:check) - только "client" (полная переустановка)
-// или "none".
-const ENGINE_ASSET_NAME = process.platform === "win32" ? "NanoDecompilerCLI.exe" : null;
+// БАГ-ФИКС: раньше здесь искался ассет "NanoDecompilerCLI.exe" - имя из
+// СТАРОЙ схемы релиза (единственный build-api job, только Windows). После
+// объединения CLI+API в "ClApi" и разбивки на 3 платформенных job'а (см.
+// .github/workflows/build-and-release.yml) ассеты релиза теперь называются
+// NanoDecompilerClApi-windows.exe / -linux / -macos - апдейтер тихо
+// переставал находить движок в новых релизах, откатываясь на "обновлять
+// нечего". Заодно тихий патч движка на лету (updateKind "engine") теперь
+// доступен на всех трёх ОС, а не только Windows - раньше это было
+// осознанным ограничением ИЗ-ЗА того, что build-api был Windows-only,
+// но эта причина больше не существует.
+const ENGINE_ASSET_NAME: string =
+  process.platform === "win32"
+    ? "NanoDecompilerClApi-windows.exe"
+    : process.platform === "darwin"
+      ? "NanoDecompilerClApi-macos"
+      : "NanoDecompilerClApi-linux";
 
 // Регэксп имени клиентского инсталлятора - см. package.json build.*.artifactName
 // по умолчанию (electron-builder) и .github/workflows/build-and-release.yml
@@ -144,16 +152,72 @@ function apiVersionMarkerPath(engineDir: string): string {
   return path.join(engineDir, ".engine-api-version");
 }
 
-function readInstalledApiVersion(engineDir: string): string | null {
+function writeInstalledApiVersion(engineDir: string, version: string): void {
+  fs.writeFileSync(apiVersionMarkerPath(engineDir), version, "utf-8");
+}
+
+// БАГ-ФИКС: раньше версия движка бралась ТОЛЬКО из файла-маркера
+// (.engine-api-version), который писался ИСКЛЮЧИТЕЛЬНО после успешного
+// update:apply - на свежей установке (маркер никогда не создавался)
+// installedApiVersion был всегда null -> apiNeedsUpdate всегда true ->
+// апдейтер ВЕЧНО показывал "доступно обновление движка", даже когда
+// встроенный в свежий инсталлятор движок уже последней версии. Теперь
+// реально спрашиваем сам бинарник через --version (см. cli_main.cpp) - и
+// только на случай, если сам бинарник почему-то не смог ответить (не
+// найден и т.п.), откатываемся на маркер-файл как на кэш последнего
+// известного значения.
+function extractVersionNumber(raw: string): string | null {
+  // "NanoDecompiler v1.6.2 BETA" -> "1.6.2" (версия внутри произвольного
+  // текста - число из максимум 4 точечных сегментов, первое совпадение).
+  const m = raw.match(/(\d+(?:\.\d+){1,3})/);
+  return m ? m[1] : null;
+}
+
+function resolveInstalledApiVersion(
+  engineDir: string,
+  engineInvocation: (scriptArgs: string[]) => { cmd: string; args: string[] },
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    let cmd: string, args: string[];
+    try {
+      ({ cmd, args } = engineInvocation(["--version"]));
+    } catch {
+      resolve(readMarkerFallback(engineDir));
+      return;
+    }
+    let out = "";
+    let settled = false;
+    const finish = (v: string | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(v ?? readMarkerFallback(engineDir));
+    };
+    try {
+      const proc = spawn(cmd, args, { env: { ...process.env } });
+      proc.stdout.on("data", (d) => (out += d.toString("utf-8")));
+      proc.on("close", () => {
+        try {
+          const parsed = JSON.parse(out.trim());
+          const num = parsed.version ? extractVersionNumber(String(parsed.version)) : null;
+          if (num) writeInstalledApiVersion(engineDir, num);
+          finish(num);
+        } catch {
+          finish(null);
+        }
+      });
+      proc.on("error", () => finish(null));
+    } catch {
+      finish(null);
+    }
+  });
+}
+
+function readMarkerFallback(engineDir: string): string | null {
   try {
     return fs.readFileSync(apiVersionMarkerPath(engineDir), "utf-8").trim() || null;
   } catch {
     return null;
   }
-}
-
-function writeInstalledApiVersion(engineDir: string, version: string): void {
-  fs.writeFileSync(apiVersionMarkerPath(engineDir), version, "utf-8");
 }
 
 // "v1.2" / "1.2" / "1.2.0" - в разных местах версия приходит в разном
@@ -223,7 +287,10 @@ export function consumeUpdateSuccessFlag(): boolean {
   return viaFlag || viaMarker;
 }
 
-export function registerUpdateHandlers(engineDir: () => string) {
+export function registerUpdateHandlers(
+  engineDir: () => string,
+  engineInvocation: (scriptArgs: string[]) => { cmd: string; args: string[] },
+) {
   ipcMain.handle("update:consumeSuccessFlag", async () => consumeUpdateSuccessFlag());
 
   ipcMain.handle("update:installClientAndRestart", async (event, downloadUrl: string) => {
@@ -255,7 +322,9 @@ export function registerUpdateHandlers(engineDir: () => string) {
       writeUpdateSuccessMarker();
       // detached + unref - инсталлятор должен пережить закрытие текущего
       // процесса (не быть его child'ом с точки зрения жизненного цикла).
-      const { spawn } = await import("child_process");
+      // spawn уже статически импортирован в шапке файла - раньше здесь был
+      // отдельный динамический import(), излишний и лишь маскировавший
+      // обычный статический импорт тем же именем.
       const child = spawn(installerPath, [], { detached: true, stdio: "ignore" });
       child.unref();
       // Небольшая задержка перед выходом - даём инсталлятору реально
@@ -280,7 +349,7 @@ export function registerUpdateHandlers(engineDir: () => string) {
       const setupAsset = release.assets.find((a) => clientAssetPattern().test(a.name));
 
       const currentClientVersion = app.getVersion();
-      const installedApiVersion = readInstalledApiVersion(engineDir());
+      const installedApiVersion = await resolveInstalledApiVersion(engineDir(), engineInvocation);
 
       if (!versionsAsset) {
         // Старый релиз без versions.json (см. HANDOFF_16) - не можем
@@ -306,14 +375,11 @@ export function registerUpdateHandlers(engineDir: () => string) {
       // движка (даже если он ТОЖЕ поменялся) неважен сам по себе - новый
       // инсталлятор клиента и так принесёт свежий движок внутри себя (см.
       // build-client в workflow - он теперь сам собирает и встраивает
-      // NanoDecompilerCLI.exe).
+      // движок).
       //
-      // HANDOFF_51: "engine"-обновление (тихий патч без переустановки)
-      // доступно ТОЛЬКО на Windows (см. ENGINE_ASSET_NAME выше) - на
-      // Linux/macOS updateKind никогда не "engine", даже если версии
-      // формально разошлись (нечего было бы скачивать) - в этом случае
-      // просто "none" (пользователь всё равно получит свежий движок при
-      // следующем полном обновлении клиента).
+      // "engine"-обновление (тихий патч без переустановки) теперь доступно
+      // на всех трёх ОС (см. ENGINE_ASSET_NAME выше - раньше было только
+      // на Windows, пока build-api был Windows-only job'ом).
       let updateKind: "none" | "engine" | "client" = "none";
       if (clientNeedsUpdate) updateKind = "client";
       else if (apiNeedsUpdate && cliAsset) updateKind = "engine";

@@ -15,6 +15,7 @@
 #include "javatypes.hpp"
 #include "lib_filter.hpp"
 #include "naming_hints.hpp"
+#include "platform_detect.hpp"
 #include "pom_builder.hpp"
 #include "render_class.hpp"
 #include "str_decrypt.hpp"
@@ -60,17 +61,39 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     ProjectStats& stats = jr.stats;
 
     // --- 1. Сканирование на подозрительное содержимое (см. HANDOFF_31) ---
-    std::cerr << "[DBG] before scan_jar\n"; jr.malware_findings = scan_jar(jar_path); std::cerr << "[DBG] after scan_jar\n";
+    jr.malware_findings = scan_jar(jar_path);
 
     std::string src_dir = (fs::path(out_dir) / "src" / "main" / "java").string();
     fs::create_directories(src_dir);
 
-    std::cerr << "[DBG] before ZipReader\n"; ZipReader zr(jar_path); std::cerr << "[DBG] after ZipReader\n";
+    ZipReader zr(jar_path);
     std::vector<std::string> all_names = zr.namelist();
+
+    // --- 1.5. Определение платформы (см. platform_detect.hpp) - ДО
+    // разбора классов: если это МОД (Fabric/Forge/NeoForge), а не
+    // серверный плагин, декомпиляция сразу прерывается с понятным
+    // сообщением, вместо траты времени на разбор сотен классов мода,
+    // который всё равно не задуман под структуру серверного плагина.
+    jr.platform = detect_platform(all_names, [&zr](const std::string& path) -> std::optional<std::string> {
+        try {
+            auto data = zr.read(path);
+            return std::string(data.begin(), data.end());
+        } catch (...) {
+            return std::nullopt;
+        }
+    });
+    if (jr.platform.is_mod()) {
+        jr.mod_rejected = true;
+        jr.mod_rejected_reason =
+            "Обнаружен " + jr.platform.kind_label() + " (" + jr.platform.manifest_path + ") - это МОД, а не "
+            "серверный плагин (Bukkit/Spigot/Paper/BungeeCord/Velocity). Временно моды не декомпилируются.";
+        return jr;
+    }
+
     std::vector<std::string> class_names;
     for (auto& n : all_names)
         if (n.size() >= 6 && n.substr(n.size() - 6) == ".class" && n.find("module-info") == std::string::npos) class_names.push_back(n);
-    stats.classes_total = static_cast<int>(class_names.size()); std::cerr << "[DBG] class_names.size()=" << class_names.size() << "\n";
+    stats.classes_total = static_cast<int>(class_names.size());
 
     // --- 2. Разбор .class файлов ---
     std::map<std::string, ClassFile> class_files;
@@ -78,7 +101,6 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     std::optional<std::string> plugin_yml_text;
     std::vector<std::string> class_order;  // порядок появления в jar - нужен find_active_decryptor_in_jar
     for (auto& n : class_names) {
-        std::cerr << "[DBG] parsing class: " << n << "\n";
         try {
             auto data = zr.read(n);
             ClassFile cf(data);
@@ -89,7 +111,7 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
             parse_errors.push_back({n, e.what()});
         }
     }
-    stats.classes_parsed = static_cast<int>(class_files.size()); std::cerr << "[DBG] classes_parsed=" << class_files.size() << "\n";
+    stats.classes_parsed = static_cast<int>(class_files.size());
     stats.parse_errors = parse_errors;
 
     // --- 3. Расшифровщик строк (см. str_decrypt.hpp) - сброс состояния с
@@ -216,18 +238,14 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     // источники, если явно не выключена. См. header legitimacy_check.hpp -
     // сетевая часть не тестировалась вживую (нет сети в песочнице). ---
     if (!skip_legitimacy) {
-        std::optional<std::string> plugin_name_for_check;
-        if (plugin_yml_text.has_value()) {
-            static const std::regex name_re(R"(^name:\s*['"]?([^'"\n]+)['"]?\s*$)");
-            std::smatch m;
-            if (std::regex_search(*plugin_yml_text, m, name_re)) {
-                std::string v = m[1].str();
-                size_t b = v.find_first_not_of(" \t");
-                size_t e = v.find_last_not_of(" \t");
-                plugin_name_for_check = (b == std::string::npos) ? "" : v.substr(b, e - b + 1);
-            }
-        }
-        jr.legitimacy = run_legitimacy_check(plugin_name_for_check.value_or(""), plugin_yml_text.value_or(""), jar_path);
+        // БАГ-ФИКС: раньше имя плагина для проверки легитимности бралось
+        // ТОЛЬКО регэкспом по plugin_yml_text (Bukkit-only YAML) - для
+        // Velocity (JSON) и Bungee (YAML, но другой набор полей) имя
+        // никогда не находилось, даже когда jr.platform.name уже успешно
+        // распарсен detect_platform() правильным парсером под каждый
+        // формат манифеста. Используем его напрямую вместо повторного
+        // (и для не-YAML форматов - изначально нерабочего) разбора здесь.
+        jr.legitimacy = run_legitimacy_check(jr.platform.name.value_or(""), plugin_yml_text.value_or(""), jar_path);
     }
 
     // --- 10. Renamer (см. HANDOFF_41) + naming_hints (см. HANDOFF_46,

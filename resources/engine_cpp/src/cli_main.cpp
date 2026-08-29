@@ -84,6 +84,7 @@ void print_usage() {
     std::cout << "       NanoDecompilerCLI plugin.jar [out_dir] --json-output   (разовый вызов, JSON в stdout)\n";
     std::cout << "       NanoDecompilerCLI --api-server [--host H] [--port 8791]   (HTTP-сервер)\n";
     std::cout << "       NanoDecompilerCLI --jar-summary plugin.jar   (JSON-сводка для GUI)\n";
+    std::cout << "       NanoDecompilerCLI --version   (JSON с версией движка, для GUI - см. settings:checkEngine)\n";
     std::cout << "       NanoDecompilerCLI --install-tools[=jdk|maven]   (portable JDK/Maven по требованию)\n";
 }
 
@@ -95,6 +96,11 @@ int run_decompile_console(const std::string& jar_path, const std::string& out_di
         jr = nd::process_jar_with_stats(jar_path, out_dir, skip_legitimacy);
     } catch (const std::exception& e) {
         std::cerr << "[!] ОШИБКА: " << e.what() << "\n";
+        return 1;
+    }
+
+    if (jr.mod_rejected) {
+        std::cout << "[!] " << jr.mod_rejected_reason.value_or("Обнаружен мод - декомпиляция не выполнена.") << "\n";
         return 1;
     }
 
@@ -229,6 +235,17 @@ int main(int argc, char** argv) {
     if (args.empty()) {
         print_usage();
         return 1;
+    }
+
+    if (args[0] == "--version") {
+        // БАГ-ФИКС: раньше версии движка/GUI в SettingsModal.tsx/AppHeader.tsx/
+        // Titlebar.tsx/StatusBar.tsx были захардкожены заглушками из демо-
+        // прототипа ("2.4.1", "GUI v2.1.0", "build a3f9c2") и никогда не
+        // совпадали с реальным version.hpp ("NanoDecompiler v1.6.1 BETA") -
+        // мгновенный флаг без запуска jar/сервера, чтобы GUI мог спросить
+        // движок напрямую вместо хардкода.
+        std::cout << "{\"version\":\"" << NANO_DECOMPILER_VERSION << "\"}\n";
+        return 0;
     }
 
     if (args[0] == "--jar-summary") {

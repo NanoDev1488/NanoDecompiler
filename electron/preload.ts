@@ -23,13 +23,20 @@ export type AppSettings = {
 };
 
 contextBridge.exposeInMainWorld("nano", {
-  selectJar: (): Promise<string | null> => ipcRenderer.invoke("dialog:selectJar"),
+  selectJar: (): Promise<string[]> => ipcRenderer.invoke("dialog:selectJar"),
   selectOutDir: (defaultPath?: string): Promise<string | null> =>
     ipcRenderer.invoke("dialog:selectOutDir", defaultPath),
   openPath: (target: string): Promise<void> => ipcRenderer.invoke("shell:openPath", target),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke("shell:openExternal", url),
   openInVSCode: (target: string): Promise<ShellResult> => ipcRenderer.invoke("shell:openInVSCode", target),
   jarSummary: (jarPath: string): Promise<JarSummary> => ipcRenderer.invoke("jar:summary", jarPath),
+  getEngineVersion: (): Promise<{ ok: boolean; version?: string; error?: string }> =>
+    ipcRenderer.invoke("engine:version"),
+  getGuiVersion: (): Promise<string> => ipcRenderer.invoke("gui:version"),
+  checkEnv: (): Promise<{
+    java: { ok: boolean; text?: string };
+    maven: { ok: boolean; text?: string };
+  }> => ipcRenderer.invoke("env:check"),
   runDecompile: (jarPath: string, outDir: string): Promise<RunResult> =>
     ipcRenderer.invoke("run:decompile", jarPath, outDir),
   cancel: (): Promise<boolean> => ipcRenderer.invoke("run:cancel"),

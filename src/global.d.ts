@@ -3,7 +3,7 @@ export {};
 declare global {
   interface Window {
     nano: {
-      selectJar: () => Promise<string | null>;
+      selectJar: () => Promise<string[]>;
       selectOutDir: (defaultPath?: string) => Promise<string | null>;
       openPath: (target: string) => Promise<void>;
       openExternal: (url: string) => Promise<void>;
@@ -17,6 +17,8 @@ declare global {
         plugin_name: string | null;
         error?: string;
       }>;
+      getEngineVersion: () => Promise<{ ok: boolean; version?: string; error?: string }>;
+      getGuiVersion: () => Promise<string>;
       runDecompile: (
         jarPath: string,
         outDir: string

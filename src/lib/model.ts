@@ -55,6 +55,9 @@ export interface Settings {
    * визуальные: CLI принимает только [jarPath, outDir, --no-legitimacy-check?].
    * persisted в main-процессе через settings:get/settings:set. */
   legitimacyCheck: boolean;
+  /** второе персистящееся поле - включает автопроверку обновлений при
+   * старте (см. saveSettings/settings:set). */
+  autoUpdateCheck: boolean;
 }
 
 export type ToastKind = LogLevel;
