@@ -154,12 +154,12 @@ export function SettingsModal() {
                   javaEnv === null
                     ? "проверяю…"
                     : envIssue
-                      ? "JRE не найдена в PATH — движок не запустится"
+                      ? "не найдена в PATH — не блокирует декомпиляцию, нужна только для ручной сборки (mvn compile) сгенерированного проекта"
                       : (javaEnv.text ?? "найдена")
                 }
                 control={
                   envIssue ? (
-                    <button className="btn btn-err h-7 text-[11.5px]" onClick={resolveEnvIssue}>
+                    <button className="btn btn-tonal h-7 text-[11.5px]" onClick={resolveEnvIssue}>
                       Проверить снова
                     </button>
                   ) : (
@@ -177,8 +177,8 @@ export function SettingsModal() {
                   mavenEnv === null
                     ? "проверяю…"
                     : mavenEnv.ok
-                      ? (mavenEnv.text ?? "найден") + " · нужен для верификации через recompile"
-                      : "не найден — верификация через recompile недоступна"
+                      ? (mavenEnv.text ?? "найден") + " · нужен только для ручной сборки (mvn compile), не для декомпиляции"
+                      : "не найден — не блокирует декомпиляцию, нужен только для ручной сборки"
                 }
                 control={
                   <span className={cn("chip", !mavenEnv?.ok ? "opacity-40" : "border-acid/35 text-acid")}>

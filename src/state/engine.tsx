@@ -181,16 +181,17 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   );
 
   const checkEnv = useCallback(() => {
+    // БАГ-ФИКС: раньше не сбрасывал javaEnv/mavenEnv перед перепроверкой -
+    // UI продолжал показывать старое значение, пока идёт новый запрос, из-за
+    // чего клик по "Проверить снова" выглядел так, будто ничего не
+    // происходит (нет "проверяю…" между кликом и ответом).
+    setJavaEnv(null);
+    setMavenEnv(null);
     window.nano
       .checkEnv()
       .then(r => {
         setJavaEnv(r.java);
         setMavenEnv(r.maven);
-        // Java нужна ТОЛЬКО для верификации через mvn recompile (см.
-        // verify.cpp) - сама декомпиляция чисто C++ и Java не требует, но
-        // envIssue исторически завязан именно на Java (UI формулирует это
-        // как "движок не запустится" - неточно, но пусть решается
-        // отдельно от этого фикса, чтобы не расширять объём правки).
         setEnvIssue(!r.java.ok);
       })
       .catch(() => {
@@ -474,10 +475,14 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   runRef.current = run;
 
   const startQueue = useCallback(() => {
-    if (envIssue) {
-      toast("Java Runtime не найдена — движку нужен JRE 17+. Проверьте окружение в настройках.", "err");
-      return;
-    }
+    // БАГ-ФИКС: раньше здесь была жёсткая блокировка "if (envIssue) return"
+    // с сообщением "движку нужен JRE 17+" - ЛОЖЬ: движок написан на чистом
+    // C++17, для самой декомпиляции Java не требуется вообще. Java/Maven
+    // нужны ТОЛЬКО если пользователь сам захочет вручную собрать
+    // сгенерированный Maven-проект (mvn compile) уже ПОСЛЕ декомпиляции -
+    // это никак не влияет на работу самого движка. Эта блокировка не
+    // просто показывала неверный текст, а реально не давала запустить
+    // декомпиляцию на машинах без Java - самый severe баг из всех.
     if (runningIdRef.current) return;
     const next = jobsRef.current.find(
       j => j.status === "queued" || j.status === "canceled" || j.status === "failed",
@@ -487,7 +492,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       return;
     }
     runRef.current(next.id);
-  }, [envIssue, toast]);
+  }, [toast]);
 
   const stopRunning = useCallback(() => {
     const id = runningIdRef.current;

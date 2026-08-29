@@ -21,10 +21,10 @@ export function StatusBar() {
         ) : envIssue ? (
           <button
             onClick={resolveEnvIssue}
-            className="flex items-center gap-1 text-err hover:text-ink"
-            title="Проверить снова"
+            className="flex items-center gap-1 text-faint hover:text-ink"
+            title="Java не нужна для декомпиляции - только для ручной сборки (mvn compile). Проверить снова"
           >
-            <TriangleAlert size={11} />
+            <TriangleAlert size={11} className="text-warn/70" />
             java: не найдена
           </button>
         ) : (
