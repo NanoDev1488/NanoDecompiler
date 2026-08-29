@@ -11,10 +11,14 @@ resources/engine/*.spec
 resources/engine/__pycache__/
 **/__pycache__/
 *.pyc
-# NanoDecompilerCLI.exe встраивается ПРЯМО в resources/engine/ при сборке
+# NanoDecompilerCLI/.exe встраивается ПРЯМО в resources/engine/ при сборке
 # клиента (см. .github/workflows/build-and-release.yml::build-client) -
 # генерируется в CI, никогда не коммитится.
+# БАГ-ФИКС: раньше игнорировался только .exe (Windows) - голый
+# NanoDecompilerCLI без расширения (Linux/macOS) мог случайно закоммититься
+# при локальной сборке на этих ОС.
 resources/engine/NanoDecompilerCLI.exe
+resources/engine/NanoDecompilerCLI
 resources/engine/.engine-api-version
 release-files/versions.json
 

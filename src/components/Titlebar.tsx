@@ -1,20 +1,32 @@
 import { Minus, Square, X } from "lucide-react";
 import { useEngine } from "../state/engine";
 
-function LogoMark() {
+// БАГ-ФИКС/фича: раньше был статичный мотив "раскрытых скобок" - тот же
+// стиль, что и в старой заглушке иконки приложения, которую заменили по
+// прямой просьбе пользователя ("это ПОЛНЕЙШЕЕ ГОВНО"). Теперь мини-лого
+// живо отражает выбранную в настройках иконку приложения (Settings.appIcon)
+// вместо одного захардкоженного варианта.
+function LogoMark({ variant }: { variant: "terminal" | "layers" }) {
   return (
     <span className="grid size-[22px] flex-none place-items-center rounded-[6px] border border-acid/35 bg-acid/10">
-      {/* раскрытые скобки: jar раскрывается в исходник */}
-      <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
-        <path d="M4.5 2 2 6l2.5 4" stroke="#9bf246" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M7.5 2 10 6l-2.5 4" stroke="#9bf246" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" opacity=".45" />
-      </svg>
+      {variant === "terminal" ? (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <path d="M5 6.5 10.5 12 5 17.5" stroke="#9bf246" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M13 17.5h6" stroke="#eaf0ea" strokeWidth="2.4" strokeLinecap="round" />
+        </svg>
+      ) : (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <path d="M4 8 12 4l8 4-8 4-8-4Z" stroke="#eaf0ea" strokeWidth="1.6" strokeLinejoin="round" opacity=".85" />
+          <path d="M4 12l8 4 8-4" stroke="#9bf246" strokeWidth="1.6" strokeLinejoin="round" />
+          <path d="M4 16l8 4 8-4" stroke="#eaf0ea" strokeWidth="1.6" strokeLinejoin="round" opacity=".5" />
+        </svg>
+      )}
     </span>
   );
 }
 
 export function Titlebar() {
-  const { runningJob, selectedJob, toast, guiVersion } = useEngine();
+  const { runningJob, selectedJob, toast, guiVersion, settings } = useEngine();
 
   const center = runningJob
     ? `декомпиляция: ${runningJob.fileName}`
@@ -27,7 +39,7 @@ export function Titlebar() {
   return (
     <header className="flex h-9 flex-none items-center gap-3 border-b border-line bg-bg px-3 select-none">
       <div className="flex items-center gap-2">
-        <LogoMark />
+        <LogoMark variant={settings.appIcon} />
         <span className="mono text-[12px] font-semibold tracking-tight text-ink">
           NanoDecompiler
         </span>

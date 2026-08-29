@@ -58,6 +58,10 @@ export interface Settings {
   /** второе персистящееся поле - включает автопроверку обновлений при
    * старте (см. saveSettings/settings:set). */
   autoUpdateCheck: boolean;
+  /** живой лого-марк в шапке + иконка окна/панели задач (Windows/Linux) -
+   * НЕ сама иконка .exe/.app в проводнике, ту в рантайме не поменять
+   * (ограничение ОС - зашивается при сборке). */
+  appIcon: "terminal" | "layers";
 }
 
 export type ToastKind = LogLevel;

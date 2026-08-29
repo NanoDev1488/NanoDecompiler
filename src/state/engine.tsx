@@ -67,6 +67,7 @@ interface EngineApi {
   guiVersion: string | null;
   javaEnv: { ok: boolean; text?: string } | null;
   mavenEnv: { ok: boolean; text?: string } | null;
+  iconThumbnails: { terminal: string | null; layers: string | null };
   updateInfo: UpdateInfo;
   toasts: Toast[];
   queuedCount: number;
@@ -110,6 +111,7 @@ const DEFAULT_SETTINGS: Settings = {
   openFolderOnDone: false,
   legitimacyCheck: true,
   autoUpdateCheck: true,
+  appIcon: "terminal",
 };
 
 export interface UpdateInfo {
@@ -150,6 +152,10 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   // дочерний процесс.
   const [javaEnv, setJavaEnv] = useState<{ ok: boolean; text?: string } | null>(null);
   const [mavenEnv, setMavenEnv] = useState<{ ok: boolean; text?: string } | null>(null);
+  const [iconThumbnails, setIconThumbnails] = useState<{ terminal: string | null; layers: string | null }>({
+    terminal: null,
+    layers: null,
+  });
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [runningElapsed, setRunningElapsed] = useState<number | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
@@ -260,7 +266,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       .getSettings()
       .then(s => {
         if (cancelled) return;
-        setSettings(prev => ({ ...prev, legitimacyCheck: s.legitimacyCheck, autoUpdateCheck: s.autoUpdateCheck }));
+        setSettings(prev => ({ ...prev, legitimacyCheck: s.legitimacyCheck, autoUpdateCheck: s.autoUpdateCheck, appIcon: s.appIcon }));
         // Автопроверка обновлений при старте - только ПОСЛЕ того, как
         // узнали настоящее значение из настроек (не дефолт), иначе
         // выключенная пользователем автопроверка на миг игнорировалась бы.
@@ -301,6 +307,19 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       .getGuiVersion()
       .then(v => {
         if (!cancelled) setGuiVersion(v);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    window.nano
+      .getAppIconThumbnails()
+      .then(t => {
+        if (!cancelled) setIconThumbnails(t);
       })
       .catch(() => {});
     return () => {
@@ -654,7 +673,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     (next: Settings) => {
       setSettings(next);
       setSettingsOpen(false);
-      window.nano.setSettings({ legitimacyCheck: next.legitimacyCheck, autoUpdateCheck: next.autoUpdateCheck }).catch(() => {});
+      window.nano.setSettings({ legitimacyCheck: next.legitimacyCheck, autoUpdateCheck: next.autoUpdateCheck, appIcon: next.appIcon }).catch(() => {});
       toast("Настройки сохранены", "ok");
     },
     [toast],
@@ -719,7 +738,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
   const api: EngineApi = {
     jobs, log, runningJob, runningElapsed, selectedJobId, selectedJob, openFileByJob,
-    terminalOpen, logFilter, settings, settingsOpen, updateModalOpen, paletteOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, updateInfo, toasts, queuedCount,
+    terminalOpen, logFilter, settings, settingsOpen, updateModalOpen, paletteOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, iconThumbnails, updateInfo, toasts, queuedCount,
     addFiles, openFileDialog, startQueue, stopRunning, cancelJob, removeJob, clearQueue,
     selectJob, selectFile, setLogFilter, toggleTerminal, clearLog, copyLog, copyText,
     openOutput, setSettingsOpen, setUpdateModalOpen, saveSettings, setPaletteOpen,

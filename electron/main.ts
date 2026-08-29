@@ -29,8 +29,15 @@ const isDev = !app.isPackaged;
 type Settings = {
   legitimacyCheck: boolean;
   autoUpdateCheck: boolean;
+  // Живой лого-марк в шапке приложения + иконка окна/панели задач (см.
+  // setAppIcon ниже) - выбор пользователя между двумя вариантами дизайна.
+  // ВАЖНО: это НЕ иконка самого .exe/.app в проводнике/при первом запуске -
+  // та зашивается в бинарник electron-builder'ом на этапе СБОРКИ и в
+  // рантайме поменяться не может ни при каких обстоятельствах (ограничение
+  // ОС, не наше) - честно объяснено в UI, не только здесь в комментарии.
+  appIcon: "terminal" | "layers";
 };
-const DEFAULT_SETTINGS: Settings = { legitimacyCheck: true, autoUpdateCheck: true };
+const DEFAULT_SETTINGS: Settings = { legitimacyCheck: true, autoUpdateCheck: true, appIcon: "terminal" };
 
 function settingsPath(): string {
   return path.join(app.getPath("userData"), "settings.json");
@@ -47,6 +54,7 @@ function loadSettings(): Settings {
     return {
       legitimacyCheck: typeof parsed.legitimacyCheck === "boolean" ? parsed.legitimacyCheck : DEFAULT_SETTINGS.legitimacyCheck,
       autoUpdateCheck: typeof parsed.autoUpdateCheck === "boolean" ? parsed.autoUpdateCheck : DEFAULT_SETTINGS.autoUpdateCheck,
+      appIcon: parsed.appIcon === "terminal" || parsed.appIcon === "layers" ? parsed.appIcon : DEFAULT_SETTINGS.appIcon,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -55,6 +63,36 @@ function loadSettings(): Settings {
 
 function saveSettings(s: Settings): void {
   fs.writeFileSync(settingsPath(), JSON.stringify(s, null, 2), "utf-8");
+}
+
+// БАГ-ФИКС/фича: выбор иконки приложения (см. Settings.appIcon выше).
+// iconsDir() зеркалит engineDir() - dev режим читает прямо из resources/,
+// упакованный - из resourcesPath (electron-builder кладёт extraResources
+// туда же).
+function iconsDir(): string {
+  return isDev ? path.join(__dirname, "..", "resources", "icons") : path.join(process.resourcesPath, "icons");
+}
+
+function iconPathFor(choice: Settings["appIcon"]): string {
+  const name = choice === "layers" ? "icon-e-layers.png" : "icon-b-terminal.png";
+  return path.join(iconsDir(), name);
+}
+
+// Применяет выбранную иконку к окну/панели задач ЖИВЬЁМ, без перезапуска -
+// работает на Windows/Linux (Electron setIcon() поддерживается там), на
+// macOS дока-иконку так поменять нельзя (ограничение самой ОС - dock icon
+// определяется Info.plist упакованного .app) - см. честную подпись в UI
+// (SettingsModal), а не молчаливое "не сработало". Сам .exe/.app остаётся
+// с той иконкой, что была на момент сборки - это отдельный,
+// непреодолимый в рантайме случай, см. комментарий у Settings.appIcon.
+function applyAppIcon(choice: Settings["appIcon"]): void {
+  if (process.platform === "darwin") return;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    mainWindow.setIcon(iconPathFor(choice));
+  } catch {
+    // молча игнорируем - косметика, не должна ронять приложение
+  }
 }
 
 function engineDir(): string {
@@ -92,8 +130,14 @@ function createWindow() {
     height: 760,
     minWidth: 860,
     minHeight: 560,
-    backgroundColor: "#0a0d0b", // --surface из styles.css (терминал+MD3 слияние)
+    // БАГ-ФИКС: было #0a0d0b с комментарием "из styles.css" - этот файл
+    // заменён на index.css при интеграции нового GUI в этой сессии, и
+    // реальный --color-surface там #0c100d, не #0a0d0b - несовпадение
+    // давало едва заметную вспышку неверного фона на долю секунды перед
+    // отрисовкой контента.
+    backgroundColor: "#0c100d", // --color-surface из index.css
     autoHideMenuBar: true,
+    icon: iconPathFor(loadSettings().appIcon),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -122,7 +166,27 @@ ipcMain.handle("settings:get", async (): Promise<Settings> => loadSettings());
 ipcMain.handle("settings:set", async (_e, partial: Partial<Settings>): Promise<Settings> => {
   const merged = { ...loadSettings(), ...partial };
   saveSettings(merged);
+  if (partial.appIcon) applyAppIcon(merged.appIcon);
   return merged;
+});
+
+// Превью для пикера иконок в настройках - как base64 data URI, а не
+// прямой file:// путь: рендерер работает с contextIsolation:true и
+// webSecurity включён по умолчанию, произвольные file:// пути внутри
+// него не гарантированно отрисуются в упакованной сборке (зависит от
+// платформы/протокола) - base64 работает всегда, независимо от этого.
+ipcMain.handle("appIcon:thumbnails", async () => {
+  const read = (name: string) => {
+    try {
+      return `data:image/png;base64,${fs.readFileSync(path.join(iconsDir(), name)).toString("base64")}`;
+    } catch {
+      return null;
+    }
+  };
+  return {
+    terminal: read("icon-b-terminal-thumb.png"),
+    layers: read("icon-e-layers-thumb.png"),
+  };
 });
 
 ipcMain.handle("dialog:selectJar", async () => {

@@ -52,6 +52,7 @@ export function SettingsModal() {
     guiVersion,
     javaEnv,
     mavenEnv,
+    iconThumbnails,
     toast,
   } = useEngine();
   const [draft, setDraft] = useState(settings);
@@ -189,6 +190,46 @@ export function SettingsModal() {
             </div>
 
             {/* пути */}
+            {/* иконка приложения - живой лого-марк в шапке + иконка окна/
+                панели задач на Windows/Linux. Честно НЕ обещаем поменять
+                саму иконку .exe/.app в проводнике - это зашивается при
+                сборке, в рантайме невозможно ни при каких обстоятельствах. */}
+            <p className="kicker pt-4 pb-2">Иконка приложения</p>
+            <div className="rounded-xl border border-line bg-bg px-3.5 py-3">
+              <div className="flex gap-3">
+                {(
+                  [
+                    { key: "terminal" as const, label: "Консоль", thumb: iconThumbnails.terminal },
+                    { key: "layers" as const, label: "Слои", thumb: iconThumbnails.layers },
+                  ]
+                ).map(opt => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setDraft(d => ({ ...d, appIcon: opt.key }))}
+                    className={cn(
+                      "flex flex-1 flex-col items-center gap-2 rounded-lg border px-3 py-3 transition-colors",
+                      draft.appIcon === opt.key
+                        ? "border-acid/50 bg-acid/5"
+                        : "border-line hover:border-line-strong",
+                    )}
+                  >
+                    {opt.thumb ? (
+                      <img src={opt.thumb} alt={opt.label} className="size-12 rounded-[10px]" />
+                    ) : (
+                      <div className="size-12 rounded-[10px] bg-raised" />
+                    )}
+                    <span className={cn("text-[11.5px]", draft.appIcon === opt.key ? "text-acid" : "text-dim")}>
+                      {opt.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-3 text-[10.5px] leading-relaxed text-faint">
+                Меняет логотип в шапке приложения и иконку окна сразу. Иконку .exe/.app в проводнике/панели задач при
+                установке это не затрагивает — она задаётся при сборке приложения.
+              </p>
+            </div>
+
             <p className="kicker pt-4 pb-2">Пути</p>
             <div className="rounded-xl border border-line bg-bg px-3 py-2.5">
               <p className="mb-1.5 text-[12.5px] text-ink/90">Папка результата</p>

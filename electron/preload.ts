@@ -20,6 +20,7 @@ export type JarSummary = {
 export type AppSettings = {
   legitimacyCheck: boolean;
   autoUpdateCheck: boolean;
+  appIcon: "terminal" | "layers";
 };
 
 contextBridge.exposeInMainWorld("nano", {
@@ -33,6 +34,8 @@ contextBridge.exposeInMainWorld("nano", {
   getEngineVersion: (): Promise<{ ok: boolean; version?: string; error?: string }> =>
     ipcRenderer.invoke("engine:version"),
   getGuiVersion: (): Promise<string> => ipcRenderer.invoke("gui:version"),
+  getAppIconThumbnails: (): Promise<{ terminal: string | null; layers: string | null }> =>
+    ipcRenderer.invoke("appIcon:thumbnails"),
   checkEnv: (): Promise<{
     java: { ok: boolean; text?: string };
     maven: { ok: boolean; text?: string };
