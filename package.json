@@ -61,6 +61,9 @@
       "target": "dmg",
       "icon": "resources/engine/icon.png",
       "identity": null
-    }
+    },
+    "afterPack": "scripts/afterPack.cjs",
+    "compression": "maximum",
+    "asar": true
   }
 }

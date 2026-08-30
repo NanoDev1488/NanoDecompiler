@@ -2,6 +2,7 @@ import { app, ipcMain, shell } from "electron";
 import * as https from "https";
 import * as fs from "fs";
 import * as path from "path";
+import * as crypto from "crypto";
 import { spawn } from "child_process";
 
 // Подтверждено пользователем: реальный владелец/репозиторий (не заглушка).
@@ -20,6 +21,27 @@ interface GhRelease {
 interface VersionsJson {
   client: string;
   api: string;
+}
+// checksums.json (см. build-and-release.yml) - плоская мапа
+// "имя-файла-в-релизе" -> "sha256 hex". Ключи - буквально то же имя, что
+// у release-ассета (напр. "NanoDecompilerClApi-windows.exe").
+type ChecksumsJson = Record<string, string>;
+
+// SHA256 локального файла - для сверки с checksums.json ДО скачивания
+// (не качать заново, если содержимое не изменилось) и ПОСЛЕ (защита от
+// оборванного/битого скачивания - см. update:apply ниже).
+function sha256File(filePath: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    try {
+      const hash = crypto.createHash("sha256");
+      const stream = fs.createReadStream(filePath);
+      stream.on("data", (chunk) => hash.update(chunk));
+      stream.on("end", () => resolve(hash.digest("hex")));
+      stream.on("error", () => resolve(null));
+    } catch {
+      resolve(null);
+    }
+  });
 }
 
 // БАГ-ФИКС: раньше здесь искался ассет "NanoDecompilerCLI.exe" - имя из
@@ -345,11 +367,31 @@ export function registerUpdateHandlers(
         `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`
       );
       const versionsAsset = release.assets.find((a) => a.name === "versions.json");
+      const checksumsAsset = release.assets.find((a) => a.name === "checksums.json");
       const cliAsset = ENGINE_ASSET_NAME ? release.assets.find((a) => a.name === ENGINE_ASSET_NAME) : undefined;
       const setupAsset = release.assets.find((a) => clientAssetPattern().test(a.name));
 
       const currentClientVersion = app.getVersion();
       const installedApiVersion = await resolveInstalledApiVersion(engineDir(), engineInvocation);
+
+      // По просьбе пользователя: сверяем SHA256 движка с checksums.json
+      // релиза ДО того, как вообще предлагать обновление - если бинарник
+      // на диске побайтово совпадает с тем, что в релизе (даже если
+      // версионная строка почему-то разошлась - редкий, но возможный
+      // случай), апдейт движка не предлагаем вообще, нечего качать.
+      let engineHashMatches = false;
+      if (checksumsAsset && cliAsset) {
+        try {
+          const checksums = await httpsGetJson<ChecksumsJson>(checksumsAsset.browser_download_url);
+          const expectedHash = checksums[cliAsset.name];
+          const localBin = path.join(engineDir(), ENGINE_ASSET_NAME ?? "NanoDecompilerCLI");
+          const localHash = expectedHash ? await sha256File(localBin) : null;
+          engineHashMatches = !!expectedHash && !!localHash && expectedHash === localHash;
+        } catch {
+          // checksums.json недоступен/битый - не блокируем обновление
+          // из-за этого, просто не получаем доп. проверку.
+        }
+      }
 
       if (!versionsAsset) {
         // Старый релиз без versions.json (см. HANDOFF_16) - не можем
@@ -382,7 +424,7 @@ export function registerUpdateHandlers(
       // на Windows, пока build-api был Windows-only job'ом).
       let updateKind: "none" | "engine" | "client" = "none";
       if (clientNeedsUpdate) updateKind = "client";
-      else if (apiNeedsUpdate && cliAsset) updateKind = "engine";
+      else if (apiNeedsUpdate && cliAsset && !engineHashMatches) updateKind = "engine";
 
       return {
         ok: true,
@@ -409,16 +451,47 @@ export function registerUpdateHandlers(
     try {
       const dir = engineDir();
       const dest = path.join(dir, ENGINE_ASSET_NAME ?? "NanoDecompilerCLI");
-      // Движок вызывается ТОЛЬКО как дочерний процесс (spawn) - см.
-      // electron/main.ts::run:decompile/tools:install - между вызовами
-      // файл никем не заблокирован. Если apply вызван ПОКА идёт
-      // декомпиляция - перезапись может упасть с EBUSY/EPERM - вызывающая
-      // сторона (App.tsx) должна дождаться завершения текущей операции
-      // перед вызовом apply (уже сделано - кнопка "Обновить" задизейблена,
-      // пока status === "running").
-      await httpsDownloadFile(downloadUrl, dest, (downloaded, total) => {
+      // БАГ-ФИКС/фича: скачиваем во ВРЕМЕННЫЙ файл, а не сразу поверх
+      // рабочего движка - если скачивание оборвётся/повредится (см.
+      // "движок завершился с кодом N без вывода - возможно, файл повреждён
+      // при скачивании" в main.ts), рабочая копия остаётся нетронутой.
+      // После скачивания сверяем SHA256 с checksums.json релиза - только
+      // при совпадении делаем rename поверх рабочего файла (атомарно на
+      // одной файловой системе).
+      const tmpDest = dest + ".download";
+      await httpsDownloadFile(downloadUrl, tmpDest, (downloaded, total) => {
         event.sender.send("update:downloadProgress", { downloaded, total, kind: "engine" });
       });
+
+      try {
+        const release = await httpsGetJson<GhRelease>(
+          `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`
+        );
+        const checksumsAsset = release.assets.find((a) => a.name === "checksums.json");
+        const assetName = ENGINE_ASSET_NAME ?? path.basename(dest);
+        if (checksumsAsset) {
+          const checksums = await httpsGetJson<ChecksumsJson>(checksumsAsset.browser_download_url);
+          const expected = checksums[assetName];
+          const actual = await sha256File(tmpDest);
+          if (expected && actual && expected !== actual) {
+            fs.unlinkSync(tmpDest);
+            return { ok: false, error: "скачанный файл повреждён (SHA256 не совпадает) - попробуйте ещё раз" };
+          }
+        }
+      } catch {
+        // checksums.json недоступен - не блокируем обновление из-за этого
+        // (лучше применить непроверенное обновление, чем не обновиться
+        // вовсе, раз основной httpsDownloadFile уже завершился без ошибки).
+      }
+
+      fs.renameSync(tmpDest, dest);
+      if (process.platform !== "win32") {
+        try {
+          fs.chmodSync(dest, 0o755);
+        } catch {
+          // не критично - если бинарник уже был +x, rename сохраняет права
+        }
+      }
       if (latestApiVersion) {
         writeInstalledApiVersion(dir, latestApiVersion);
       }

@@ -91,13 +91,14 @@ export function AppHeader() {
       </button>
 
       <button
-        className="icon-btn relative"
+        className="icon-btn relative flex items-center gap-1.5 px-2"
         onClick={() => setUpdateModalOpen(true)}
         aria-label="Обновления"
         title="Обновления"
       >
         <Bell size={16} />
-        {hasUpdate && <span className="absolute top-1 right-1 size-[7px] rounded-full bg-acid" />}
+        <span className="hidden text-[11.5px] text-dim sm:inline">Обновления</span>
+        {hasUpdate && <span className="absolute top-1 right-1.5 size-[7px] rounded-full bg-acid" />}
       </button>
 
       <button

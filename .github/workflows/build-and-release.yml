@@ -399,6 +399,33 @@ jobs:
         run: |
           printf '{"client":"%s","api":"%s"}' "$CLIENT_VERSION" "$API_VERSION" > release-files/versions.json
 
+      # По просьбе пользователя: апдейтер сверяет SHA256 перед скачиванием
+      # (не качать заново, если хэш совпадает с уже установленным - файл
+      # не менялся) и ПОСЛЕ скачивания (защита от битого/оборванного
+      # скачивания - раньше подозрительно похожий на это симптом уже
+      # всплывал как "движок завершился с кодом N без вывода").
+      - name: Сгенерировать checksums.json (SHA256 всех артефактов)
+        shell: bash
+        run: |
+          python3 - <<'PYEOF'
+          import hashlib, json, os
+          out = {}
+          for name in os.listdir("release-files"):
+              if name in ("versions.json", "checksums.json"):
+                  continue
+              path = os.path.join("release-files", name)
+              if not os.path.isfile(path):
+                  continue
+              h = hashlib.sha256()
+              with open(path, "rb") as f:
+                  for chunk in iter(lambda: f.read(1 << 20), b""):
+                      h.update(chunk)
+              out[name] = h.hexdigest()
+          with open("release-files/checksums.json", "w") as f:
+              json.dump(out, f, indent=2)
+          print(json.dumps(out, indent=2))
+          PYEOF
+
       - name: Публикация ОДНОГО релиза со всеми файлами и текстом
         uses: softprops/action-gh-release@v2
         with:

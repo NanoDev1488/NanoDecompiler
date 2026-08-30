@@ -314,6 +314,18 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
     // Запоминаем последнюю такую строку, чтобы отдать её как реальный
     // error вместо generic-сообщения.
     let lastReasonLine: string | null = null;
+    // БАГ-ФИКС: если движок падает БЕЗ единой строки "[!] ..." (например,
+    // чистый крэш на уровне ОС на Windows - antivirus quarantine, missing
+    // dependency и т.п., без единого байта полезного вывода) -
+    // lastReasonLine оставался null, и пользователь видел бесполезное
+    // "движок завершился с кодом N" без единой зацепки для диагностики.
+    // Держим последние несколько строк ЛЮБОГО вывода как запасной вариант.
+    const recentLines: string[] = [];
+    const rememberRecent = (line: string) => {
+      if (!line.trim()) return;
+      recentLines.push(line);
+      if (recentLines.length > 5) recentLines.shift();
+    };
     // Батчим строки лога вместо отправки КАЖДОЙ отдельным IPC-сообщением -
     // на jar с тысячами методов движок может выдать сотни строк за долю
     // секунды, и раньше каждая строка = отдельный IPC round-trip +
@@ -340,6 +352,7 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
       else bufErr = rest;
       for (const line of lines) {
         if (line.startsWith("[!] ")) lastReasonLine = line.slice(4);
+        rememberRecent(line);
         pendingLines.push({ line, stream });
       }
       if (pendingLines.length > 0) scheduleFlush();
@@ -354,12 +367,18 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
       if (flushTimer) clearTimeout(flushTimer);
       if (pendingLines.length > 0) send("run:log", { lines: pendingLines });
       runningProc = null;
-      resolve({ ok: code === 0, code, outDir, error: code !== 0 ? (lastReasonLine ?? undefined) : undefined });
+      const fallbackError =
+        lastReasonLine ?? (recentLines.length > 0 ? recentLines.join(" | ") : `движок завершился с кодом ${code} без вывода - возможно, антивирус блокирует запуск, или файл повреждён при скачивании`);
+      resolve({ ok: code === 0, code, outDir, error: code !== 0 ? fallbackError : undefined });
     });
 
     proc.on("error", (err) => {
+      // spawn() провалился на уровне ОС (ENOENT - файл не найден,
+      // EACCES - нет прав на выполнение) - раньше это тоже уходило в
+      // generic "код N", хотя код здесь даже не появится (процесс не
+      // стартовал вовсе).
       runningProc = null;
-      resolve({ ok: false, error: String(err) });
+      resolve({ ok: false, code: null, outDir, error: `не удалось запустить движок: ${err.message}` });
     });
   });
 });
@@ -381,28 +400,94 @@ let cachedEngineVersion: string | null = null;
 // единого реального вызова java/mvn где-либо в проекте. Настоящая
 // проверка через дочерний процесс - оба инструмента при --version часто
 // пишут в stderr (особенно java), поэтому собираем оба потока.
+// БАГ-ФИКС (реальный, воспроизведён на Windows): spawn(cmd, args) БЕЗ
+// shell:true на Windows не находит .cmd/.bat-обёртки - а Maven на Windows
+// ВСЕГДА ставится как mvn.cmd, никогда как mvn.exe! Java обычно java.exe
+// (нашёлся бы и без shell), но некоторые менеджеры JDK (Scoop, sdkman для
+// Windows и т.п.) тоже шимят через .cmd - отсюда "оба установлены, но
+// пишет что их нету" именно на Windows. shell:true решает оба случая сразу.
 function checkVersionCmd(cmd: string, args: string[]): Promise<{ ok: boolean; text?: string }> {
   return new Promise((resolve) => {
     let out = "";
     let settled = false;
-    const proc = spawn(cmd, args, { env: { ...process.env } });
+    const proc = spawn(cmd, args, { env: { ...process.env }, shell: process.platform === "win32" });
     const finish = (ok: boolean) => {
       if (settled) return;
       settled = true;
       resolve({ ok, text: ok ? out.split(/\r?\n/)[0]?.trim() : undefined });
     };
-    proc.stdout.on("data", (d) => (out += d.toString("utf-8")));
-    proc.stderr.on("data", (d) => (out += d.toString("utf-8")));
-    proc.on("close", (code) => finish(code === 0 && out.trim().length > 0));
+    proc.stdout.on("data", (d: Buffer) => (out += d.toString("utf-8")));
+    proc.stderr.on("data", (d: Buffer) => (out += d.toString("utf-8")));
+    proc.on("close", (code: number) => finish(code === 0 && out.trim().length > 0));
     proc.on("error", () => finish(false));
   });
 }
 
+// Резервный поиск по стандартным путям установки, если PATH почему-то не
+// содержит java/mvn в окружении, унаследованном Electron-процессом (по
+// просьбе пользователя - "искать разные части"). НЕ отдельный C++/Rust-
+// бинарник: это чисто ОС-специфичный поиск файлов на диске, Node делает
+// это надёжно сам через fs/glob - заводить ради этого ещё один
+// компилируемый на 3 платформах артефакт добавило бы риска и веса сборки
+// без реальной пользы (это не байткод-логика, где нужен именно C++).
+function findFallbackBinary(names: string[], searchRoots: string[]): string | null {
+  for (const root of searchRoots) {
+    try {
+      if (!fs.existsSync(root)) continue;
+      const entries = fs.readdirSync(root, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        for (const name of names) {
+          const candidate = path.join(root, entry.name, "bin", name);
+          if (fs.existsSync(candidate)) return candidate;
+        }
+      }
+    } catch {
+      // недоступная директория - молча пропускаем, это лишь fallback
+    }
+  }
+  return null;
+}
+
+function javaSearchRoots(): string[] {
+  const roots: string[] = [];
+  if (process.env.JAVA_HOME) roots.push(path.join(process.env.JAVA_HOME, ".."));
+  if (process.platform === "win32") {
+    roots.push("C:\\Program Files\\Java", "C:\\Program Files\\Eclipse Adoptium", "C:\\Program Files\\Zulu");
+  } else if (process.platform === "darwin") {
+    roots.push("/Library/Java/JavaVirtualMachines", "/opt/homebrew/opt");
+  } else {
+    roots.push("/usr/lib/jvm");
+  }
+  return roots;
+}
+
+function mavenSearchRoots(): string[] {
+  const roots: string[] = [];
+  if (process.env.MAVEN_HOME) roots.push(path.join(process.env.MAVEN_HOME, ".."));
+  if (process.platform === "win32") {
+    roots.push("C:\\Program Files\\Apache\\maven", "C:\\apache-maven", "C:\\maven");
+  } else {
+    roots.push("/opt", "/usr/local");
+  }
+  return roots;
+}
+
 ipcMain.handle("env:check", async () => {
-  const [java, maven] = await Promise.all([
-    checkVersionCmd("java", ["-version"]),
-    checkVersionCmd("mvn", ["-version"]),
-  ]);
+  let java = await checkVersionCmd("java", ["-version"]);
+  let maven = await checkVersionCmd("mvn", ["-version"]);
+  // PATH-поиск не нашёл - пробуем стандартные пути установки напрямую по
+  // полному пути к бинарнику (спавн по абсолютному пути не зависит от
+  // PATH вообще, так что shell:true здесь не нужен для .exe, но нужен
+  // для .cmd на Windows - оставляем ту же логику через checkVersionCmd).
+  if (!java.ok) {
+    const found = findFallbackBinary(["java.exe", "java"], javaSearchRoots());
+    if (found) java = await checkVersionCmd(found, ["-version"]);
+  }
+  if (!maven.ok) {
+    const found = findFallbackBinary(["mvn.cmd", "mvn"], mavenSearchRoots());
+    if (found) maven = await checkVersionCmd(found, ["-version"]);
+  }
   return { java, maven };
 });
 
