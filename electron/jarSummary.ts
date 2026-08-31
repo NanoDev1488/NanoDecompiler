@@ -30,6 +30,7 @@ import * as zlib from "zlib";
 export type JarSummary = {
   name: string;
   size: string;
+  sizeBytes: number;
   classes: number;
   packages: number;
   java: string;
@@ -151,6 +152,7 @@ export function readJarSummaryNative(jarPath: string): JarSummary {
     return {
       name: path.basename(jarPath),
       size: formatSize(fileSize),
+      sizeBytes: fileSize,
       classes: classEntries.length,
       packages: packages.size,
       java,

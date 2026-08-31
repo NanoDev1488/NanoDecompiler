@@ -91,7 +91,6 @@ interface EngineApi {
   setUpdateModalOpen(open: boolean): void;
   saveSettings(next: Settings): void;
   setPaletteOpen(open: boolean): void;
-  toggleEnvIssue(): void;
   resolveEnvIssue(): void;
   checkForUpdates(silent?: boolean): void;
   applyEngineUpdate(): void;
@@ -549,11 +548,25 @@ export function EngineProvider({ children }: { children: ReactNode }) {
           window.nano
             .jarSummary(j.jarPath)
             .then(s => {
-              if (s.error) return;
-              const bytes = Number(s.size.replace(/[^\d]/g, "")) || 0;
-              patchJob(j.id, { classCount: s.classes, sizeBytes: bytes || j.sizeBytes });
+              if (s.error) {
+                toast(`Не удалось прочитать сводку по ${j.fileName}: ${s.error}`, "err");
+                return;
+              }
+              // БАГ-ФИКС: раньше байты доставали обратным regex-разбором уже
+              // ОТФОРМАТИРОВАННОЙ строки размера ("1.5 МБ" -> replace(/[^\d]/,"")
+              // стирал точку вместе с буквами -> "15", а не ~1500000) - реальное
+              // искажение на порядки. sizeBytes теперь отдельное числовое поле
+              // напрямую из jarSummary.ts/jar_summary.cpp, без реконструкции.
+              patchJob(j.id, { classCount: s.classes, sizeBytes: s.sizeBytes ?? j.sizeBytes });
             })
-            .catch(() => {});
+            .catch(e => {
+              // БАГ-ФИКС: раньше молча глотал любую ошибку - если jarSummary()
+              // падал (что угодно: битый jar, ошибка чтения и т.п.), карточка
+              // плагина вечно показывала "0 Б · 0 классов" без единой зацепки,
+              // что вообще пошло не так.
+              toast(`Не удалось прочитать сводку по ${j.fileName}`, "err");
+              console.error("jarSummary failed:", e);
+            });
         }
       }
     },
@@ -697,10 +710,6 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       .catch(() => {});
   }, [toast]);
 
-  const toggleEnvIssue = useCallback(() => {
-    setEnvIssue(v => !v);
-  }, []);
-
   // БАГ-ФИКС: раньше молча ставил envIssue=false без единой реальной
   // проверки ("окружение проверено" было ложью) - теперь реально
   // перезапрашивает java/mvn через checkEnv().
@@ -747,7 +756,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     addFiles, openFileDialog, startQueue, stopRunning, cancelJob, removeJob, clearQueue,
     selectJob, selectFile, setLogFilter, toggleTerminal, clearLog, copyLog, copyText,
     openOutput, setSettingsOpen, setUpdateModalOpen, saveSettings, setPaletteOpen,
-    toggleEnvIssue, resolveEnvIssue, checkForUpdates, applyEngineUpdate, openClientDownload, checkEnv, toast, dismissToast,
+    resolveEnvIssue, checkForUpdates, applyEngineUpdate, openClientDownload, checkEnv, toast, dismissToast,
   };
 
   return (

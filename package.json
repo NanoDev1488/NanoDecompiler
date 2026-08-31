@@ -1,6 +1,6 @@
 {
   "name": "nano-decompiler-gui",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "description": "NanoDecompiler — Electron/React GUI поверх C++ движка декомпиляции",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -41,7 +41,14 @@
     "extraResources": [
       {
         "from": "resources/engine",
-        "to": "engine"
+        "to": "engine",
+        "filter": [
+          "**/*",
+          "!*.md",
+          "!archive/**",
+          "!run.bat",
+          "!run.sh"
+        ]
       },
       {
         "from": "resources/icons",

@@ -32,6 +32,17 @@ target_link_libraries(NanoDecompilerCLI PRIVATE ZLIB::ZLIB)
 # extraResources, никакого установщика рядом с ним нет).
 if(MINGW)
   target_link_options(NanoDecompilerCLI PRIVATE -static -static-libgcc -static-libstdc++)
+  # БАГ-ФИКС (реальный, подозреваемая причина "движок вообще не запускается
+  # на чистой Windows" - код ошибки похож на STATUS_DLL_NOT_FOUND): api.cpp
+  # использует std::thread (для --api-server) - на "posix"-модели потоков
+  # MinGW (нужна для полноценного std::thread, в отличие от "win32"-модели)
+  # зависимость от libwinpthread-1.dll НЕ гарантированно покрывается одним
+  # только общим -static флагом на некоторых вариантах тулчейна - Windows
+  # подгружает ВСЕ DLL-зависимости exe при старте процесса целиком, даже
+  # если конкретный запуск (обычная декомпиляция) никогда не касается
+  # потокового кода API-сервера - без этой DLL рядом (и без её статической
+  # линковки) exe отказывается стартовать вообще, ещё до main().
+  target_link_options(NanoDecompilerCLI PRIVATE -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic)
   # БАГ-ФИКС: api.cpp использует Winsock (WSAStartup/socket/bind/... для
   # --api-server) под #ifdef _WIN32, но ws2_32 нигде не линковалась - на
   # MinGW линкер не подтягивает системные .lib неявно (в отличие от

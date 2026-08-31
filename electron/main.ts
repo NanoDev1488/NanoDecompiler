@@ -13,8 +13,23 @@ import { app, BrowserWindow, ipcMain, dialog, shell } from "electron";
 import { spawn, ChildProcessWithoutNullStreams } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
+import * as os from "os";
 import { registerUpdateHandlers } from "./updater";
 import { readJarSummaryNative } from "./jarSummary";
+
+// БАГ-ФИКС (реальный, воспроизведён пользователем на AntiX Linux -
+// "Read-only file system"): DEFAULT_SETTINGS.outputDir = "~/NanoDecompiler/out"
+// - тильда работает ТОЛЬКО в интерактивном shell, никогда при передаче
+// пути напрямую в std::filesystem/fs - буквальная "~" создавалась как
+// подпапка ОТНОСИТЕЛЬНО cwd движка (engineDir()), а в AppImage это
+// смонтированный squashfs-образ - физически read-only. На Windows "~"
+// вообще ничего не значит ни в каком контексте - та же причина там тоже
+// правдоподобно объясняет "движок не запускается" с самого начала.
+function expandHome(p: string): string {
+  if (p === "~") return os.homedir();
+  if (p.startsWith("~/") || p.startsWith("~\\")) return path.join(os.homedir(), p.slice(2));
+  return p;
+}
 
 let mainWindow: BrowserWindow | null = null;
 let runningProc: ChildProcessWithoutNullStreams | null = null;
@@ -137,6 +152,15 @@ function createWindow() {
     // отрисовкой контента.
     backgroundColor: "#0c100d", // --color-surface из index.css
     autoHideMenuBar: true,
+    // БАГ-ФИКС (реальный, воспроизведён пользователем - "х2 кнопок"):
+    // frame не был задан вообще -> ОС рисовала СВОИ системные кнопки
+    // (свернуть/развернуть/закрыть) НАД кастомным Titlebar.tsx, у которого
+    // были СВОИ, но фиктивные React-кнопки (только показывали toast,
+    // реально ничего не делали) - две пары кнопок разом, только нижняя
+    // (кастомная) не работала. frame:false убирает системную рамку целиком
+    // - кастомные кнопки внизу теперь единственные и реально подключены
+    // (см. window:minimize/maximize/close ниже).
+    frame: false,
     icon: iconPathFor(loadSettings().appIcon),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -222,7 +246,7 @@ ipcMain.handle("dialog:selectOutDir", async (_e, defaultPath?: string) => {
 });
 
 ipcMain.handle("shell:openPath", async (_e, target: string) => {
-  await shell.openPath(target);
+  await shell.openPath(expandHome(target));
 });
 
 ipcMain.handle("shell:openExternal", async (_e, url: string) => {
@@ -262,6 +286,7 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
   if (!fs.existsSync(jarPath)) {
     return { ok: false, error: "Файл .jar не найден: " + jarPath };
   }
+  outDir = expandHome(outDir);
 
   // HANDOFF_47: --headless убран совсем (был no-op в cli_main.cpp - см.
   // HANDOFF_46, движок и так никогда не пытается открыть GUI, вся
@@ -474,24 +499,40 @@ function mavenSearchRoots(): string[] {
 }
 
 ipcMain.handle("env:check", async () => {
-  let java = await checkVersionCmd("java", ["-version"]);
-  let maven = await checkVersionCmd("mvn", ["-version"]);
+  let java = await checkVersionCmd("java", ["--version"]);
+  let maven = await checkVersionCmd("mvn", ["--version"]);
   // PATH-поиск не нашёл - пробуем стандартные пути установки напрямую по
   // полному пути к бинарнику (спавн по абсолютному пути не зависит от
   // PATH вообще, так что shell:true здесь не нужен для .exe, но нужен
   // для .cmd на Windows - оставляем ту же логику через checkVersionCmd).
   if (!java.ok) {
     const found = findFallbackBinary(["java.exe", "java"], javaSearchRoots());
-    if (found) java = await checkVersionCmd(found, ["-version"]);
+    if (found) java = await checkVersionCmd(found, ["--version"]);
   }
   if (!maven.ok) {
     const found = findFallbackBinary(["mvn.cmd", "mvn"], mavenSearchRoots());
-    if (found) maven = await checkVersionCmd(found, ["-version"]);
+    if (found) maven = await checkVersionCmd(found, ["--version"]);
   }
   return { java, maven };
 });
 
 ipcMain.handle("gui:version", async () => app.getVersion());
+
+// Реальное управление окном для кастомного Titlebar.tsx - см. frame:false
+// выше (без родной рамки ОС нужно самим сворачивать/разворачивать/
+// закрывать через IPC, раньше эти кнопки были фиктивными заглушками).
+ipcMain.handle("window:minimize", async () => {
+  mainWindow?.minimize();
+});
+ipcMain.handle("window:toggleMaximize", async () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMaximized()) mainWindow.unmaximize();
+  else mainWindow.maximize();
+});
+ipcMain.handle("window:close", async () => {
+  mainWindow?.close();
+});
+ipcMain.handle("window:isMaximized", async () => mainWindow?.isMaximized() ?? false);
 
 ipcMain.handle("engine:version", async () => {
   if (cachedEngineVersion) return { ok: true, version: cachedEngineVersion };
@@ -601,7 +642,7 @@ ipcMain.handle("run:cancel", async () => {
 const MAX_TEXT_FILE_BYTES = 4 * 1024 * 1024; // 4 МБ - с запасом для любого разумного .java/.xml/.txt
 
 function resolveWithinRoot(root: string, relPath: string): string | null {
-  const resolvedRoot = path.resolve(root);
+  const resolvedRoot = path.resolve(expandHome(root));
   const resolvedTarget = path.resolve(resolvedRoot, relPath || ".");
   if (resolvedTarget === resolvedRoot) return resolvedTarget;
   if (resolvedTarget.startsWith(resolvedRoot + path.sep)) return resolvedTarget;

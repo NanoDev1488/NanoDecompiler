@@ -1,6 +1,5 @@
 import {
   ClipboardCopy,
-  FlaskConical,
   FolderOpen,
   FolderOutput,
   ListX,
@@ -30,7 +29,7 @@ export function CommandPalette() {
   const [index, setIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const { setPaletteOpen, runningJob, queuedCount, selectedJob, envIssue, toggleEnvIssue, toast } = engine;
+  const { setPaletteOpen, runningJob, queuedCount, selectedJob, toast } = engine;
 
   const actions = useMemo<Action[]>(
     () => [
@@ -95,14 +94,8 @@ export function CommandPalette() {
         icon: Settings2,
         run: () => engine.setSettingsOpen(true),
       },
-      {
-        id: "sim-env",
-        label: envIssue ? "Демо: вернуть окружение в норму" : "Демо: симулировать «Java не найдена»",
-        icon: FlaskConical,
-        run: toggleEnvIssue,
-      },
     ],
-    [engine, queuedCount, runningJob, selectedJob, envIssue, toggleEnvIssue],
+    [engine, queuedCount, runningJob, selectedJob],
   );
 
   const filtered = useMemo(() => {

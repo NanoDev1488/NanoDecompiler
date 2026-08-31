@@ -34,6 +34,10 @@ contextBridge.exposeInMainWorld("nano", {
   getEngineVersion: (): Promise<{ ok: boolean; version?: string; error?: string }> =>
     ipcRenderer.invoke("engine:version"),
   getGuiVersion: (): Promise<string> => ipcRenderer.invoke("gui:version"),
+  minimizeWindow: (): Promise<void> => ipcRenderer.invoke("window:minimize"),
+  toggleMaximizeWindow: (): Promise<void> => ipcRenderer.invoke("window:toggleMaximize"),
+  closeWindow: (): Promise<void> => ipcRenderer.invoke("window:close"),
+  isWindowMaximized: (): Promise<boolean> => ipcRenderer.invoke("window:isMaximized"),
   getAppIconThumbnails: (): Promise<{ terminal: string | null; layers: string | null }> =>
     ipcRenderer.invoke("appIcon:thumbnails"),
   checkEnv: (): Promise<{

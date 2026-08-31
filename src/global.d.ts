@@ -11,6 +11,7 @@ declare global {
       jarSummary: (jarPath: string) => Promise<{
         name: string;
         size: string;
+        sizeBytes?: number;
         classes: number;
         packages: number;
         java: string;
@@ -19,6 +20,10 @@ declare global {
       }>;
       getEngineVersion: () => Promise<{ ok: boolean; version?: string; error?: string }>;
       getGuiVersion: () => Promise<string>;
+      minimizeWindow: () => Promise<void>;
+      toggleMaximizeWindow: () => Promise<void>;
+      closeWindow: () => Promise<void>;
+      isWindowMaximized: () => Promise<boolean>;
       runDecompile: (
         jarPath: string,
         outDir: string

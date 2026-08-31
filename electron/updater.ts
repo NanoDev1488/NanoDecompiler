@@ -61,6 +61,22 @@ const ENGINE_ASSET_NAME: string =
       ? "NanoDecompilerClApi-macos"
       : "NanoDecompilerClApi-linux";
 
+// БАГ-ФИКС (реальный, воспроизведён пользователем - "движок.exe называется
+// по-другому"): ENGINE_ASSET_NAME - это имя файла В РЕЛИЗЕ на GitHub
+// (совпадает с тем, что публикует build-and-release.yml). ЛОКАЛЬНЫЙ файл,
+// который реально спавнит main.ts (engineInvocation/binName), называется
+// ИНАЧЕ - "NanoDecompilerCLI.exe"/"NanoDecompilerCLI", без "ClApi"/"-win"
+// в имени. Раньше update:apply писал скачанный файл под ENGINE_ASSET_NAME
+// (т.е. "NanoDecompilerClApi-windows.exe") - это создавало ВТОРОЙ,
+// НИКЕМ НЕ ИСПОЛЬЗУЕМЫЙ файл рядом с реальным движком, который
+// main.ts продолжал спавнить в СТАРОЙ версии - обновление "успешно"
+// скачивалось в никуда, а реальный движок оставался нетронутым (отсюда
+// незнающая причина ошибок ПОСЛЕ обновления - пользователь по факту
+// продолжал использовать старый бинарник, свежий никогда не подключался).
+function localEngineBinaryName(): string {
+  return process.platform === "win32" ? "NanoDecompilerCLI.exe" : "NanoDecompilerCLI";
+}
+
 // Регэксп имени клиентского инсталлятора - см. package.json build.*.artifactName
 // по умолчанию (electron-builder) и .github/workflows/build-and-release.yml
 // (там же явно копируется под фиксированное имя перед публикацией).
@@ -75,7 +91,15 @@ function clientAssetPattern(): RegExp {
 // инсталлятор, могут быть десятки МБ) отдельный, более щедрый таймаут -
 // 5 сек для реальной закачки было бы слишком мало и рвало бы её на
 // медленном интернете.
-const CHECK_TIMEOUT_MS = 5000;
+// БАГ-ФИКС: 5с было слишком жёстко именно для ТИХОЙ автопроверки на
+// старте приложения - на холодном старте (первое HTTPS-соединение,
+// антивирус/корпоративный прокси делают glubокую инспекцию трафика,
+// VPN и т.п.) 5с легко превышаются без какой-либо реальной проблемы с
+// сетью - пользователь видел "Таймаут запроса к GitHub" при попытке
+// открыть панель обновлений, хотя сам НИКОГДА не запускал проверку
+// вручную (silent-режим на старте не показывает toast с ошибкой, но
+// сохраняет её в состоянии - см. checkForUpdates в engine.tsx).
+const CHECK_TIMEOUT_MS = 12000;
 const DOWNLOAD_TIMEOUT_MS = 30000;
 
 function httpsGetJson<T>(url: string): Promise<T> {
@@ -384,7 +408,7 @@ export function registerUpdateHandlers(
         try {
           const checksums = await httpsGetJson<ChecksumsJson>(checksumsAsset.browser_download_url);
           const expectedHash = checksums[cliAsset.name];
-          const localBin = path.join(engineDir(), ENGINE_ASSET_NAME ?? "NanoDecompilerCLI");
+          const localBin = path.join(engineDir(), localEngineBinaryName());
           const localHash = expectedHash ? await sha256File(localBin) : null;
           engineHashMatches = !!expectedHash && !!localHash && expectedHash === localHash;
         } catch {
@@ -450,7 +474,7 @@ export function registerUpdateHandlers(
     // НОВОГО инсталлятора через shell.openExternal, а не сюда.
     try {
       const dir = engineDir();
-      const dest = path.join(dir, ENGINE_ASSET_NAME ?? "NanoDecompilerCLI");
+      const dest = path.join(dir, localEngineBinaryName());
       // БАГ-ФИКС/фича: скачиваем во ВРЕМЕННЫЙ файл, а не сразу поверх
       // рабочего движка - если скачивание оборвётся/повредится (см.
       // "движок завершился с кодом N без вывода - возможно, файл повреждён
@@ -468,7 +492,7 @@ export function registerUpdateHandlers(
           `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`
         );
         const checksumsAsset = release.assets.find((a) => a.name === "checksums.json");
-        const assetName = ENGINE_ASSET_NAME ?? path.basename(dest);
+        const assetName = ENGINE_ASSET_NAME;
         if (checksumsAsset) {
           const checksums = await httpsGetJson<ChecksumsJson>(checksumsAsset.browser_download_url);
           const expected = checksums[assetName];

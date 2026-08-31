@@ -1,4 +1,5 @@
 import { Minus, Square, X } from "lucide-react";
+import type { CSSProperties } from "react";
 import { useEngine } from "../state/engine";
 
 // БАГ-ФИКС/фича: раньше был статичный мотив "раскрытых скобок" - тот же
@@ -26,7 +27,7 @@ function LogoMark({ variant }: { variant: "terminal" | "layers" }) {
 }
 
 export function Titlebar() {
-  const { runningJob, selectedJob, toast, guiVersion, settings } = useEngine();
+  const { runningJob, selectedJob, guiVersion, settings } = useEngine();
 
   const center = runningJob
     ? `декомпиляция: ${runningJob.fileName}`
@@ -34,10 +35,16 @@ export function Titlebar() {
       ? selectedJob.fileName
       : "готов к работе";
 
-  const windowHint = () => toast("Кнопки окна работают в Electron-сборке", "info");
-
+  // БАГ-ФИКС (реальный, воспроизведён пользователем - "х2 кнопок от
+  // электрона + кастомные не работают"): раньше эти три кнопки были
+  // ФИКТИВНЫМИ (просто toast "работают в Electron-сборке"), а родная
+  // рамка ОС рисовала СВОИ настоящие кнопки поверх - см. frame:false в
+  // main.ts. Теперь это единственные кнопки окна, и они реально работают.
   return (
-    <header className="flex h-9 flex-none items-center gap-3 border-b border-line bg-bg px-3 select-none">
+    <header
+      className="flex h-9 flex-none items-center gap-3 border-b border-line bg-bg px-3 select-none"
+      style={{ WebkitAppRegion: "drag" } as CSSProperties}
+    >
       <div className="flex items-center gap-2">
         <LogoMark variant={settings.appIcon} />
         <span className="mono text-[12px] font-semibold tracking-tight text-ink">
@@ -48,17 +55,25 @@ export function Titlebar() {
 
       <div className="mono flex-1 truncate text-center text-[11px] text-faint">{center}</div>
 
-      <div className="flex items-center gap-0.5">
-        <button className="icon-btn h-7 w-9 rounded-md" title="Свернуть" onClick={windowHint}>
+      <div className="flex items-center gap-0.5" style={{ WebkitAppRegion: "no-drag" } as CSSProperties}>
+        <button
+          className="icon-btn h-7 w-9 rounded-md"
+          title="Свернуть"
+          onClick={() => window.nano.minimizeWindow()}
+        >
           <Minus size={13} />
         </button>
-        <button className="icon-btn h-7 w-9 rounded-md" title="Развернуть" onClick={windowHint}>
+        <button
+          className="icon-btn h-7 w-9 rounded-md"
+          title="Развернуть"
+          onClick={() => window.nano.toggleMaximizeWindow()}
+        >
           <Square size={11} />
         </button>
         <button
           className="icon-btn h-7 w-9 rounded-md hover:bg-err/15 hover:text-err"
           title="Закрыть"
-          onClick={windowHint}
+          onClick={() => window.nano.closeWindow()}
         >
           <X size={14} />
         </button>

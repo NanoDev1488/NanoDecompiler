@@ -23,11 +23,11 @@ export function AppHeader() {
   const hasUpdate = updateInfo.kind === "engine" || updateInfo.kind === "client";
 
   return (
-    <div className="flex h-12 flex-none items-center gap-3 border-b border-line bg-surface px-3">
+    <div className="flex h-12 flex-none items-center gap-3 overflow-x-auto border-b border-line bg-surface px-3">
       {/* статус движка — ассист-чип с точкой, наследие gui_neon.py */}
       <div
         className={cn(
-          "chip max-w-[46vw]",
+          "chip max-w-[32vw] flex-none",
           envIssue && "border-err/40 text-err",
           !envIssue && running && "border-acid/40 text-acid",
         )}
@@ -58,19 +58,19 @@ export function AppHeader() {
 
       <div className="flex-1" />
 
-      <button className="btn btn-tonal" onClick={openFileDialog}>
+      <button className="btn btn-tonal flex-none" onClick={openFileDialog}>
         <FolderOpen size={14} />
         Открыть .jar
         <span className="kbd ml-1 hidden lg:inline">Ctrl O</span>
       </button>
 
       {running ? (
-        <button className="btn btn-err" onClick={stopRunning}>
+        <button className="btn btn-err flex-none" onClick={stopRunning}>
           <Square size={13} />
           Остановить
         </button>
       ) : (
-        <button className="btn btn-acid" onClick={startQueue} disabled={queuedCount === 0}>
+        <button className="btn btn-acid flex-none" onClick={startQueue} disabled={queuedCount === 0}>
           <Play size={14} />
           Запустить
           {queuedCount > 0 && (
@@ -82,7 +82,7 @@ export function AppHeader() {
       )}
 
       <button
-        className="btn btn-ghost hidden md:inline-flex"
+        className="btn btn-ghost hidden flex-none md:inline-flex"
         onClick={() => setPaletteOpen(true)}
         title="Палитра команд"
       >
@@ -91,18 +91,18 @@ export function AppHeader() {
       </button>
 
       <button
-        className="icon-btn relative flex items-center gap-1.5 px-2"
+        className={cn("btn btn-ghost relative flex-none", hasUpdate && "border-acid/40 text-acid")}
         onClick={() => setUpdateModalOpen(true)}
         aria-label="Обновления"
         title="Обновления"
       >
-        <Bell size={16} />
-        <span className="hidden text-[11.5px] text-dim sm:inline">Обновления</span>
+        <Bell size={14} />
+        <span className="hidden lg:inline">Обновления</span>
         {hasUpdate && <span className="absolute top-1 right-1.5 size-[7px] rounded-full bg-acid" />}
       </button>
 
       <button
-        className="icon-btn"
+        className="icon-btn flex-none"
         onClick={() => setSettingsOpen(true)}
         aria-label="Настройки"
         title="Настройки (Ctrl ,)"
