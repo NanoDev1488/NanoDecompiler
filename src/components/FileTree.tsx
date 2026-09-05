@@ -1,6 +1,8 @@
 import { ChevronDown, ChevronRight, FileCode2, Search, TriangleAlert } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import type { SourceFile } from "../lib/model";
+import { useEngine } from "../state/engine";
+import { useResizeDrag } from "../lib/useResize";
 
 interface Props {
   files: SourceFile[];
@@ -9,6 +11,8 @@ interface Props {
 }
 
 export const FileTree = memo(function FileTree({ files, openId, onSelect }: Props) {
+  const { fileTreeWidth, setFileTreeWidth } = useEngine();
+  const onResizeDown = useResizeDrag("x", fileTreeWidth, setFileTreeWidth, 180, 420);
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -36,7 +40,13 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect }: Prop
   const totalLoc = useMemo(() => files.reduce((sum, f) => sum + f.loc, 0), [files]);
 
   return (
-    <div className="flex w-[248px] flex-none flex-col border-r border-line bg-surface">
+    <div className="relative flex flex-none flex-col border-r border-line bg-surface" style={{ width: fileTreeWidth }}>
+      <div
+        onPointerDown={onResizeDown}
+        className="group absolute top-0 right-[-3px] z-10 h-full w-[6px] cursor-col-resize select-none"
+      >
+        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-line-strong opacity-0 transition-opacity group-hover:opacity-100 group-active:bg-acid group-active:opacity-100" />
+      </div>
       <div className="flex h-9 flex-none items-center gap-2 border-b border-line px-3">
         <span className="kicker">Исходники</span>
         <span className="chip h-[18px] px-1.5 text-[10px]">{files.length} файл(ов)</span>

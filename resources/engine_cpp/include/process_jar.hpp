@@ -40,13 +40,17 @@ struct JarProcessResult {
     // nullopt эквивалентно skip_legitimacy=true (проверка не выполнялась).
     std::optional<LegitimacyCheckResult> legitimacy;
     // Платформа jar'а (см. platform_detect.hpp) - Bukkit/Paper/Velocity/
-    // Bungee/мод/неизвестно. mod_rejected=true - декомпиляция ПРЕРВАНА
-    // сразу после определения платформы (см. process_jar_with_stats,
-    // раздел 1.5) - остальные поля JarProcessResult в этом случае пустые/
-    // неактуальные, единственное, что нужно смотреть - mod_rejected_reason.
+    // Bungee/мод/неизвестно.
     PlatformInfo platform;
-    bool mod_rejected = false;
-    std::optional<std::string> mod_rejected_reason;
+    // rejected=true - декомпиляция ПРЕРВАНА до основной обработки, до
+    // определения платформы включительно - остальные поля этой структуры
+    // в этом случае пустые/неактуальные, смотреть только rejected_reason.
+    // Три возможные причины (см. process_jar_with_stats, разделы 0/1.2/1.5):
+    // файл меньше правдоподобного минимума для плагина, ZIP без единого
+    // .class файла (подмена содержимого), либо распознанный МОД (не
+    // серверный плагин) - разные ситуации, одно общее поле отказа.
+    bool rejected = false;
+    std::optional<std::string> rejected_reason;
 };
 
 // Бросает std::runtime_error, если jar_path не открывается (битый zip и т.п.) -

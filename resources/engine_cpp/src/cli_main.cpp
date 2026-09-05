@@ -99,8 +99,8 @@ int run_decompile_console(const std::string& jar_path, const std::string& out_di
         return 1;
     }
 
-    if (jr.mod_rejected) {
-        std::cout << "[!] " << jr.mod_rejected_reason.value_or("Обнаружен мод - декомпиляция не выполнена.") << "\n";
+    if (jr.rejected) {
+        std::cout << "[!] " << jr.rejected_reason.value_or("Декомпиляция не выполнена.") << "\n";
         return 1;
     }
 

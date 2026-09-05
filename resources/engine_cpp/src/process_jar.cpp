@@ -60,6 +60,33 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     jr.out_dir = out_dir;
     ProjectStats& stats = jr.stats;
 
+    // --- 0. Валидация файла ДО любой обработки (по прямой просьбе
+    // пользователя - "если .жар весит больше 5кб" + "проверки на
+    // правильное содержимое - а то вдруг какую-то херню поставили в
+    // архив заменили на .жар"). Порог взят из РЕАЛЬНЫХ данных: самый
+    // маленький легитимный плагин во всём тестовом корпусе (66 файлов) -
+    // FunProtector-1.0.0.jar, 4834 байта - берём порог заметно НИЖЕ
+    // этого (2048 байт), чтобы не отбраковывать настоящие маленькие
+    // плагины, но отсечь заведомо не-плагины (переименованный текстовый
+    // файл, пустышка, битый огрызок).
+    {
+        std::error_code fec;
+        auto fsize = fs::file_size(jar_path, fec);
+        if (fec) {
+            jr.rejected = true;
+            jr.rejected_reason = "Не удалось прочитать файл: " + fec.message();
+            return jr;
+        }
+        if (fsize < 1024) {
+            jr.rejected = true;
+            jr.rejected_reason =
+                "Файл слишком маленький (" + std::to_string(fsize) +
+                " байт) для настоящего скомпилированного плагина - минимальный реальный плагин в тестах весит "
+                "около 4.8 КБ. Похоже, это не тот файл (переименованный текст, пустышка, битая загрузка).";
+            return jr;
+        }
+    }
+
     // --- 1. Сканирование на подозрительное содержимое (см. HANDOFF_31) ---
     jr.malware_findings = scan_jar(jar_path);
 
@@ -68,6 +95,25 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
 
     ZipReader zr(jar_path);
     std::vector<std::string> all_names = zr.namelist();
+
+    // --- 1.2. Проверка реального содержимого - хотя бы один .class файл.
+    // Валидный ZIP с посторонним содержимым (текст, картинки, что угодно
+    // вместо скомпилированного плагина) раньше тихо давал
+    // status:"ok", decompiled_pct:0.00 - выглядело как "успех" вместо
+    // явного отказа с понятной причиной.
+    {
+        bool has_class = false;
+        for (auto& n : all_names) {
+            if (n.size() >= 6 && n.substr(n.size() - 6) == ".class") { has_class = true; break; }
+        }
+        if (!has_class) {
+            jr.rejected = true;
+            jr.rejected_reason =
+                "Архив открылся, но не содержит ни одного .class файла - это не скомпилированный Java-плагин "
+                "(возможно, подменённый или повреждённый файл под видом .jar).";
+            return jr;
+        }
+    }
 
     // --- 1.5. Определение платформы (см. platform_detect.hpp) - ДО
     // разбора классов: если это МОД (Fabric/Forge/NeoForge), а не
@@ -83,8 +129,8 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
         }
     });
     if (jr.platform.is_mod()) {
-        jr.mod_rejected = true;
-        jr.mod_rejected_reason =
+        jr.rejected = true;
+        jr.rejected_reason =
             "Обнаружен " + jr.platform.kind_label() + " (" + jr.platform.manifest_path + ") - это МОД, а не "
             "серверный плагин (Bukkit/Spigot/Paper/BungeeCord/Velocity). Временно моды не декомпилируются.";
         return jr;

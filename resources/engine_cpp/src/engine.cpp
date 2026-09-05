@@ -392,6 +392,381 @@ std::vector<StmtPtr> strip_decl_to_assign(const std::vector<StmtPtr>& lst, const
     return out;
 }
 
+// ---------------- _collapse_string_switch ----------------
+// НОВАЯ ФУНКЦИЯ (найдено сравнением декомпилированного вывода с настоящим
+// исходником пользователя NanoForge - switch(String) в исходнике всегда
+// компилируется javac в МЕХАНИЧЕСКИЙ паттерн: switch(x.hashCode()) с
+// .equals()-проверкой на коллизии хэша внутри каждого case, назначающий
+// индекс во временную int-переменную, и ВТОРОЙ switch по этому индексу с
+// реальными телами case. Это не эвристика - строго один и тот же паттерн
+// у ЛЮБОГО javac для ЛЮБОГО switch(String), безопасно распознавать и
+// схлопывать обратно. Один из самых крупных источников нечитаемости (см.
+// упомянутую ниже по коду ошибку "типично для switch(String) через
+// hashCode" - эта же функция, если успешно схлопнёт паттерн ДО той
+// проверки, заодно чинит часть случаев, раньше проваливавшихся в
+// fallback из-за "утекающей" между двумя switch'ами индекс-переменной).
+
+namespace {
+
+// Достаёт X из `X.hashCode()`, если expr - ровно такой вызов, иначе nullptr.
+Local* as_hashcode_target(const ExprPtr& e) {
+    if (!e || e->kind != ExprKind::MethodCall) return nullptr;
+    auto* mc = static_cast<MethodCall*>(e.get());
+    if (mc->name != "hashCode" || mc->is_static || !mc->target || mc->target->kind != ExprKind::Local) return nullptr;
+    return static_cast<Local*>(mc->target.get());
+}
+
+// Разбирает тело одного case первого (hashCode) switch'а:
+//   if (!X.equals("лит")) break;
+//   idxVar = N;
+//   [break;]                       <- необязателен у последнего case перед пустым default
+// Возвращает {строковый литерал, индекс}, либо nullopt, если тело не совпадает ТОЧНО.
+std::optional<std::pair<std::string, std::string>> match_hash_case(const std::vector<StmtPtr>& body,
+                                                                     const std::string& x_name,
+                                                                     const std::string& idx_name) {
+    if (body.size() != 2 && body.size() != 3) return std::nullopt;
+    if (body[0]->kind != StmtKind::IfStmt) return std::nullopt;
+    auto* ifs = static_cast<IfStmt*>(body[0].get());
+    if (ifs->else_body.has_value()) return std::nullopt;
+    if (ifs->then_body.size() != 1 || ifs->then_body[0]->kind != StmtKind::BreakStmt) return std::nullopt;
+    if (!ifs->cond || ifs->cond->kind != ExprKind::UnOp) return std::nullopt;
+    auto* neg = static_cast<UnOp*>(ifs->cond.get());
+    if (neg->op != "!" || !neg->expr || neg->expr->kind != ExprKind::MethodCall) return std::nullopt;
+    auto* eq = static_cast<MethodCall*>(neg->expr.get());
+    if (eq->name != "equals" || eq->args.size() != 1 || !eq->target || eq->target->kind != ExprKind::Local) return std::nullopt;
+    if (static_cast<Local*>(eq->target.get())->name != x_name) return std::nullopt;
+    if (eq->args[0]->kind != ExprKind::Const) return std::nullopt;
+    auto* lit = static_cast<Const*>(eq->args[0].get());
+    if (lit->type != "String") return std::nullopt;
+
+    if (body[1]->kind != StmtKind::ExprStmt) return std::nullopt;
+    auto* es = static_cast<ExprStmtNode*>(body[1].get());
+    if (!es->expr || es->expr->kind != ExprKind::Assign) return std::nullopt;
+    auto* asn = static_cast<Assign*>(es->expr.get());
+    if (asn->op != "=" || !asn->target || asn->target->kind != ExprKind::Local) return std::nullopt;
+    if (static_cast<Local*>(asn->target.get())->name != idx_name) return std::nullopt;
+    if (!asn->value || asn->value->kind != ExprKind::Const) return std::nullopt;
+    auto* idxc = static_cast<Const*>(asn->value.get());
+
+    if (body.size() == 3 && body[2]->kind != StmtKind::BreakStmt) return std::nullopt;
+
+    return std::make_pair(lit->literal, idxc->literal);
+}
+
+}  // namespace
+
+std::vector<StmtPtr> collapse_string_switch(const std::vector<StmtPtr>& stmts) {
+    std::vector<StmtPtr> out;
+    size_t i = 0;
+    while (i < stmts.size()) {
+        // рекурсия вглубь вложенных тел - тот же обход, что и hoist_escaping_locals
+        auto& s = stmts[i];
+        if (s->kind == StmtKind::IfStmt) {
+            auto* n = static_cast<IfStmt*>(s.get());
+            n->then_body = collapse_string_switch(n->then_body);
+            if (n->else_body.has_value()) n->else_body = collapse_string_switch(*n->else_body);
+        } else if (s->kind == StmtKind::WhileStmt) {
+            static_cast<WhileStmt*>(s.get())->body = collapse_string_switch(static_cast<WhileStmt*>(s.get())->body);
+        } else if (s->kind == StmtKind::DoWhileStmt) {
+            static_cast<DoWhileStmt*>(s.get())->body = collapse_string_switch(static_cast<DoWhileStmt*>(s.get())->body);
+        } else if (s->kind == StmtKind::ForStmt) {
+            static_cast<ForStmt*>(s.get())->body = collapse_string_switch(static_cast<ForStmt*>(s.get())->body);
+        } else if (s->kind == StmtKind::SyncStmt) {
+            static_cast<SyncStmt*>(s.get())->body = collapse_string_switch(static_cast<SyncStmt*>(s.get())->body);
+        } else if (s->kind == StmtKind::BlockStmt) {
+            static_cast<BlockStmt*>(s.get())->stmts = collapse_string_switch(static_cast<BlockStmt*>(s.get())->stmts);
+        } else if (s->kind == StmtKind::TryStmt) {
+            auto* t = static_cast<TryStmt*>(s.get());
+            t->body = collapse_string_switch(t->body);
+            for (auto& c : t->catches) c.body = collapse_string_switch(c.body);
+            if (t->finally_body.has_value()) t->finally_body = collapse_string_switch(*t->finally_body);
+        } else if (s->kind == StmtKind::SwitchStmt) {
+            for (auto& c : static_cast<SwitchStmt*>(s.get())->cases) c.body = collapse_string_switch(c.body);
+        }
+
+        // ---- попытка распознать паттерн, начиная с позиции i ----
+        // Форма A: [LocalDecl X=Y] [LocalDecl idx=-1] [SwitchStmt(X.hashCode())] [SwitchStmt(idx)]
+        // Форма B (без алиаса X):  [LocalDecl idx=-1] [SwitchStmt(X.hashCode())] [SwitchStmt(idx)]
+        for (int has_alias = 1; has_alias >= 0; --has_alias) {
+            size_t base = i + static_cast<size_t>(has_alias);
+            if (base + 2 >= stmts.size()) continue;
+            std::string x_name;
+            ExprPtr subject;
+            if (has_alias) {
+                if (stmts[i]->kind != StmtKind::LocalDecl) continue;
+                auto* ad = static_cast<LocalDecl*>(stmts[i].get());
+                if (ad->type != "String" || !ad->init) continue;
+                x_name = ad->name;
+                subject = ad->init;
+            }
+            if (stmts[base]->kind != StmtKind::LocalDecl) continue;
+            auto* idxd = static_cast<LocalDecl*>(stmts[base].get());
+            if (idxd->type != "int" || !idxd->init || idxd->init->kind != ExprKind::Const) continue;
+            std::string idx_name = idxd->name;
+
+            if (stmts[base + 1]->kind != StmtKind::SwitchStmt) continue;
+            auto* hsw = static_cast<SwitchStmt*>(stmts[base + 1].get());
+            Local* ht = as_hashcode_target(hsw->selector);
+            if (!ht) continue;
+            if (has_alias) {
+                if (ht->name != x_name) continue;
+            } else {
+                x_name = ht->name;
+                subject = std::make_shared<Local>(ht->name, ht->type);
+            }
+
+            // Каждый case первого switch'а обязан совпасть ТОЧНО - без
+            // исключений, при первом же несовпадении вся форма отбрасывается
+            // (никаких частичных трансформаций).
+            std::map<std::string, std::string> idx_to_literal;  // "0" -> "\"message\""
+            bool ok = true;
+            for (auto& c : hsw->cases) {
+                if (c.is_default) {
+                    if (!c.body.empty()) { ok = false; break; }
+                    continue;
+                }
+                auto m = match_hash_case(c.body, x_name, idx_name);
+                if (!m.has_value()) { ok = false; break; }
+                idx_to_literal[m->second] = m->first;
+            }
+            if (!ok || idx_to_literal.empty()) continue;
+
+            if (base + 2 >= stmts.size() || stmts[base + 2]->kind != StmtKind::SwitchStmt) continue;
+            auto* isw = static_cast<SwitchStmt*>(stmts[base + 2].get());
+            if (!isw->selector || isw->selector->kind != ExprKind::Local) continue;
+            if (static_cast<Local*>(isw->selector.get())->name != idx_name) continue;
+
+            // Строим новые case: каждая числовая метка -> строковый литерал
+            // из карты выше. Если хоть одна метка не найдена в карте (не
+            // "наш" индекс-свитч, совпадение случайное) - отбрасываем форму.
+            std::vector<SwitchCase> new_cases;
+            for (auto& c : isw->cases) {
+                SwitchCase nc;
+                nc.is_default = c.is_default;
+                nc.body = c.body;
+                if (c.is_default) {
+                    new_cases.push_back(std::move(nc));
+                    continue;
+                }
+                for (auto& v : c.values) {
+                    auto it = idx_to_literal.find(v);
+                    if (it == idx_to_literal.end()) { ok = false; break; }
+                    nc.values.push_back(it->second);
+                }
+                if (!ok) break;
+                new_cases.push_back(std::move(nc));
+            }
+            if (!ok) continue;
+
+            out.push_back(std::make_shared<SwitchStmt>(subject, std::move(new_cases)));
+            i = base + 3;
+            goto matched;
+        }
+
+        out.push_back(s);
+        ++i;
+    matched:;
+    }
+    return out;
+}
+
+// ---------------- _collapse_stringbuilder ----------------
+// НОВАЯ ФУНКЦИЯ (найдено сравнением декомпилированного вывода с настоящим
+// исходником пользователя NanoForge - каждая строковая конкатенация "a + b"
+// в исходнике компилируется javac в new StringBuilder().append(a).append(b)
+// .toString() - тоже строго механический паттерн одного и того же вида у
+// ЛЮБОГО javac, безопасно распознавать и схлопывать обратно в "a + b".
+namespace {
+
+bool is_stringbuilder_type(const std::string& t) {
+    return t == "StringBuilder" || t == "java.lang.StringBuilder" || t == "StringBuffer" ||
+           t == "java.lang.StringBuffer";
+}
+
+// Пытается распознать expr как ЗАВЕРШЁННУЮ цепочку
+// new StringBuilder([initial]).append(a).append(b)....toString() -
+// возвращает куски СЛЕВА НАПРАВО, либо nullopt при любом несовпадении.
+std::optional<std::vector<ExprPtr>> try_match_sb_chain(const ExprPtr& e) {
+    if (!e || e->kind != ExprKind::MethodCall) return std::nullopt;
+    auto* top = static_cast<MethodCall*>(e.get());
+    if (top->name != "toString" || !top->args.empty() || top->is_static || !top->target) return std::nullopt;
+
+    std::vector<ExprPtr> pieces_rev;
+    ExprPtr cur = top->target;
+    while (true) {
+        if (!cur) return std::nullopt;
+        if (cur->kind == ExprKind::MethodCall) {
+            auto* mc = static_cast<MethodCall*>(cur.get());
+            if (mc->name != "append" || mc->args.size() != 1 || mc->is_static || !mc->target) return std::nullopt;
+            pieces_rev.push_back(mc->args[0]);
+            cur = mc->target;
+            continue;
+        }
+        if (cur->kind == ExprKind::NewObject) {
+            auto* no = static_cast<NewObject*>(cur.get());
+            if (!is_stringbuilder_type(no->type)) return std::nullopt;
+            if (no->args.size() == 1) pieces_rev.push_back(no->args[0]);
+            else if (!no->args.empty()) return std::nullopt;  // StringBuilder(int capacity) - не наш случай
+            break;
+        }
+        return std::nullopt;
+    }
+    // Одна деталь (голое "new StringBuilder().append(a).toString()") -
+    // такое эквивалентно просто "a", если a уже String, но безопаснее не
+    // трогать редкий вырожденный случай, чем ошибиться с типом.
+    if (pieces_rev.size() < 2) return std::nullopt;
+    std::reverse(pieces_rev.begin(), pieces_rev.end());
+    return pieces_rev;
+}
+
+}  // namespace
+
+ExprPtr collapse_sb_chain(const ExprPtr& e) {
+    if (!e) return e;
+    auto pieces = try_match_sb_chain(e);
+    if (pieces.has_value()) {
+        for (auto& p : *pieces) p = collapse_sb_chain(p);  // вложенные цепочки внутри кусков
+        ExprPtr result = (*pieces)[0];
+        for (size_t k = 1; k < pieces->size(); ++k) result = std::make_shared<BinOp>("+", result, (*pieces)[k], "String");
+        return result;
+    }
+    switch (e->kind) {
+        case ExprKind::BinOp: {
+            auto* b = static_cast<BinOp*>(e.get());
+            b->left = collapse_sb_chain(b->left);
+            b->right = collapse_sb_chain(b->right);
+            break;
+        }
+        case ExprKind::UnOp: static_cast<UnOp*>(e.get())->expr = collapse_sb_chain(static_cast<UnOp*>(e.get())->expr); break;
+        case ExprKind::Assign: {
+            auto* a = static_cast<Assign*>(e.get());
+            a->target = collapse_sb_chain(a->target);
+            a->value = collapse_sb_chain(a->value);
+            break;
+        }
+        case ExprKind::Cast: static_cast<Cast*>(e.get())->expr = collapse_sb_chain(static_cast<Cast*>(e.get())->expr); break;
+        case ExprKind::InstanceOf:
+            static_cast<InstanceOf*>(e.get())->expr = collapse_sb_chain(static_cast<InstanceOf*>(e.get())->expr);
+            break;
+        case ExprKind::Ternary: {
+            auto* t = static_cast<Ternary*>(e.get());
+            t->cond = collapse_sb_chain(t->cond);
+            t->tval = collapse_sb_chain(t->tval);
+            t->fval = collapse_sb_chain(t->fval);
+            break;
+        }
+        case ExprKind::ArrayAccess: {
+            auto* aa = static_cast<ArrayAccess*>(e.get());
+            aa->array = collapse_sb_chain(aa->array);
+            aa->index = collapse_sb_chain(aa->index);
+            break;
+        }
+        case ExprKind::FieldAccess: {
+            auto* fa = static_cast<FieldAccess*>(e.get());
+            if (fa->target) fa->target = collapse_sb_chain(fa->target);
+            break;
+        }
+        case ExprKind::MethodCall: {
+            auto* mc = static_cast<MethodCall*>(e.get());
+            if (mc->target) mc->target = collapse_sb_chain(mc->target);
+            for (auto& a : mc->args) a = collapse_sb_chain(a);
+            break;
+        }
+        case ExprKind::NewObject:
+            for (auto& a : static_cast<NewObject*>(e.get())->args) a = collapse_sb_chain(a);
+            break;
+        case ExprKind::NewArray: {
+            auto* na = static_cast<NewArray*>(e.get());
+            for (auto& d : na->dims)
+                if (d) d = collapse_sb_chain(d);
+            if (na->initializer.has_value())
+                for (auto& v : *na->initializer) v = collapse_sb_chain(v);
+            break;
+        }
+        default:
+            break;  // Const/Local/This/Raw/ClassLiteral/Lambda - листья, не трогаем
+    }
+    return e;
+}
+
+void collapse_sb_in_stmts(std::vector<StmtPtr>& stmts) {
+    for (auto& s : stmts) {
+        switch (s->kind) {
+            case StmtKind::ExprStmt:
+                static_cast<ExprStmtNode*>(s.get())->expr = collapse_sb_chain(static_cast<ExprStmtNode*>(s.get())->expr);
+                break;
+            case StmtKind::LocalDecl: {
+                auto* ld = static_cast<LocalDecl*>(s.get());
+                if (ld->init) ld->init = collapse_sb_chain(ld->init);
+                break;
+            }
+            case StmtKind::ReturnStmt: {
+                auto* r = static_cast<ReturnStmt*>(s.get());
+                if (r->expr) r->expr = collapse_sb_chain(r->expr);
+                break;
+            }
+            case StmtKind::ThrowStmt:
+                static_cast<ThrowStmt*>(s.get())->expr = collapse_sb_chain(static_cast<ThrowStmt*>(s.get())->expr);
+                break;
+            case StmtKind::IfStmt: {
+                auto* i = static_cast<IfStmt*>(s.get());
+                i->cond = collapse_sb_chain(i->cond);
+                collapse_sb_in_stmts(i->then_body);
+                if (i->else_body.has_value()) collapse_sb_in_stmts(*i->else_body);
+                break;
+            }
+            case StmtKind::WhileStmt: {
+                auto* w = static_cast<WhileStmt*>(s.get());
+                w->cond = collapse_sb_chain(w->cond);
+                collapse_sb_in_stmts(w->body);
+                break;
+            }
+            case StmtKind::DoWhileStmt: {
+                auto* w = static_cast<DoWhileStmt*>(s.get());
+                w->cond = collapse_sb_chain(w->cond);
+                collapse_sb_in_stmts(w->body);
+                break;
+            }
+            case StmtKind::ForStmt: {
+                auto* f = static_cast<ForStmt*>(s.get());
+                if (f->init) f->init = collapse_sb_chain(f->init);
+                if (f->cond) f->cond = collapse_sb_chain(f->cond);
+                if (f->update) {
+                    std::vector<StmtPtr> one{f->update};
+                    collapse_sb_in_stmts(one);
+                    f->update = one[0];
+                }
+                collapse_sb_in_stmts(f->body);
+                break;
+            }
+            case StmtKind::SwitchStmt: {
+                auto* sw = static_cast<SwitchStmt*>(s.get());
+                sw->selector = collapse_sb_chain(sw->selector);
+                for (auto& c : sw->cases) collapse_sb_in_stmts(c.body);
+                break;
+            }
+            case StmtKind::SyncStmt: {
+                auto* sy = static_cast<SyncStmt*>(s.get());
+                sy->expr = collapse_sb_chain(sy->expr);
+                collapse_sb_in_stmts(sy->body);
+                break;
+            }
+            case StmtKind::BlockStmt:
+                collapse_sb_in_stmts(static_cast<BlockStmt*>(s.get())->stmts);
+                break;
+            case StmtKind::TryStmt: {
+                auto* t = static_cast<TryStmt*>(s.get());
+                collapse_sb_in_stmts(t->body);
+                for (auto& c : t->catches) collapse_sb_in_stmts(c.body);
+                if (t->finally_body.has_value()) collapse_sb_in_stmts(*t->finally_body);
+                break;
+            }
+            default:
+                break;
+        }
+    }
+}
+
 // ---------------- _hoist_escaping_locals ----------------
 
 std::vector<StmtPtr> hoist_escaping_locals(const std::vector<StmtPtr>& stmts, std::set<std::string>& declared_so_far) {
@@ -1779,6 +2154,14 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
             std::set<std::string> declared_so_far;
             stmts = hoist_escaping_locals(stmts, declared_so_far);
         }
+        // НОВОЕ: схлопываем javac-паттерн switch(x.hashCode())+.equals() обратно
+        // в нормальный switch(String) - см. collapse_string_switch выше. ДО
+        // проверки has_escaping_local_decl ниже - если паттерн распознан и
+        // схлопнут, индекс-переменная (var8 и т.п.) вообще исчезает из AST,
+        // и часть методов, раньше падавших в fallback именно из-за неё,
+        // теперь пройдут структуризацию успешно.
+        stmts = collapse_string_switch(stmts);
+        collapse_sb_in_stmts(stmts);
         prune_unused_imports(stmts, ctx);
         if (contains_unfolded_monitor(stmts)) throw DecompileAbort("synchronized-блок не свёрнут (monitorenter/monitorexit)");
         if (has_escaping_local_decl(stmts)) {

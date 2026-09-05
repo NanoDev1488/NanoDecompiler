@@ -361,8 +361,19 @@ StmtPtr assign_stmt(const ExprPtr& target, const ExprPtr& value) {
 
 std::string refine_type(const std::string& current, const ExprPtr& value_expr) {
     const std::string& t = value_expr->type;
+    // БАГ-ФИКС (реальный, найден сравнением декомпилированного вывода с
+    // настоящим исходником пользователя - "Object rest = ...;" затем
+    // "rest.isEmpty()" - Object не имеет isEmpty(), СГЕНЕРИРОВАННЫЙ КОД НЕ
+    // КОМПИЛИРУЕТСЯ): LocalInfo::type - обычный std::string, по умолчанию
+    // "" (пустая строка), НЕ литерал "Object" - а этот список проверял
+    // только current == "Object"/"int"/"long"/"float"/"double", пустую
+    // строку не считал "нуждающейся в уточнении" - "" так и оставался ""
+    // навсегда (t никогда не подхватывался), и только при РЕНДЕРИНГЕ
+    // где-то пустой тип отображался как "Object" по умолчанию - то есть
+    // переменная реально теряла тип по пути, хотя значение было String с
+    // самого начала.
     if (!t.empty() && !PSEUDO_TYPES.count(t) &&
-        (current == "Object" || current == "int" || current == "long" || current == "float" || current == "double")) {
+        (current.empty() || current == "Object" || current == "int" || current == "long" || current == "float" || current == "double")) {
         return t;
     }
     return current;
@@ -1107,7 +1118,21 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
             ExprPtr val = pop();
             bool declare = !ctx.locals.count(slot);
             LocalInfo& info = ctx.local(slot, cat);
-            if (declare) info.type = refine_type(info.type, val);
+            // БАГ-ФИКС (реальный, найден через сравнение с настоящим исходником
+            // пользователя - decompiled "Object rest = ...; ... rest.isEmpty()"
+            // не компилируется вообще, Object не имеет isEmpty()): раньше
+            // refine_type() вызывался ТОЛЬКО при первом объявлении слота
+            // (declare==true) - JVM переиспользует один физический слот для
+            // РАЗНЫХ логических переменных с непересекающимися временами жизни
+            // (обычная практика javac) - если слот раньше уже получил тип
+            // "Object" (по любой причине, например из другого использования
+            // того же номера слота раньше в методе), тип НИКОГДА не уточнялся
+            // повторно, даже когда текущее значение совершенно точно String.
+            // refine_type() сам по себе безопасен на повторный вызов - он
+            // только "улучшает" тип с Object/примитива до конкретного, никогда
+            // не ухудшает уже точный тип - так что вызывать его на КАЖДЫЙ стор
+            // (не только первый) не может сделать хуже, только лучше.
+            info.type = refine_type(info.type, val);
             ExprPtr target = std::make_shared<Local>(info.name, info.type);
             StmtPtr stmt;
             if (declare) {
@@ -1128,9 +1153,32 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
             ExprPtr arr = pop();
             static const std::map<std::string, std::string> ET = {
                 {"iaload", "int"}, {"laload", "long"}, {"faload", "float"}, {"daload", "double"},
-                {"aaload", "Object"}, {"baload", "byte"}, {"caload", "char"}, {"saload", "short"},
+                {"baload", "byte"}, {"caload", "char"}, {"saload", "short"},
             };
-            push(std::make_shared<ArrayAccess>(arr, idx, ET.at(mn)));
+            std::string elem_type;
+            if (mn == "aaload") {
+                // БАГ-ФИКС (реальный, найден сравнением декомпилированного
+                // вывода с настоящим исходником пользователя - в итоге давало
+                // "Object rest = ...; rest.isEmpty()", НЕКОМПИЛИРУЕМЫЙ код,
+                // т.к. Object не имеет isEmpty()): aaload (загрузка элемента
+                // ЛЮБОГО ссылочного массива - String[], Object[], File[] и
+                // т.п.) была жёстко типизирована как "Object" БЕЗ ПОПЫТКИ
+                // посмотреть на реальный тип самого массива (arr->type,
+                // который к этому моменту УЖЕ известен - например
+                // "java.lang.String[]" для String[] parts) - отбрасываем
+                // суффикс "[]" от типа массива, чтобы получить тип элемента;
+                // если тип массива неизвестен/pseudo или не похож на массив
+                // (нет "[]"), честно откатываемся на "Object", как и раньше.
+                const std::string& at = arr->type;
+                if (at.size() > 2 && at.substr(at.size() - 2) == "[]" && !PSEUDO_TYPES.count(at)) {
+                    elem_type = at.substr(0, at.size() - 2);
+                } else {
+                    elem_type = "Object";
+                }
+            } else {
+                elem_type = ET.at(mn);
+            }
+            push(std::make_shared<ArrayAccess>(arr, idx, elem_type));
             i += 1;
             continue;
         }
@@ -1142,9 +1190,21 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
             arr = materialize_if_shared(arr, stack, ctx, res.stmts);
             static const std::map<std::string, std::string> ET = {
                 {"iastore", "int"}, {"lastore", "long"}, {"fastore", "float"}, {"dastore", "double"},
-                {"aastore", "Object"}, {"bastore", "byte"}, {"castore", "char"}, {"sastore", "short"},
+                {"bastore", "byte"}, {"castore", "char"}, {"sastore", "short"},
             };
-            emit(assign_stmt(std::make_shared<ArrayAccess>(arr, idx, ET.at(mn)), val));
+            std::string elem_type;
+            if (mn == "aastore") {
+                // Та же логика вывода типа, что и для aaload выше.
+                const std::string& at = arr->type;
+                if (at.size() > 2 && at.substr(at.size() - 2) == "[]" && !PSEUDO_TYPES.count(at)) {
+                    elem_type = at.substr(0, at.size() - 2);
+                } else {
+                    elem_type = "Object";
+                }
+            } else {
+                elem_type = ET.at(mn);
+            }
+            emit(assign_stmt(std::make_shared<ArrayAccess>(arr, idx, elem_type), val));
             i += 1;
             continue;
         }

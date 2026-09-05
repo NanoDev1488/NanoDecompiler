@@ -2,7 +2,19 @@ import { Copy, WrapText } from "lucide-react";
 import { memo, useState } from "react";
 import { useEngine } from "../state/engine";
 import { JavaCode } from "../lib/javaHighlight";
+import { PlainCode, XmlCode, YamlCode } from "../lib/textHighlight";
 import type { SourceFile } from "../lib/model";
+
+// БАГ-ФИКС: раньше ЛЮБОЙ файл в просмотрщике рендерился через JavaCode
+// независимо от расширения - .yml подсвечивался java-ключевыми словами.
+// Выбираем токенизатор по расширению реального имени файла.
+function codeComponentFor(name: string) {
+  if (/\.java$/i.test(name)) return JavaCode;
+  if (/\.ya?ml$/i.test(name)) return YamlCode;
+  if (/\.properties$/i.test(name)) return YamlCode;  // ключ=значение - тот же токенизатор подходит
+  if (/\.xml$/i.test(name)) return XmlCode;
+  return PlainCode;
+}
 
 export const CodeView = memo(function CodeView({ file }: { file: SourceFile | null }) {
   const { copyText } = useEngine();
@@ -16,7 +28,8 @@ export const CodeView = memo(function CodeView({ file }: { file: SourceFile | nu
     );
   }
 
-  const crumbs = [...file.pkg.split("."), file.name];
+  const crumbs = [...file.pkg.split(".").filter(Boolean), file.name];
+  const CodeComponent = codeComponentFor(file.name);
 
   return (
     <section className="flex min-w-0 flex-1 flex-col bg-bg">
@@ -67,7 +80,7 @@ export const CodeView = memo(function CodeView({ file }: { file: SourceFile | nu
           {file.code === undefined ? (
             <p className="mono px-4 text-[11.5px] text-faint">// загрузка…</p>
           ) : (
-            <JavaCode code={file.code} wrap={wrap} />
+            <CodeComponent code={file.code} wrap={wrap} />
           )}
         </div>
       </div>

@@ -706,6 +706,30 @@ std::pair<std::string, OrderedImports> render_class(
             param_str += param_parts[i];
         }
         bool has_body = result.has_value();
+        // НОВОЕ: пропускаем полностью тривиальный no-arg public конструктор
+        // (найдено сравнением с настоящим исходником пользователя - у него
+        // ВООБЩЕ НЕТ явного конструктора, Java сама генерирует его неявно -
+        // а декомпилятор печатал "public X() { super(); }" как будто это
+        // осмысленный код автора, хотя это чистый шум байткода. Безопасно
+        // опускать ТОЛЬКО когда тело - РОВНО один super()-вызов без
+        // аргументов и модификатор именно "public" (самый частый случай для
+        // Bukkit-плагинов) - иначе (protected/package-private конструктор,
+        // или тело с доп. кодом) печатаем как раньше, не рискуем угадывать.
+        if (m.name == "<init>" && params_disp.empty() && mmods == "public" && result.has_value() && result->ok &&
+            result->stmts.size() == 1) {
+            auto* es0 = dynamic_cast<ExprStmtNode*>(result->stmts[0].get());
+            if (es0 != nullptr) {
+                auto* mc0 = dynamic_cast<MethodCall*>(es0->expr.get());
+                if (mc0 != nullptr && mc0->is_ctor && mc0->is_super && mc0->args.empty()) {
+                    // stats.total_methods уже увеличен выше (m.has_code) - метод
+                    // РЕАЛЬНО успешно декомпилирован, просто осознанно не
+                    // печатается - не считать его "непонятым", иначе процент в
+                    // JSON занижался бы на пустом месте.
+                    stats.decompiled_methods += 1;
+                    continue;
+                }
+            }
+        }
         std::string sig_end = has_body ? " {" : ";";
         for (auto& a : m.annotations) body_lines.push_back("    " + format_annotation(a, renamer, known_internal_by_dotted, all_imports));
         std::string ret_display = (used_generic_sig && m.name != "<init>") ? ret_disp : mark_type(ret_disp);

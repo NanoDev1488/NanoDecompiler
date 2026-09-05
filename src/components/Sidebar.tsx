@@ -1,6 +1,7 @@
 import { FileArchive, FolderOpen, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { useEngine } from "../state/engine";
+import { useResizeDrag } from "../lib/useResize";
 import { fmtBytes, fmtNum, fmtSeconds, type Job } from "../lib/model";
 import { cn } from "../utils/cn";
 
@@ -108,11 +109,18 @@ function JobCard({ job, selected }: { job: Job; selected: boolean }) {
 }
 
 export function Sidebar() {
-  const { jobs, selectedJobId, addFiles, openFileDialog, clearQueue } = useEngine();
+  const { jobs, selectedJobId, addFiles, openFileDialog, clearQueue, sidebarWidth, setSidebarWidth } = useEngine();
   const [dragActive, setDragActive] = useState(false);
+  const onResizeDown = useResizeDrag("x", sidebarWidth, setSidebarWidth, 220, 480);
 
   return (
-    <aside className="flex w-[292px] flex-none flex-col border-r border-line bg-surface">
+    <aside className="relative flex flex-none flex-col border-r border-line bg-surface" style={{ width: sidebarWidth }}>
+      <div
+        onPointerDown={onResizeDown}
+        className="group absolute top-0 right-[-3px] z-10 h-full w-[6px] cursor-col-resize select-none"
+      >
+        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-line-strong opacity-0 transition-opacity group-hover:opacity-100 group-active:bg-acid group-active:opacity-100" />
+      </div>
       <div className="flex h-9 flex-none items-center gap-2 border-b border-line px-3">
         <span className="kicker">Входные архивы</span>
         <span className="chip h-[18px] px-1.5 text-[10px]">{jobs.length}</span>

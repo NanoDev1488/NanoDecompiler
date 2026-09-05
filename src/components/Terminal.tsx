@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useEngine } from "../state/engine";
 import { fmtClock, type LogFilter, type LogLevel } from "../lib/model";
 import { cn } from "../utils/cn";
+import { useResizeDrag } from "../lib/useResize";
 
 const TAG_COLOR: Record<LogLevel, string> = {
   info: "text-faint",
@@ -20,10 +21,13 @@ const FILTERS: Array<{ id: LogFilter; label: string }> = [
 ];
 
 export function Terminal() {
-  const { log, logFilter, setLogFilter, terminalOpen, toggleTerminal, clearLog, copyLog, runningJob } =
+  const { log, logFilter, setLogFilter, terminalOpen, toggleTerminal, clearLog, copyLog, runningJob, terminalHeight, setTerminalHeight } =
     useEngine();
   const [stick, setStick] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // invert=true - тянем ЗА ВЕРХНИЙ край терминала, движение мыши ВВЕРХ
+  // должно УВЕЛИЧИВАТЬ высоту (терминал растёт вверх, а не вниз).
+  const onResizeDown = useResizeDrag("y", terminalHeight, setTerminalHeight, 120, 560, true);
 
   const counts = useMemo(() => {
     const c: Record<LogFilter, number> = { all: log.length, info: 0, ok: 0, warn: 0, err: 0 };
@@ -57,10 +61,19 @@ export function Terminal() {
   return (
     <div
       className={cn(
-        "flex flex-none flex-col border-t border-line bg-bg transition-[height] duration-200",
-        terminalOpen ? "h-[228px]" : "h-9",
+        "relative flex flex-none flex-col border-t border-line bg-bg transition-[height] duration-200",
+        !terminalOpen && "h-9",
       )}
+      style={terminalOpen ? { height: terminalHeight } : undefined}
     >
+      {terminalOpen && (
+        <div
+          onPointerDown={onResizeDown}
+          className="group absolute top-[-3px] left-0 z-10 h-[6px] w-full cursor-row-resize select-none"
+        >
+          <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-line-strong opacity-0 transition-opacity group-hover:opacity-100 group-active:bg-acid group-active:opacity-100" />
+        </div>
+      )}
       <div className="flex h-9 flex-none items-center gap-2 px-3">
         <button
           onClick={toggleTerminal}

@@ -15,19 +15,24 @@ function Centered({ children }: { children: ReactNode }) {
   );
 }
 
+// БАГ-ФИКС: тот же ложный текст "движку нужен JRE 17+", что уже был
+// исправлен в StatusBar/SettingsModal - здесь про него забыли. Движок на
+// чистом C++, Java для декомпиляции не нужна вообще, это никогда не
+// блокирует работу - баннер занижен по тревожности и текст честный.
 function EnvBanner() {
   const { resolveEnvIssue, setSettingsOpen } = useEngine();
   return (
-    <div className="flex flex-none items-center gap-3 border-b border-err/25 bg-err/7 px-4 py-2.5">
-      <TriangleAlert size={15} className="flex-none text-err" />
+    <div className="flex flex-none items-center gap-3 border-b border-line bg-raised/40 px-4 py-2">
+      <TriangleAlert size={14} className="flex-none text-warn/70" />
       <div className="min-w-0 flex-1">
-        <p className="text-[12.5px] font-medium text-err">Java Runtime не найдена</p>
-        <p className="text-[11.5px] text-err/70">Движку нужен JRE 17+. Поставьте Temurin 21 и проверьте окружение снова.</p>
+        <p className="text-[12px] text-dim">
+          Java не найдена — это не мешает декомпиляции, нужна только для ручной сборки (mvn compile) результата.
+        </p>
       </div>
-      <button className="btn btn-err h-7 text-[11.5px]" onClick={resolveEnvIssue}>
+      <button className="btn btn-ghost h-6 text-[11px]" onClick={resolveEnvIssue}>
         Проверить снова
       </button>
-      <button className="btn btn-ghost h-7 text-[11.5px]" onClick={() => setSettingsOpen(true)}>
+      <button className="btn btn-ghost h-6 text-[11px]" onClick={() => setSettingsOpen(true)}>
         Настройки
       </button>
     </div>

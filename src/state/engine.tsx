@@ -26,9 +26,16 @@ import {
 
 const MAX_LOG_LINES = 800;
 
-/* Собирает плоское дерево .java-файлов из реального вывода движка через
+/* Собирает плоское дерево файлов из реального вывода движка через
    window.nano.listDir (рекурсивно), без чтения содержимого - код каждого
-   файла подгружается лениво в selectFile() через readTextFile(). */
+   файла подгружается лениво в selectFile() через readTextFile().
+   БАГ-ФИКС: раньше в список попадали ТОЛЬКО .java - plugin.yml, pom.xml,
+   config.yml и прочие ресурсы декомпилированного Maven-проекта вообще не
+   показывались в мини-просмотрщике (не то что не открывались - их не было
+   в дереве файлов вовсе). Теперь читаемые текстовые форматы, которые
+   реально встречаются в выводе движка, показываются тоже. */
+const VIEWABLE_EXT = /\.(java|ya?ml|xml|properties|json|md|txt|gitignore|gitattributes)$/i;
+
 async function collectSourceFiles(outDir: string, relDir = ""): Promise<SourceFile[]> {
   const res = await window.nano.listDir(outDir, relDir);
   if (!res.ok || !res.items) return [];
@@ -37,12 +44,16 @@ async function collectSourceFiles(outDir: string, relDir = ""): Promise<SourceFi
     const rel = relDir ? `${relDir}/${item.name}` : item.name;
     if (item.isDir) {
       out.push(...(await collectSourceFiles(outDir, rel)));
-    } else if (/\.java$/i.test(item.name)) {
+    } else if (VIEWABLE_EXT.test(item.name)) {
+      // "pkg" - группировка по папке для дерева файлов. Для .java это и
+      // правда совпадает с Java-пакетом (после отбрасывания src/main/java/),
+      // для остальных форматов (plugin.yml, pom.xml и т.п.) - это просто
+      // путь к папке, где лежит файл, тоже разумная группировка для дерева.
       const pkg = rel
-        .replace(/^src\/main\/java\//, "")
+        .replace(/^src\/main\/(java|resources)\//, "")
         .replace(/\/[^/]+$/, "")
         .replace(/\//g, ".");
-      out.push({ id: rid("f"), pkg: pkg || "(default)", name: item.name, relPath: rel, loc: 0 });
+      out.push({ id: rid("f"), pkg: pkg || "(корень)", name: item.name, relPath: rel, loc: 0 });
     }
   }
   return out;
@@ -68,6 +79,9 @@ interface EngineApi {
   javaEnv: { ok: boolean; text?: string } | null;
   mavenEnv: { ok: boolean; text?: string } | null;
   iconThumbnails: { terminal: string | null; layers: string | null };
+  sidebarWidth: number;
+  fileTreeWidth: number;
+  terminalHeight: number;
   updateInfo: UpdateInfo;
   toasts: Toast[];
   queuedCount: number;
@@ -89,6 +103,9 @@ interface EngineApi {
   openOutput(job: Job): void;
   setSettingsOpen(open: boolean): void;
   setUpdateModalOpen(open: boolean): void;
+  setSidebarWidth(w: number): void;
+  setFileTreeWidth(w: number): void;
+  setTerminalHeight(h: number): void;
   saveSettings(next: Settings): void;
   setPaletteOpen(open: boolean): void;
   resolveEnvIssue(): void;
@@ -116,7 +133,7 @@ const DEFAULT_SETTINGS: Settings = {
 export interface UpdateInfo {
   checking: boolean;
   applying: boolean;
-  kind: "none" | "engine" | "client" | null;
+  kind: "none" | "engine" | "client" | "closed_beta" | null;
   currentVersion?: string;
   latestVersion?: string;
   downloadUrl?: string | null;
@@ -155,6 +172,12 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     terminal: null,
     layers: null,
   });
+  // Растягиваемые панели (по просьбе пользователя) - сессионное состояние,
+  // сбрасывается при перезапуске приложения (осознанный компромисс - не
+  // усложняем settings:get/set ради ширины панели в пикселях).
+  const [sidebarWidth, setSidebarWidth] = useState(292);
+  const [fileTreeWidth, setFileTreeWidth] = useState(248);
+  const [terminalHeight, setTerminalHeight] = useState(228);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [runningElapsed, setRunningElapsed] = useState<number | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
@@ -752,10 +775,10 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
   const api: EngineApi = {
     jobs, log, runningJob, runningElapsed, selectedJobId, selectedJob, openFileByJob,
-    terminalOpen, logFilter, settings, settingsOpen, updateModalOpen, paletteOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, iconThumbnails, updateInfo, toasts, queuedCount,
+    terminalOpen, logFilter, settings, settingsOpen, updateModalOpen, paletteOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, iconThumbnails, updateInfo, toasts, queuedCount, sidebarWidth, fileTreeWidth, terminalHeight,
     addFiles, openFileDialog, startQueue, stopRunning, cancelJob, removeJob, clearQueue,
     selectJob, selectFile, setLogFilter, toggleTerminal, clearLog, copyLog, copyText,
-    openOutput, setSettingsOpen, setUpdateModalOpen, saveSettings, setPaletteOpen,
+    openOutput, setSettingsOpen, setUpdateModalOpen, setSidebarWidth, setFileTreeWidth, setTerminalHeight, saveSettings, setPaletteOpen,
     resolveEnvIssue, checkForUpdates, applyEngineUpdate, openClientDownload, checkEnv, toast, dismissToast,
   };
 

@@ -276,14 +276,24 @@ function versionParts(v: string): number[] {
     .map((p) => parseInt(p, 10) || 0);
 }
 
-function versionsEqual(a: string, b: string): boolean {
+// БАГ-ФИКС (по прямой просьбе пользователя): раньше версия сравнивалась
+// только на РАВЕНСТВО - если локальная версия клиента ВЫШЕ последнего
+// известного релиза (например, пользователь сам собрал более новую
+// бета-версию из исходников, чем то, что уже опубликовано на GitHub),
+// апдейтер всё равно писал "У вас последняя версия" - технически неверно
+// и вводит в заблуждение. compareVersions возвращает -1/0/1, что
+// позволяет отличить "отстаём от релиза" (обновиться) от "мы новее
+// релиза" (это не значит "последняя версия" - значит "закрытая бета").
+function compareVersions(a: string, b: string): -1 | 0 | 1 {
   const pa = versionParts(a);
   const pb = versionParts(b);
   const len = Math.max(pa.length, pb.length);
   for (let i = 0; i < len; i++) {
-    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return false;
+    const va = pa[i] ?? 0;
+    const vb = pb[i] ?? 0;
+    if (va !== vb) return va > vb ? 1 : -1;
   }
-  return true;
+  return 0;
 }
 
 // Соглашение о номерах версий проекта (см. HANDOFF_22): релиз - РОВНО два
@@ -434,8 +444,12 @@ export function registerUpdateHandlers(
       }
 
       const versions = await httpsGetJson<VersionsJson>(versionsAsset.browser_download_url);
-      const clientNeedsUpdate = !versionsEqual(currentClientVersion, versions.client);
-      const apiNeedsUpdate = installedApiVersion === null || !versionsEqual(installedApiVersion, versions.api);
+      const clientCmp = compareVersions(currentClientVersion, versions.client);
+      const clientNeedsUpdate = clientCmp < 0;  // локальная версия СТАРШЕ релиза - реально нужно обновление
+      const clientIsAhead = clientCmp > 0;  // локальная версия НОВЕЕ релиза - закрытая бета, не "последняя версия"
+      const apiCmp = installedApiVersion !== null ? compareVersions(installedApiVersion, versions.api) : -1;
+      const apiNeedsUpdate = installedApiVersion === null || apiCmp < 0;
+      const apiIsAhead = installedApiVersion !== null && apiCmp > 0;
 
       // Клиент важнее движка: если поменялось само GUI-приложение, апдейт
       // движка (даже если он ТОЖЕ поменялся) неважен сам по себе - новый
@@ -446,15 +460,23 @@ export function registerUpdateHandlers(
       // "engine"-обновление (тихий патч без переустановки) теперь доступно
       // на всех трёх ОС (см. ENGINE_ASSET_NAME выше - раньше было только
       // на Windows, пока build-api был Windows-only job'ом).
-      let updateKind: "none" | "engine" | "client" = "none";
+      //
+      // БАГ-ФИКС (по прямой просьбе пользователя): если локальная версия
+      // ВЫШЕ последнего опубликованного релиза (собрал более новую бету
+      // сам, до публикации) - это НЕ "последняя версия" (звучит как "всё
+      // official и стабильно"), это "closed_beta" - отдельное состояние с
+      // честной формулировкой в UI ("У вас закрытая Бета Версия").
+      let updateKind: "none" | "engine" | "client" | "closed_beta" = "none";
       if (clientNeedsUpdate) updateKind = "client";
+      else if (clientIsAhead) updateKind = "closed_beta";
       else if (apiNeedsUpdate && cliAsset && !engineHashMatches) updateKind = "engine";
+      else if (apiIsAhead) updateKind = "closed_beta";
 
       return {
         ok: true,
         updateKind,
         currentVersion: currentClientVersion,
-        latestVersion: updateKind === "client" ? versions.client : versions.api,
+        latestVersion: updateKind === "client" ? versions.client : updateKind === "closed_beta" ? versions.client : versions.api,
         latestVersionKind: classifyVersion(updateKind === "client" ? versions.client : versions.api),
         downloadUrl: cliAsset ? cliAsset.browser_download_url : null,
         clientDownloadUrl: setupAsset ? setupAsset.browser_download_url : release.html_url,

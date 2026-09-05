@@ -103,6 +103,18 @@ export function UpdateModal() {
                 Скачать
               </button>
             </>
+          ) : updateInfo.kind === "closed_beta" ? (
+            <>
+              <p className="text-[13.5px] font-medium text-ink">У вас закрытая Бета Версия</p>
+              <p className="mono mt-1 text-[11.5px] text-faint">
+                {engineVersion?.replace(/^NanoDecompiler /, "") ?? guiVersion ?? "?"} — новее последнего
+                опубликованного релиза ({updateInfo.latestVersion})
+              </p>
+              <button className="btn btn-ghost h-9 w-full text-[12.5px]" onClick={() => checkForUpdates()}>
+                <RefreshCw size={13} />
+                Проверить ещё раз
+              </button>
+            </>
           ) : updateInfo.error ? (
             <>
               <p className="text-[13px] text-err">{updateInfo.error}</p>

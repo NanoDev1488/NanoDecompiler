@@ -38,7 +38,7 @@ declare global {
       }>;
       checkUpdate: () => Promise<{
         ok: boolean;
-        updateKind?: "none" | "engine" | "client";
+        updateKind?: "none" | "engine" | "client" | "closed_beta";
         currentVersion?: string;
         latestVersion?: string;
         latestVersionKind?: "release" | "prerelease";
