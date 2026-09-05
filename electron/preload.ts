@@ -21,6 +21,7 @@ export type AppSettings = {
   legitimacyCheck: boolean;
   autoUpdateCheck: boolean;
   appIcon: "terminal" | "layers";
+  setupCompleted: boolean;
 };
 
 contextBridge.exposeInMainWorld("nano", {
@@ -81,7 +82,7 @@ contextBridge.exposeInMainWorld("nano", {
     return () => ipcRenderer.removeListener("update:downloadProgress", handler);
   },
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke("settings:get"),
-  setSettings: (partial: Partial<AppSettings>): Promise<AppSettings> =>
+  setSettings: (partial: Partial<AppSettings>): Promise<AppSettings & { ok: boolean; error?: string }> =>
     ipcRenderer.invoke("settings:set", partial),
   // HANDOFF_52: мини-IDE - см. main.ts::fs:listDir/fs:readTextFile.
   listDir: (root: string, relDir: string): Promise<{ ok: boolean; items?: { name: string; isDir: boolean }[]; error?: string }> =>

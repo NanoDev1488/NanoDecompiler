@@ -1,4 +1,4 @@
-import { useCallback, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
 
 /* Растягиваемые панели по просьбе пользователя ("чтобы можно было изменять
    размер каждого под окошка") - Sidebar/FileTree по горизонтали, Terminal
@@ -15,6 +15,20 @@ export function useResizeDrag(
   invert = false,
 ) {
   const startRef = useRef({ pos: 0, size: 0 });
+  // БАГ-ФИКС: раньше слушатели pointermove/pointerup вешались на window
+  // ТОЛЬКО в onPointerDown и снимались ТОЛЬКО внутри onUp - если панель
+  // размонтируется посреди перетаскивания (переключили вкладку, окно
+  // потеряло фокус, ОС отменила pointer capture) или сработал
+  // pointercancel вместо pointerup - onUp никогда не вызывался, и
+  // слушатели утекали НАВСЕГДА, продолжая дёргать setSize() у уже
+  // отмонтированного компонента. cleanupRef хранит активную функцию
+  // очистки, чтобы useEffect ниже мог гарантированно её вызвать при
+  // размонтировании, независимо от того, как закончилось перетаскивание.
+  const cleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => cleanupRef.current?.();
+  }, []);
 
   const onPointerDown = useCallback(
     (e: ReactPointerEvent) => {
@@ -29,12 +43,18 @@ export function useResizeDrag(
         const next = startRef.current.size + (invert ? -delta : delta);
         setSize(Math.min(max, Math.max(min, next)));
       };
-      const onUp = () => {
+      const cleanup = () => {
         window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointerup", cleanup);
+        window.removeEventListener("pointercancel", cleanup);
+        window.removeEventListener("blur", cleanup);
+        cleanupRef.current = null;
       };
+      cleanupRef.current = cleanup;
       window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointerup", cleanup);
+      window.addEventListener("pointercancel", cleanup);
+      window.addEventListener("blur", cleanup);
     },
     [axis, size, setSize, min, max, invert],
   );

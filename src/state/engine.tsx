@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   baseName,
+  joinOutDir,
   fmtClock,
   fmtNum,
   fmtSeconds,
@@ -70,6 +71,7 @@ interface EngineApi {
   terminalOpen: boolean;
   logFilter: LogFilter;
   settings: Settings;
+  settingsLoaded: boolean;
   settingsOpen: boolean;
   updateModalOpen: boolean;
   paletteOpen: boolean;
@@ -107,6 +109,7 @@ interface EngineApi {
   setFileTreeWidth(w: number): void;
   setTerminalHeight(h: number): void;
   saveSettings(next: Settings): void;
+  completeSetup(): void;
   setPaletteOpen(open: boolean): void;
   resolveEnvIssue(): void;
   checkForUpdates(silent?: boolean): void;
@@ -128,6 +131,7 @@ const DEFAULT_SETTINGS: Settings = {
   legitimacyCheck: true,
   autoUpdateCheck: true,
   appIcon: "terminal",
+  setupCompleted: false,
 };
 
 export interface UpdateInfo {
@@ -181,6 +185,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [runningElapsed, setRunningElapsed] = useState<number | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const intervalRef = useRef<number | null>(null);
   const runningIdRef = useRef<string | null>(null);
@@ -289,13 +294,23 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       .getSettings()
       .then(s => {
         if (cancelled) return;
-        setSettings(prev => ({ ...prev, legitimacyCheck: s.legitimacyCheck, autoUpdateCheck: s.autoUpdateCheck, appIcon: s.appIcon }));
+        setSettings(prev => ({ ...prev, legitimacyCheck: s.legitimacyCheck, autoUpdateCheck: s.autoUpdateCheck, appIcon: s.appIcon, setupCompleted: s.setupCompleted }));
         // Автопроверка обновлений при старте - только ПОСЛЕ того, как
         // узнали настоящее значение из настроек (не дефолт), иначе
         // выключенная пользователем автопроверка на миг игнорировалась бы.
         if (s.autoUpdateCheck) checkForUpdates(true);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        // БАГ-ФИКС/фича: settings.setupCompleted в начальном состоянии -
+        // всегда false (дефолт), пока реальное значение не подгрузится с
+        // диска - для ВОЗВРАЩАЮЩЕГОСЯ пользователя (уже видел мастер
+        // первого запуска раньше) это дало бы едва заметное "мигание"
+        // мастера на долю секунды при каждом старте. settingsLoaded не
+        // даёт App.tsx решать, показывать ли мастер, пока не пришёл
+        // настоящий ответ.
+        if (!cancelled) setSettingsLoaded(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -446,8 +461,21 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       // момент добавления в очередь. Если пользователь менял "Папку
       // результата" в настройках ПОСЛЕ добавления файла, но ДО запуска -
       // job всё равно уходил в старую папку. Пересчитываем outDir из
-      // актуальных settings прямо перед запуском.
-      const outDir = `${settings.outputDir}/${baseName(job.fileName)}`;
+      // актуальных settings прямо перед запуском - но так же аккуратно,
+      // как и в addJarPaths(), проверяем коллизию с ДРУГИМИ job'ами
+      // (см. комментарий там же) - иначе этот пересчёт мог тихо откатить
+      // разруливание одноимённых файлов обратно к общей папке.
+      let outDir = joinOutDir(settings.outputDir, baseName(job.fileName));
+      const others = jobsRef.current.filter(j => j.id !== jobId);
+      if (others.some(j => j.outDir === outDir)) {
+        let n = 2;
+        let candidate = joinOutDir(settings.outputDir, `${baseName(job.fileName)}-${n}`);
+        while (others.some(j => j.outDir === candidate)) {
+          n += 1;
+          candidate = joinOutDir(settings.outputDir, `${baseName(job.fileName)}-${n}`);
+        }
+        outDir = candidate;
+      }
       if (outDir !== job.outDir) patchJob(jobId, { outDir });
       const runJob = { ...job, outDir };
 
@@ -541,6 +569,14 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     (paths: string[]) => {
       const current = jobsRef.current;
       const fresh: Job[] = [];
+      // БАГ-ФИКС (реальный, найден при систематическом аудите): дедупликация
+      // сравнивала только jarPath целиком - два файла с ОДИНАКОВЫМ именем
+      // из РАЗНЫХ папок (~/Downloads/MyPlugin.jar и ~/Desktop/MyPlugin.jar)
+      // не считались дублями, оба добавлялись в очередь, но outDir
+      // вычислялся ТОЛЬКО из имени файла - оба получали ОДИН И ТОТ ЖЕ
+      // выходной каталог, и вторая декомпиляция молча перезаписывала/
+      // смешивала результат первой без единого предупреждения.
+      const usedOutDirs = new Set(current.map(j => j.outDir));
       for (const p of paths) {
         const fileName = p.split(/[/\\]/).pop() ?? p;
         if (
@@ -550,11 +586,23 @@ export function EngineProvider({ children }: { children: ReactNode }) {
           toast(`Уже в очереди: ${fileName}`, "warn");
           continue;
         }
+        let outDir = joinOutDir(settings.outputDir, baseName(fileName));
+        if (usedOutDirs.has(outDir)) {
+          let n = 2;
+          let candidate = joinOutDir(settings.outputDir, `${baseName(fileName)}-${n}`);
+          while (usedOutDirs.has(candidate)) {
+            n += 1;
+            candidate = joinOutDir(settings.outputDir, `${baseName(fileName)}-${n}`);
+          }
+          outDir = candidate;
+          toast(`Одноимённый файл уже в очереди - результат пойдёт в отдельную папку (${baseName(fileName)}-${n})`, "warn");
+        }
+        usedOutDirs.add(outDir);
         fresh.push({
           id: rid("job"),
           fileName,
           jarPath: p,
-          outDir: `${settings.outputDir}/${baseName(fileName)}`,
+          outDir,
           sizeBytes: 0,
           classCount: null,
           addedAt: Date.now(),
@@ -637,11 +685,25 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     [stopRunning],
   );
 
-  const removeJob = useCallback((id: string) => {
-    setJobs(prev => prev.filter(j => j.id !== id));
-    setLog(prev => prev.filter(l => l.jobId !== id));
-    setSelectedJobId(prev => (prev === id ? null : prev));
-  }, []);
+  const removeJob = useCallback(
+    (id: string) => {
+      // БАГ-ФИКС (реальный, найден при систематическом аудите):
+      // clearQueue() уже защищал выполняющийся job (не удалял его), но
+      // removeJob() - нет. Удаление карточки job'а ПРЯМО во время его
+      // выполнения не останавливало реальный процесс движка - он продолжал
+      // работать в фоне, а его лог-строки продолжали приходить в терминал
+      // для job'а, у которого уже нет карточки в сайдбаре (видимая
+      // путаница: активность в терминале без соответствующей карточки).
+      if (runningIdRef.current === id) {
+        toast("Сначала остановите декомпиляцию, потом удаляйте", "warn");
+        return;
+      }
+      setJobs(prev => prev.filter(j => j.id !== id));
+      setLog(prev => prev.filter(l => l.jobId !== id));
+      setSelectedJobId(prev => (prev === id ? null : prev));
+    },
+    [toast],
+  );
 
   const clearQueue = useCallback(() => {
     const removed = jobsRef.current.filter(j => j.status !== "running").length;
@@ -714,11 +776,33 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     (next: Settings) => {
       setSettings(next);
       setSettingsOpen(false);
-      window.nano.setSettings({ legitimacyCheck: next.legitimacyCheck, autoUpdateCheck: next.autoUpdateCheck, appIcon: next.appIcon }).catch(() => {});
-      toast("Настройки сохранены", "ok");
+      // БАГ-ФИКС: toast "Настройки сохранены" раньше показывался
+      // БЕЗУСЛОВНО и НЕМЕДЛЕННО, даже не дожидаясь результата асинхронного
+      // window.nano.setSettings() - при реальном отказе записи на диск
+      // (fs.writeFileSync упал - диск полон, нет прав) пользователь видел
+      // ложное "сохранено", хотя на деле настройка тихо не сохранялась и
+      // откатилась бы при следующем запуске.
+      window.nano
+        .setSettings({ legitimacyCheck: next.legitimacyCheck, autoUpdateCheck: next.autoUpdateCheck, appIcon: next.appIcon })
+        .then(r => {
+          if (r.ok) toast("Настройки сохранены", "ok");
+          else toast(`Не удалось сохранить настройки: ${r.error ?? "неизвестная ошибка"}`, "err");
+        })
+        .catch(e => toast(`Не удалось сохранить настройки: ${String(e)}`, "err"));
     },
     [toast],
   );
+
+  // Мастер первого запуска - отдельная функция, не через saveSettings():
+  // это разовое действие ("принял лицензию"), не связанное с обычным
+  // диалогом настроек и его toast'ами - молча сохраняем и молча
+  // проглатываем отказ (если ЭТО почему-то не сохранится, худшее, что
+  // случится - мастер покажется ещё раз при следующем запуске, не
+  // критично, в отличие от реальных настроек).
+  const completeSetup = useCallback(() => {
+    setSettings(prev => ({ ...prev, setupCompleted: true }));
+    window.nano.setSettings({ setupCompleted: true }).catch(() => {});
+  }, []);
 
   // Сообщение об успешном обновлении, если предыдущий запуск закончился
   // рестартом ради применения апдейта клиента (см.
@@ -775,10 +859,10 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
   const api: EngineApi = {
     jobs, log, runningJob, runningElapsed, selectedJobId, selectedJob, openFileByJob,
-    terminalOpen, logFilter, settings, settingsOpen, updateModalOpen, paletteOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, iconThumbnails, updateInfo, toasts, queuedCount, sidebarWidth, fileTreeWidth, terminalHeight,
+    terminalOpen, logFilter, settings, settingsLoaded, settingsOpen, updateModalOpen, paletteOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, iconThumbnails, updateInfo, toasts, queuedCount, sidebarWidth, fileTreeWidth, terminalHeight,
     addFiles, openFileDialog, startQueue, stopRunning, cancelJob, removeJob, clearQueue,
     selectJob, selectFile, setLogFilter, toggleTerminal, clearLog, copyLog, copyText,
-    openOutput, setSettingsOpen, setUpdateModalOpen, setSidebarWidth, setFileTreeWidth, setTerminalHeight, saveSettings, setPaletteOpen,
+    openOutput, setSettingsOpen, setUpdateModalOpen, setSidebarWidth, setFileTreeWidth, setTerminalHeight, saveSettings, completeSetup, setPaletteOpen,
     resolveEnvIssue, checkForUpdates, applyEngineUpdate, openClientDownload, checkEnv, toast, dismissToast,
   };
 

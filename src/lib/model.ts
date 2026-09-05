@@ -62,6 +62,9 @@ export interface Settings {
    * НЕ сама иконка .exe/.app в проводнике, ту в рантайме не поменять
    * (ограничение ОС - зашивается при сборке). */
   appIcon: "terminal" | "layers";
+  /** мастер первого запуска (EULA) показан и подтверждён - см.
+   * electron/main.ts::Settings.setupCompleted. */
+  setupCompleted: boolean;
 }
 
 export type ToastKind = LogLevel;
@@ -104,4 +107,17 @@ export function fmtClock(ms: number) {
 
 export function baseName(fileName: string) {
   return fileName.replace(/\.jar$/i, "");
+}
+
+// БАГ-ФИКС: раньше пути для outDir склеивались через литеральный `/`
+// прямо в JS-шаблонных строках (`${settings.outputDir}/${...}`) - на
+// Windows, где outputDir обычно уже содержит обратные слеши
+// (C:\Users\x\out), это давало смешанные разделители в путях
+// (C:\Users\x\out/MyPlugin) - не крашит (Node на Windows принимает "/"
+// в путях), но выглядит небрежно в логах/UI. Определяем разделитель по
+// уже используемому в самом outputDir, а не жёстко "/".
+export function joinOutDir(outputDir: string, name: string): string {
+  const sep = outputDir.includes("\\") && !outputDir.includes("/") ? "\\" : "/";
+  const trimmed = outputDir.endsWith(sep) ? outputDir.slice(0, -1) : outputDir;
+  return `${trimmed}${sep}${name}`;
 }

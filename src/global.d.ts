@@ -57,10 +57,10 @@ declare global {
       onDownloadProgress: (
         cb: (e: { downloaded: number; total: number | null; kind: "client" | "engine" }) => void
       ) => () => void;
-      getSettings: () => Promise<{ legitimacyCheck: boolean; autoUpdateCheck: boolean; appIcon: "terminal" | "layers" }>;
+      getSettings: () => Promise<{ legitimacyCheck: boolean; autoUpdateCheck: boolean; appIcon: "terminal" | "layers"; setupCompleted: boolean }>;
       setSettings: (
-        partial: Partial<{ legitimacyCheck: boolean; autoUpdateCheck: boolean; appIcon: "terminal" | "layers" }>
-      ) => Promise<{ legitimacyCheck: boolean; autoUpdateCheck: boolean; appIcon: "terminal" | "layers" }>;
+        partial: Partial<{ legitimacyCheck: boolean; autoUpdateCheck: boolean; appIcon: "terminal" | "layers"; setupCompleted: boolean }>
+      ) => Promise<{ legitimacyCheck: boolean; autoUpdateCheck: boolean; appIcon: "terminal" | "layers"; setupCompleted: boolean; ok: boolean; error?: string }>;
       getAppIconThumbnails: () => Promise<{ terminal: string | null; layers: string | null }>;
       listDir: (root: string, relDir: string) => Promise<{ ok: boolean; items?: { name: string; isDir: boolean }[]; error?: string }>;
       readTextFile: (root: string, relPath: string) => Promise<{ ok: boolean; content?: string; size?: number; error?: string }>;

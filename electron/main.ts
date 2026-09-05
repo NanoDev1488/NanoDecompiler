@@ -51,8 +51,17 @@ type Settings = {
   // рантайме поменяться не может ни при каких обстоятельствах (ограничение
   // ОС, не наше) - честно объяснено в UI, не только здесь в комментарии.
   appIcon: "terminal" | "layers";
+  // Мастер первого запуска (EULA + приветствие) - показывается один раз,
+  // пока false. По просьбе пользователя - лицензия на английском
+  // (LICENSE_EULA.txt в корне проекта), автор NanoDev, t.me/NanoDev_mc.
+  setupCompleted: boolean;
 };
-const DEFAULT_SETTINGS: Settings = { legitimacyCheck: true, autoUpdateCheck: true, appIcon: "terminal" };
+const DEFAULT_SETTINGS: Settings = {
+  legitimacyCheck: true,
+  autoUpdateCheck: true,
+  appIcon: "terminal",
+  setupCompleted: false,
+};
 
 function settingsPath(): string {
   return path.join(app.getPath("userData"), "settings.json");
@@ -70,6 +79,7 @@ function loadSettings(): Settings {
       legitimacyCheck: typeof parsed.legitimacyCheck === "boolean" ? parsed.legitimacyCheck : DEFAULT_SETTINGS.legitimacyCheck,
       autoUpdateCheck: typeof parsed.autoUpdateCheck === "boolean" ? parsed.autoUpdateCheck : DEFAULT_SETTINGS.autoUpdateCheck,
       appIcon: parsed.appIcon === "terminal" || parsed.appIcon === "layers" ? parsed.appIcon : DEFAULT_SETTINGS.appIcon,
+      setupCompleted: typeof parsed.setupCompleted === "boolean" ? parsed.setupCompleted : DEFAULT_SETTINGS.setupCompleted,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -187,11 +197,21 @@ app.on("window-all-closed", () => {
 
 ipcMain.handle("settings:get", async (): Promise<Settings> => loadSettings());
 
-ipcMain.handle("settings:set", async (_e, partial: Partial<Settings>): Promise<Settings> => {
+ipcMain.handle("settings:set", async (_e, partial: Partial<Settings>): Promise<Settings & { ok: boolean; error?: string }> => {
   const merged = { ...loadSettings(), ...partial };
-  saveSettings(merged);
+  try {
+    saveSettings(merged);
+  } catch (e) {
+    // БАГ-ФИКС: saveSettings() пишет на диск (fs.writeFileSync) - может
+    // упасть (диск полон, нет прав записи и т.п.) - раньше исключение
+    // просто улетало необработанным отказом промиса, а рендерер тихо
+    // глотал его через .catch(() => {}) - пользователь менял настройку,
+    // видел визуальный отклик в UI, но на деле она НЕ сохранялась и
+    // тихо откатывалась при следующем запуске без единого предупреждения.
+    return { ...loadSettings(), ok: false, error: String(e) };
+  }
   if (partial.appIcon) applyAppIcon(merged.appIcon);
-  return merged;
+  return { ...merged, ok: true };
 });
 
 // Превью для пикера иконок в настройках - как base64 data URI, а не
