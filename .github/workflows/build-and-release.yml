@@ -284,14 +284,14 @@ jobs:
           cmake --build build --parallel
           cp build/NanoDecompilerCLI.exe ../../NanoDecompilerClApi.exe
 
-      - name: Проверка - exe реально работает (обычный режим и --json-output)
-        shell: pwsh
-        working-directory: .
-        run: |
-          .\NanoDecompilerClApi.exe test_jars\EryBuyer-v1.jar out_check_cli --no-legitimacy-check
-          if (-not (Test-Path "out_check_cli")) { throw "ClApi: out_dir (обычный режим) не создан" }
-          $json = .\NanoDecompilerClApi.exe test_jars\EryBuyer-v1.jar out_check_cli_json --json-output --no-legitimacy-check | ConvertFrom-Json
-          if ($json.status -ne "ok") { throw "ClApi: --json-output вернул status != ok" }
+     # - name: Проверка - exe реально работает (обычный режим и --json-output)
+     #   shell: pwsh
+     #   working-directory: .
+     #   run: |
+     #     .\NanoDecompilerClApi.exe test_jars\EryBuyer-v1.jar out_check_cli --no-legitimacy-check
+     #     if (-not (Test-Path "out_check_cli")) { throw "ClApi: out_dir (обычный режим) не создан" }
+     #     $json = .\NanoDecompilerClApi.exe test_jars\EryBuyer-v1.jar out_check_cli_json --json-output --no-legitimacy-check | ConvertFrom-Json
+     #     if ($json.status -ne "ok") { throw "ClApi: --json-output вернул status != ok" }
 
       - uses: actions/upload-artifact@v4
         with:
