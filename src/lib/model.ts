@@ -12,6 +12,11 @@ export interface SourceFile {
   note?: string;
   /** undefined, пока содержимое не подгружено через window.nano.readTextFile */
   code?: string;
+  /** БАГ-ФИКС: раньше при отказе readTextFile file.code просто оставался
+   * undefined НАВСЕГДА без единой ошибки - CodeView показывал "загрузка…"
+   * бесконечно, неотличимо от "правда ещё грузится". loadError отличает
+   * два состояния и даёт кнопку "Повторить" вместо вечного спиннера. */
+  loadError?: string;
 }
 
 export interface Job {

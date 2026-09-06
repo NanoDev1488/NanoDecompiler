@@ -16,8 +16,8 @@ function codeComponentFor(name: string) {
   return PlainCode;
 }
 
-export const CodeView = memo(function CodeView({ file }: { file: SourceFile | null }) {
-  const { copyText } = useEngine();
+export const CodeView = memo(function CodeView({ file, jobId }: { file: SourceFile | null; jobId?: string }) {
+  const { copyText, selectFile } = useEngine();
   const [wrap, setWrap] = useState(false);
 
   if (!file) {
@@ -77,7 +77,17 @@ export const CodeView = memo(function CodeView({ file }: { file: SourceFile | nu
           </div>
         )}
         <div className={wrap ? undefined : "min-w-max"}>
-          {file.code === undefined ? (
+          {file.loadError !== undefined ? (
+            <div className="mono flex flex-col items-start gap-2 px-4 text-[11.5px]">
+              <p className="text-err">// не удалось загрузить файл: {file.loadError}</p>
+              <button
+                className="btn btn-tonal h-7 text-[11px]"
+                onClick={() => jobId && selectFile(jobId, file.id)}
+              >
+                Повторить
+              </button>
+            </div>
+          ) : file.code === undefined ? (
             <p className="mono px-4 text-[11.5px] text-faint">// загрузка…</p>
           ) : (
             <CodeComponent code={file.code} wrap={wrap} />

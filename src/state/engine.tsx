@@ -46,14 +46,19 @@ async function collectSourceFiles(outDir: string, relDir = ""): Promise<SourceFi
     if (item.isDir) {
       out.push(...(await collectSourceFiles(outDir, rel)));
     } else if (VIEWABLE_EXT.test(item.name)) {
-      // "pkg" - группировка по папке для дерева файлов. Для .java это и
-      // правда совпадает с Java-пакетом (после отбрасывания src/main/java/),
-      // для остальных форматов (plugin.yml, pom.xml и т.п.) - это просто
-      // путь к папке, где лежит файл, тоже разумная группировка для дерева.
-      const pkg = rel
-        .replace(/^src\/main\/(java|resources)\//, "")
-        .replace(/\/[^/]+$/, "")
-        .replace(/\//g, ".");
+      // БАГ-ФИКС (реальный, найден на настоящем EssentialsX - "группы
+      // файлов называются именами самих файлов"): старый regex
+      // `/\/[^/]+$/` требует СЛЭШ перед последним сегментом - для файла
+      // ПРЯМО В КОРНЕ вывода (без подпапки, напр. просто "book.txt")
+      // слэша нет вообще, .replace() не находит совпадение и возвращает
+      // строку БЕЗ ИЗМЕНЕНИЙ - весь "book.txt" целиком становился
+      // значением pkg вместо пустой строки (которая корректно
+      // fallback'ится на "(корень)" ниже). Теперь явно вырезаем
+      // последний сегмент через lastIndexOf, не полагаясь на то, что
+      // слэш обязательно есть в строке.
+      const stripped = rel.replace(/^src\/main\/(java|resources)\//, "");
+      const lastSlash = stripped.lastIndexOf("/");
+      const pkg = (lastSlash === -1 ? "" : stripped.slice(0, lastSlash)).replace(/\//g, ".");
       out.push({ id: rid("f"), pkg: pkg || "(корень)", name: item.name, relPath: rel, loc: 0 });
     }
   }
@@ -729,10 +734,30 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     const job = jobsRef.current.find(j => j.id === jobId);
     const file = job?.files?.find(f => f.id === fileId);
     if (!job || !file || file.code !== undefined) return;
+    // Сбрасываем прошлую ошибку перед (пере)попыткой чтения - иначе кнопка
+    // "Повторить" молча оставит старый текст ошибки, пока не придёт ответ.
+    setJobs(prev =>
+      prev.map(j =>
+        j.id !== jobId ? j : { ...j, files: j.files?.map(f => (f.id === fileId ? { ...f, loadError: undefined } : f)) },
+      ),
+    );
     window.nano
       .readTextFile(job.outDir, file.relPath)
       .then(res => {
-        if (!res.ok || res.content === undefined) return;
+        if (!res.ok || res.content === undefined) {
+          // БАГ-ФИКС: раньше здесь просто return - file.code оставался
+          // undefined НАВСЕГДА, CodeView показывал "загрузка…" бесконечно,
+          // неотличимо от того, что файл правда ещё грузится. Теперь явная
+          // ошибка + возможность повторить.
+          setJobs(prev =>
+            prev.map(j =>
+              j.id !== jobId
+                ? j
+                : { ...j, files: j.files?.map(f => (f.id === fileId ? { ...f, loadError: res.error ?? "не удалось прочитать файл" } : f)) },
+            ),
+          );
+          return;
+        }
         const loc = res.content.split("\n").length;
         setJobs(prev =>
           prev.map(j =>
@@ -742,7 +767,15 @@ export function EngineProvider({ children }: { children: ReactNode }) {
           ),
         );
       })
-      .catch(() => {});
+      .catch(e => {
+        setJobs(prev =>
+          prev.map(j =>
+            j.id !== jobId
+              ? j
+              : { ...j, files: j.files?.map(f => (f.id === fileId ? { ...f, loadError: String(e) } : f)) },
+          ),
+        );
+      });
   }, []);
 
   const clearLog = useCallback(() => setLog([]), []);

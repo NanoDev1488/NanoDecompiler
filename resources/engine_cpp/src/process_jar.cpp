@@ -376,7 +376,7 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
         total_methods += static_cast<int>(cf.methods.size());
         total_fields += static_cast<int>(cf.fields.size());
     }
-    write_readme(out_dir, jar_path, static_cast<int>(class_files.size()), parse_errors, total_methods, total_fields, renamer, stats);
+    write_readme(out_dir, jar_path, static_cast<int>(class_files.size()), total_methods, total_fields, renamer, stats);
 
     return jr;
 }
@@ -432,17 +432,22 @@ void write_mapping_report(const std::string& out_dir, const Renamer& renamer) {
 }
 
 void write_readme(const std::string& out_dir, const std::string& jar_path, int n_classes,
-                   const std::vector<std::pair<std::string, std::string>>& parse_errors, int total_methods_in_kept_classes,
+                   int total_methods_in_kept_classes,
                    int total_fields_in_kept_classes, const Renamer& renamer, const ProjectStats& stats) {
+    // БАГ-ФИКС (по прямой просьбе пользователя - "переделай readme_ru.txt,
+    // сейчас там разнообразие"): раньше "Классов успешно разобрано"/
+    // "Ошибок парсинга" + список непарсящихся классов печатались ЗДЕСЬ,
+    // наверху файла, а НИЖЕ stats.summary_text() печатал ТУ ЖЕ САМУЮ
+    // информацию (классы в jar/распарсено/ошибки парсинга) ЕЩЁ РАЗ, в
+    // другом формате - настоящее дублирование одних и тех же чисел в
+    // двух разных местах одного файла. Теперь эта секция - ЕДИНСТВЕННЫЙ
+    // источник статистики парсинга/декомпиляции (см. summary_text() ниже),
+    // здесь только заголовок и деобфускация - без пересечения по темам.
     std::ostringstream f;
     std::string base = fs::path(jar_path).filename().string();
-    f << "Результат разбора: " << base << "\n";
-    f << "Классов успешно разобрано: " << n_classes << "\n";
-    f << "Ошибок парсинга: " << parse_errors.size() << "\n";
-    if (!parse_errors.empty()) {
-        f << "\nКлассы, которые не удалось разобрать:\n";
-        for (auto& [n, err] : parse_errors) f << "  " << n << ": " << err << "\n";
-    }
+    f << std::string(70, '=') << "\n";
+    f << "NanoDecompiler - результат декомпиляции: " << base << "\n";
+    f << std::string(70, '=') << "\n";
 
     int renamed_classes = 0, renamed_methods = 0, renamed_fields = 0;
     for (auto& [old, nw] : renamer.class_map())
@@ -451,6 +456,8 @@ void write_readme(const std::string& out_dir, const std::string& jar_path, int n
         if (new_name != std::get<1>(key)) renamed_methods++;
     for (auto& [key, new_name] : renamer.field_map())
         if (new_name != std::get<1>(key)) renamed_fields++;
+
+    f << "\n" << stats.summary_text() << "\n";
 
     f << "\n" << std::string(60, '=') << "\n";
     f << "СТАТИСТИКА ДЕОБФУСКАЦИИ ИМЁН\n";
@@ -470,8 +477,6 @@ void write_readme(const std::string& out_dir, const std::string& jar_path, int n
         f << "  ни одного имени не было изменено (эвристика деобфускации не нашла,\n";
         f << "  что переименовывать - см. пояснение выше про looks_obfuscated)\n";
     }
-
-    f << "\n" << stats.summary_text() << "\n";
 
     f << "\n" << std::string(60, '=') << "\n";
     f << "ЧТО РЕАЛЬНО ДЕЛАЕТ ЭТОТ ИНСТРУМЕНТ:\n\n"

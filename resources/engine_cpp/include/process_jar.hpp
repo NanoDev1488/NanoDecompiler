@@ -67,7 +67,7 @@ void write_mapping_report(const std::string& out_dir, const Renamer& renamer);
 // stats.classes_parsed уже ПОСЛЕ удаления library_classes_skipped, см.
 // process_jar.cpp по месту вызова).
 void write_readme(const std::string& out_dir, const std::string& jar_path, int n_classes,
-                   const std::vector<std::pair<std::string, std::string>>& parse_errors, int total_methods_in_kept_classes,
+                   int total_methods_in_kept_classes,
                    int total_fields_in_kept_classes, const Renamer& renamer, const ProjectStats& stats);
 
 }  // namespace nd
