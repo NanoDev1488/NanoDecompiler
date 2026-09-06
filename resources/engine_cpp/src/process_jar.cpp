@@ -190,6 +190,15 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
             library_internal_names.push_back(it->first);
             library_hit_labels.insert(hit->second.group + ":" + hit->second.artifact);
             it = class_files.erase(it);
+        } else if (is_generic_shaded_lib_path(it->first)) {
+            // НОВОЕ: конкретная библиотека неизвестна по имени/сигнатуре,
+            // но путь класса явно проходит через сегмент "libs"/"lib" -
+            // стандартная конвенция релокации зашейдженных зависимостей
+            // (см. lib_filter.hpp). Без точных Maven-координат - помечаем
+            // общей меткой, не привязанной к конкретной библиотеке.
+            library_internal_names.push_back(it->first);
+            library_hit_labels.insert("(shaded, неизвестная библиотека)");
+            it = class_files.erase(it);
         } else {
             ++it;
         }
@@ -237,6 +246,11 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
                 skip = true;
                 break;
             }
+        // НОВОЕ: та же логика, что и для .class-файлов выше - ресурс
+        // (не-.class файл) внутри пути с сегментом "libs"/"lib" тоже
+        // считаем частью зашейдженной библиотеки, даже если конкретное имя
+        // библиотеки неизвестно.
+        if (!skip && is_generic_shaded_lib_path(n)) skip = true;
         if (skip) continue;
         std::smatch m;
         if (std::regex_search(n, m, maven_meta_re)) {

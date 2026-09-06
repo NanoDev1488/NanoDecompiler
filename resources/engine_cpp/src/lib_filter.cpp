@@ -181,4 +181,21 @@ std::optional<std::pair<std::string, LibCoords>> known_library_coords(
     return std::nullopt;
 }
 
+bool is_generic_shaded_lib_path(const std::string& internal) {
+    // internal - JVM internal name с "/" в качестве разделителя (напр.
+    // "com/viaversion/viaversion/libs/mcstructs/text/Style"). Разбиваем по
+    // "/" и проверяем каждый СЕГМЕНТ ЦЕЛИКОМ - не подстроку (иначе, скажем,
+    // "library"/"librarian" ложно бы совпали) - на точное равенство "libs"
+    // или "lib".
+    size_t start = 0;
+    while (start <= internal.size()) {
+        size_t slash = internal.find('/', start);
+        std::string segment = internal.substr(start, slash == std::string::npos ? std::string::npos : slash - start);
+        if (segment == "libs" || segment == "lib") return true;
+        if (slash == std::string::npos) break;
+        start = slash + 1;
+    }
+    return false;
+}
+
 }  // namespace nd

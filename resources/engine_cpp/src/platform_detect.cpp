@@ -107,33 +107,22 @@ PlatformInfo detect_platform(const std::vector<std::string>& all_names,
         return std::find(all_names.begin(), all_names.end(), path) != all_names.end();
     };
 
-    // Порядок проверки важен: моды - первым делом (самое важное - не дать
-    // им тихо провалиться в обычную декомпиляцию плагина), затем более
-    // специфичные серверные форматы, plugin.yml - как самый общий/частый
-    // формат, последним по приоритету среди server-плагинов, НО он же
-    // почти всегда СОпутствует paper-plugin.yml для обратной совместимости
-    // (современные Paper-плагины часто кладут оба файла) - проверяем
-    // paper-plugin.yml раньше, чтобы не занизить более точный тип до
-    // просто "Bukkit".
-
-    if (has("fabric.mod.json")) {
-        info.kind = PlatformKind::ModFabric;
-        info.manifest_path = "fabric.mod.json";
-        if (auto text = read_entry("fabric.mod.json")) info.name = extract_json_field(*text, "name");
-        return info;
-    }
-    if (has("META-INF/mods.toml") || has("META-INF/neoforge.mods.toml")) {
-        info.kind = PlatformKind::ModForge;
-        info.manifest_path = has("META-INF/mods.toml") ? "META-INF/mods.toml" : "META-INF/neoforge.mods.toml";
-        if (auto text = read_entry(info.manifest_path)) info.name = extract_toml_field(*text, "displayName");
-        return info;
-    }
-    if (has("mcmod.info")) {
-        info.kind = PlatformKind::ModForge;
-        info.manifest_path = "mcmod.info";
-        if (auto text = read_entry("mcmod.info")) info.name = extract_mcmod_info_name(*text);
-        return info;
-    }
+    // БАГ-ФИКС (реальный, воспроизведён на настоящем ViaVersion-5.11.0.jar -
+    // одном из самых популярных плагинов Minecraft): раньше моды
+    // проверялись ПЕРВЫМИ, до любых серверных манифестов - логика была
+    // "не дать моду провалиться в декомпиляцию плагина". Но ViaVersion -
+    // легитимный кросс-платформенный jar, который одновременно содержит
+    // plugin.yml (Bukkit), velocity-plugin.json (Velocity) И
+    // fabric.mod.json (Fabric) - три манифеста в одном файле, потому что
+    // ViaVersion реально ставится на все три платформы из одного и того
+    // же архива. Старый порядок видел fabric.mod.json первым и ЦЕЛИКОМ
+    // отклонял ViaVersion как "мод", даже не взглянув на plugin.yml/
+    // velocity-plugin.json рядом. Теперь СНАЧАЛА проверяем все серверные
+    // форматы - если хотя бы один найден, jar декомпилируется как
+    // соответствующий плагин, НЕЗАВИСИМО от того, есть ли рядом ЕЩЁ и
+    // мод-манифест. Отказ как "мод" происходит, только если НИ ОДНОГО
+    // серверного манифеста нет вообще - это по-прежнему верно отсекает
+    // чистые Fabric/Forge-моды без единого признака серверного плагина.
     if (has("velocity-plugin.json")) {
         info.kind = PlatformKind::Velocity;
         info.manifest_path = "velocity-plugin.json";
@@ -156,6 +145,27 @@ PlatformInfo detect_platform(const std::vector<std::string>& all_names,
         info.kind = PlatformKind::Bukkit;
         info.manifest_path = "plugin.yml";
         if (auto text = read_entry("plugin.yml")) info.name = extract_yaml_name(*text);
+        return info;
+    }
+
+    // Ни одного серверного манифеста не нашлось - только теперь проверяем
+    // моды.
+    if (has("fabric.mod.json")) {
+        info.kind = PlatformKind::ModFabric;
+        info.manifest_path = "fabric.mod.json";
+        if (auto text = read_entry("fabric.mod.json")) info.name = extract_json_field(*text, "name");
+        return info;
+    }
+    if (has("META-INF/mods.toml") || has("META-INF/neoforge.mods.toml")) {
+        info.kind = PlatformKind::ModForge;
+        info.manifest_path = has("META-INF/mods.toml") ? "META-INF/mods.toml" : "META-INF/neoforge.mods.toml";
+        if (auto text = read_entry(info.manifest_path)) info.name = extract_toml_field(*text, "displayName");
+        return info;
+    }
+    if (has("mcmod.info")) {
+        info.kind = PlatformKind::ModForge;
+        info.manifest_path = "mcmod.info";
+        if (auto text = read_entry("mcmod.info")) info.name = extract_mcmod_info_name(*text);
         return info;
     }
 

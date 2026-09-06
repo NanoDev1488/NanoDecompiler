@@ -36,4 +36,19 @@ std::vector<std::pair<std::string, LibCoords>> signature_relocated_prefixes(cons
 std::optional<std::pair<std::string, LibCoords>> known_library_coords(
     const std::string& internal, const std::vector<std::pair<std::string, LibCoords>>& extra_prefixes = {});
 
+// НОВОЕ (найдено на реальных ViaVersion/EssentialsX/Chunky - трёх самых
+// популярных плагинах Minecraft, все три содержат зашейдженные библиотеки):
+// known_library_coords() находит библиотеку, только если она УЖЕ известна
+// по имени/сигнатуре заранее - для НЕизвестных, но всё равно явно
+// зашейдженных библиотек (относокейченных под .../libs/... или .../lib/...
+// внутри пакета самого плагина - стандартная конвенция Gradle Shadow/Maven
+// Shade) даёт ложноотрицательный результат, и такая библиотека
+// декомпилируется как будто это код самого плагина. is_generic_shaded_lib_path
+// проверяет наличие СЕГМЕНТА пути (не подстроки!) "libs" или "lib" где-либо
+// в internal-имени класса - универсальный сигнал независимо от того, какая
+// именно это библиотека. Используется КАК ДОПОЛНЕНИЕ к known_library_coords,
+// не вместо неё (та даёт точные Maven-координаты для pom.xml, эта - только
+// булево "похоже на зашейдженную библиотеку").
+bool is_generic_shaded_lib_path(const std::string& internal);
+
 }  // namespace nd

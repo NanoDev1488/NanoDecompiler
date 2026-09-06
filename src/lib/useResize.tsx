@@ -37,6 +37,15 @@ export function useResizeDrag(
       const target = e.currentTarget;
       target.setPointerCapture(e.pointerId);
 
+      // БАГ-ФИКС: select-none был только на самой ручке - при быстром
+      // перетаскивании курсор пролетает над текстом кода/именами файлов
+      // в соседних панелях, и браузер может случайно их выделить (обычное
+      // поведение при mousemove с зажатой кнопкой). Блокируем выделение
+      // на ВСЁМ документе на время перетаскивания, восстанавливаем по
+      // завершении.
+      const prevUserSelect = document.body.style.userSelect;
+      document.body.style.userSelect = "none";
+
       const onMove = (ev: PointerEvent) => {
         const cur = axis === "x" ? ev.clientX : ev.clientY;
         const delta = cur - startRef.current.pos;
@@ -44,6 +53,7 @@ export function useResizeDrag(
         setSize(Math.min(max, Math.max(min, next)));
       };
       const cleanup = () => {
+        document.body.style.userSelect = prevUserSelect;
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", cleanup);
         window.removeEventListener("pointercancel", cleanup);
