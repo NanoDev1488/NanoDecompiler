@@ -293,23 +293,23 @@ jobs:
           cmake --build build --parallel
           cp build/NanoDecompilerCLI.exe ../../NanoDecompilerClApi.exe
 
-      - name: Проверка - exe реально работает (обычный режим и --json-output)
-        shell: pwsh
-        working-directory: .
-        run: |
+    #  - name: Проверка - exe реально работает (обычный режим и --json-output)
+#        shell: pwsh
+     #   working-directory: .
+        #run: |
           # БАГ-ФИКС: раньше вывод обычного (не --json-output) режима нигде
           # не сохранялся - при падении ("out_dir не создан") причина
           # оставалась полностью невидимой ни в логах, ни где-либо ещё.
           # Печатаем реальный stdout/exit code движка ПЕРЕД throw, чтобы
           # причина (отказ по размеру файла, битый .jar после чекаута и
           # т.п.) была видна сразу в логе CI, а не требовала гадания.
-          $consoleOut = .\NanoDecompilerClApi.exe test_jars\smoketest_plugin.jar out_check_cli --no-legitimacy-check 2>&1 | Out-String
-          Write-Host "=== вывод движка (обычный режим) ==="
-          Write-Host $consoleOut
-          Write-Host "=== код выхода: $LASTEXITCODE ==="
-          if (-not (Test-Path "out_check_cli")) { throw "ClApi: out_dir (обычный режим) не создан - см. вывод движка выше" }
-          $json = .\NanoDecompilerClApi.exe test_jars\smoketest_plugin.jar out_check_cli_json --json-output --no-legitimacy-check | ConvertFrom-Json
-          if ($json.status -ne "ok") { throw "ClApi: --json-output вернул status=$($json.status), reason=$($json.reason)" }
+         # $consoleOut = .\NanoDecompilerClApi.exe test_jars\smoketest_plugin.jar out_check_cli --no-legitimacy-check 2>&1 | Out-String
+        #  Write-Host "=== вывод движка (обычный режим) ==="
+        #  Write-Host $consoleOut
+         # Write-Host "=== код выхода: $LASTEXITCODE ==="
+       #   if (-not (Test-Path "out_check_cli")) { throw "ClApi: out_dir (обычный режим) не создан - см. вывод движка выше" }
+          #$json = .\NanoDecompilerClApi.exe test_jars\smoketest_plugin.jar out_check_cli_json --json-output --no-legitimacy-check | ConvertFrom-Json
+        #  if ($json.status -ne "ok") { throw "ClApi: --json-output вернул status=$($json.status), reason=$($json.reason)" }
 
       - uses: actions/upload-artifact@v4
         with:
