@@ -53,7 +53,7 @@ export function StatusBar() {
         </span>
       ) : selectedJob?.status === "done" ? (
         <span className="text-dim">
-          {fmtNum(selectedJob.classCount ?? 0)} классов · {fmtSeconds(selectedJob.elapsedMs)} ·{" "}
+          {fmtNum(selectedJob.classCount ?? 0)} классов в архиве · {fmtSeconds(selectedJob.elapsedMs)} ·{" "}
           <span className="text-acid">0 ошибок</span>
         </span>
       ) : (

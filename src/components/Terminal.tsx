@@ -43,7 +43,18 @@ export function Terminal() {
   useEffect(() => {
     if (!stick || !terminalOpen) return;
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    // БАГ-ФИКС v1.7.2 (HANDOFF_NEXT_AGENT_HANDOVER п.26): раньше прокрутка
+    // к концу была мгновенным скачком (scrollTop = scrollHeight) - при
+    // активной декомпиляции лог обновляется пачками (см. троттлинг в
+    // electron/main.ts, HANDOFF_22) и терминал буквально "дёргался" на
+    // каждую пачку. scrollTo({behavior:"smooth"}) даёт плавную анимацию;
+    // если новых строк накопилось МНОГО за раз (пачка большая - например
+    // после долгой паузы вкладки в фоне), анимация не должна тянуться
+    // долго и заметно отставать от реального конца лога - в этом случае
+    // прыгаем мгновенно, как раньше.
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    el.scrollTo({ top: el.scrollHeight, behavior: distance > 2000 ? "auto" : "smooth" });
   }, [visible.length, stick, terminalOpen]);
 
   const onScroll = () => {
@@ -54,7 +65,7 @@ export function Terminal() {
 
   const jumpToEnd = () => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     setStick(true);
   };
 

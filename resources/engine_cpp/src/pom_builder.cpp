@@ -353,7 +353,8 @@ PluginYmlInfo pom_parse_plugin_yml(const std::string& text) {
 }
 
 GroupArtifactVersion guess_group_artifact(const std::string& jar_basename, const PluginYmlInfo& plugin_info,
-                                           const std::optional<std::map<std::string, std::string>>& pom_props) {
+                                           const std::optional<std::map<std::string, std::string>>& pom_props,
+                                           const std::optional<std::string>& platform_name) {
     if (pom_props.has_value() && pom_props->count("groupId") && pom_props->count("artifactId")) {
         std::string ver = pom_props->count("version") ? pom_props->at("version") : "1.0";
         return {pom_props->at("groupId"), pom_props->at("artifactId"), ver};
@@ -361,6 +362,12 @@ GroupArtifactVersion guess_group_artifact(const std::string& jar_basename, const
     std::string name;
     if (plugin_info.name.has_value()) {
         name = *plugin_info.name;
+    } else if (platform_name.has_value() && !platform_name->empty()) {
+        // НОВОЕ v1.7.2: Velocity (velocity-plugin.json)/BungeeCord (bungee.yml)
+        // не имеют Bukkit-style plugin.yml - раньше имя ВСЕГДА бралось из
+        // jar_basename ниже, даже если платформенный манифест уже дал
+        // настоящее имя плагина.
+        name = *platform_name;
     } else {
         static const std::regex trail_re(R"([-_][\d.]+$)");
         name = std::regex_replace(jar_basename, trail_re, "");
@@ -376,7 +383,8 @@ GroupArtifactVersion guess_group_artifact(const std::string& jar_basename, const
 
 PomBuildResult build_pom(const std::string& jar_path, const std::string& plugin_yml_text,
                           const std::vector<std::string>& external_dotted_names,
-                          const std::vector<std::string>& uploads_zip_names, const ZipReader& zip_reader) {
+                          const std::vector<std::string>& uploads_zip_names, const ZipReader& zip_reader,
+                          const std::optional<std::string>& platform_name) {
     auto slash = jar_path.find_last_of("/\\");
     std::string base = (slash == std::string::npos) ? jar_path : jar_path.substr(slash + 1);
     auto dot = base.find_last_of('.');
@@ -420,7 +428,7 @@ PomBuildResult build_pom(const std::string& jar_path, const std::string& plugin_
         return {text, "original"};
     }
 
-    auto gav = guess_group_artifact(jar_basename, plugin_info, found.props);
+    auto gav = guess_group_artifact(jar_basename, plugin_info, found.props, platform_name);
 
     std::vector<std::tuple<std::string, std::string, std::string, std::string>> explicit_deps;
     for (auto& lib : plugin_info.libraries) {

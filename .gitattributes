@@ -1,0 +1,22 @@
+# БАГ-ФИКС (возможная причина CI-падения на Windows - "out_dir не создан"
+# при запуске ClApi на test_jars/EryBuyer-v1.jar): без явного .gitattributes
+# git полагается на собственную эвристику определения бинарных файлов при
+# чекауте - обычно работает верно, но не гарантированно для ЛЮБОГО .jar
+# (может ошибочно попытаться привести переносы строк к CRLF на Windows,
+# что ЛОМАЕТ содержимое ZIP/JAR-архива побайтово). Явно помечаем все
+# бинарные форматы проекта, чтобы никогда не полагаться на эвристику.
+
+*.jar binary
+*.zip binary
+*.rar binary
+*.png binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.svg binary
+*.exe binary
+*.dll binary
+*.class binary
+*.so binary
+*.dylib binary

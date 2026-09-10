@@ -235,11 +235,21 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     // корневым pom.xml, создавая ту же путаницу, что и старый MANIFEST.MF.
     static const std::regex meta_signature_re(R"(^META-INF/[^/]+\.(SF|RSA|DSA|EC)$)", std::regex::icase);
     static const std::regex meta_maven_re(R"(^META-INF/maven/.*\.(xml|properties)$)");
+    // БАГ-ФИКС v1.7.2 (HANDOFF_NEXT_AGENT_HANDOVER п.20): META-INF/LICENSE*
+    // и META-INF/NOTICE* - это лицензионные файлы БИБЛИОТЕК, забандленных
+    // maven-shade-plugin в исходный jar (каждая зависимость добавляет свой
+    // LICENSE.txt/NOTICE.txt под META-INF при shading) - не относятся к
+    // коду самого плагина, всё ещё "протекали" в ресурсы в 1.7.0. Разные
+    // сборщики называют их по-разному (LICENSE, LICENSE.txt, LICENSE.md,
+    // license, NOTICE, NOTICE.txt, license-НАЗВАНИЕ-БИБЛИОТЕКИ.txt) -
+    // ловим по префиксу регистронезависимо, не только точное имя.
+    static const std::regex meta_license_re(R"(^META-INF/(LICENSE|NOTICE)([._-].*)?$)", std::regex::icase);
     for (auto& n : all_names) {
         if ((n.size() >= 6 && n.substr(n.size() - 6) == ".class") || (!n.empty() && n.back() == '/')) continue;
         if (n == "META-INF/MANIFEST.MF") continue;
         if (std::regex_match(n, meta_signature_re)) continue;
         if (std::regex_match(n, meta_maven_re)) continue;
+        if (std::regex_match(n, meta_license_re)) continue;
         bool skip = false;
         for (auto& p : skip_res_prefixes)
             if (starts_with(n, p)) {
@@ -291,7 +301,10 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     }
 
     // --- 8. pom.xml (оригинал или сгенерированный). ---
-    auto pom_result = build_pom(jar_path, plugin_yml_text.value_or(""), external_dotted, all_names, zr);
+    // НОВОЕ v1.7.2: передаём имя плагина из detect_platform() (jr.platform)
+    // как fallback для Velocity/Bungee (без Bukkit-style plugin.yml) -
+    // раньше в этом случае artifactId всегда брался из имени файла jar.
+    auto pom_result = build_pom(jar_path, plugin_yml_text.value_or(""), external_dotted, all_names, zr, jr.platform.name);
     write_text_file((fs::path(out_dir) / "pom.xml").string(), pom_result.pom_xml);
 
     // --- 9. Проверка легитимности (см. legitimacy_check.hpp) - ВСЕГДА все
@@ -509,7 +522,18 @@ void write_readme(const std::string& out_dir, const std::string& jar_path, int n
          "  - try/finally, скомпилированный через дублирование кода finally-блока\n"
          "    (стандартно для javac 7+), восстанавливается как несколько отдельных\n"
          "    catch(Throwable)-блоков с повторяющимся кодом, а не как единый\n"
-         "    красивый `finally {}` - семантика верна, но не свёрнута.\n";
+         "    красивый `finally {}` - семантика верна, но не свёрнута.\n"
+         // НОВОЕ v1.7.2 (найдено при тестировании на 32 реальных плагинах -
+         // паттерн встретился в КАЖДОМ из них, где были enum'ы с полями):
+         // ограничение системное и частое, честная секция README_RU должна
+         // предупреждать о нём ДО того, как пользователь наткнётся на
+         // построчный комментарий внутри конкретного enum-файла.
+         "  - enum с конструктором, принимающим аргументы (например\n"
+         "    `enum X { A(1, \"a\"), B(2, \"b\"); X(int n, String s) {...} }`) -\n"
+         "    константы перечисляются БЕЗ аргументов конструктора (см. HANDOFF_42) -\n"
+         "    такой файл не скомпилируется без ручной правки. Ищите в файлах\n"
+         "    комментарий \"ВНИМАНИЕ: конструктор этого enum принимает аргументы\" -\n"
+         "    там же указаны типы нужных аргументов.\n";
 
     write_text_file((fs::path(out_dir) / "README_RU.txt").string(), f.str());
 }

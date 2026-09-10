@@ -1,8 +1,8 @@
 import { Copy, WrapText } from "lucide-react";
-import { memo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useEngine } from "../state/engine";
 import { JavaCode } from "../lib/javaHighlight";
-import { PlainCode, XmlCode, YamlCode } from "../lib/textHighlight";
+import { PlainCode, PropertiesCode, XmlCode, YamlCode } from "../lib/textHighlight";
 import type { SourceFile } from "../lib/model";
 
 // БАГ-ФИКС: раньше ЛЮБОЙ файл в просмотрщике рендерился через JavaCode
@@ -11,14 +11,39 @@ import type { SourceFile } from "../lib/model";
 function codeComponentFor(name: string) {
   if (/\.java$/i.test(name)) return JavaCode;
   if (/\.ya?ml$/i.test(name)) return YamlCode;
-  if (/\.properties$/i.test(name)) return YamlCode;  // ключ=значение - тот же токенизатор подходит
+  // БАГ-ФИКС v1.7.2: .properties использует "=" как разделитель, а
+  // YAML_KEY_RE в YamlCode понимает только ":" - подсветка ключей никогда
+  // не срабатывала. Отдельный токенизатор PropertiesCode понимает оба.
+  if (/\.properties$/i.test(name)) return PropertiesCode;
   if (/\.xml$/i.test(name)) return XmlCode;
   return PlainCode;
+}
+
+// НОВОЕ v1.7.2 (HANDOFF_NEXT_AGENT_HANDOVER п.17): .json-файлы (например
+// mapping/stats-отчёты движка) раньше показывались ОДНОЙ строкой как есть -
+// движок пишет компактный JSON без переносов, читать такое в просмотрщике
+// невозможно. Красиво печатаем ТОЛЬКО для отображения (сам файл на диске не
+// трогаем) - если JSON невалиден (обрезан/не JSON вовсе, несмотря на
+// расширение), тихо показываем исходный текст как есть, не роняем вьюер.
+function prettyPrintIfJson(name: string, code: string): string {
+  if (!/\.json$/i.test(name)) return code;
+  try {
+    return JSON.stringify(JSON.parse(code), null, 2);
+  } catch {
+    return code;
+  }
 }
 
 export const CodeView = memo(function CodeView({ file, jobId }: { file: SourceFile | null; jobId?: string }) {
   const { copyText, selectFile } = useEngine();
   const [wrap, setWrap] = useState(false);
+  // useMemo вызывается БЕЗУСЛОВНО (до раннего return ниже) - иначе при
+  // переключении file между null/не-null менялось бы число вызванных хуков
+  // между рендерами, что React запрещает (Rules of Hooks).
+  const displayCode = useMemo(
+    () => (file?.code === undefined ? undefined : prettyPrintIfJson(file.name, file.code)),
+    [file?.name, file?.code],
+  );
 
   if (!file) {
     return (
@@ -63,8 +88,8 @@ export const CodeView = memo(function CodeView({ file, jobId }: { file: SourceFi
         <button
           className="icon-btn h-7 w-7"
           title="Скопировать исходник"
-          disabled={file.code === undefined}
-          onClick={() => file.code !== undefined && copyText(file.code, `Исходник ${file.name}`)}
+          disabled={displayCode === undefined}
+          onClick={() => displayCode !== undefined && copyText(displayCode, `Исходник ${file.name}`)}
         >
           <Copy size={14} />
         </button>
@@ -87,10 +112,10 @@ export const CodeView = memo(function CodeView({ file, jobId }: { file: SourceFi
                 Повторить
               </button>
             </div>
-          ) : file.code === undefined ? (
+          ) : displayCode === undefined ? (
             <p className="mono px-4 text-[11.5px] text-faint">// загрузка…</p>
           ) : (
-            <CodeComponent code={file.code} wrap={wrap} />
+            <CodeComponent code={displayCode} wrap={wrap} />
           )}
         </div>
       </div>

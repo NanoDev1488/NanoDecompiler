@@ -64,8 +64,16 @@ struct GroupArtifactVersion {
     std::string artifact;
     std::string version;
 };
+// НОВОЕ v1.7.2 (HANDOFF_NEXT_AGENT_HANDOVER п.7): platform_name -
+// имя плагина, уже распознанное detect_platform() (velocity-plugin.json/
+// bungee.yml/paper-plugin.yml) - используется как fallback ТОЛЬКО если
+// свой (Bukkit-style) plugin_info.name отсутствует. Раньше в этом случае
+// (Velocity/Bungee jar без plugin.yml) artifactId брался из ИМЕНИ ФАЙЛА
+// jar - хуже, чем уже распарсенное настоящее имя плагина из его же
+// манифеста, которое лежит рядом и просто не использовалось здесь.
 GroupArtifactVersion guess_group_artifact(const std::string& jar_basename, const PluginYmlInfo& plugin_info,
-                                           const std::optional<std::map<std::string, std::string>>& pom_props);
+                                           const std::optional<std::map<std::string, std::string>>& pom_props,
+                                           const std::optional<std::string>& platform_name = std::nullopt);
 
 struct PomBuildResult {
     std::string pom_xml;
@@ -73,6 +81,7 @@ struct PomBuildResult {
 };
 PomBuildResult build_pom(const std::string& jar_path, const std::string& plugin_yml_text,
                           const std::vector<std::string>& external_dotted_names,
-                          const std::vector<std::string>& uploads_zip_names, const ZipReader& zip_reader);
+                          const std::vector<std::string>& uploads_zip_names, const ZipReader& zip_reader,
+                          const std::optional<std::string>& platform_name = std::nullopt);
 
 }  // namespace nd

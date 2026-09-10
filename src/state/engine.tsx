@@ -97,6 +97,7 @@ interface EngineApi {
   openFileDialog(): void;
   startQueue(): void;
   stopRunning(): void;
+  stopAll(): void;
   cancelJob(id: string): void;
   removeJob(id: string): void;
   clearQueue(): void;
@@ -512,6 +513,14 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
       try {
         const res = await window.nano.runDecompile(runJob.jarPath, runJob.outDir);
+        // БАГ-ФИКС (реальный, по прямой жалобе пользователя): stopRunning()
+        // уже мог пометить job как "canceled" и показать toast "Остановлено"
+        // ДО того, как этот await вообще успел вернуться (убитый процесс
+        // всё равно рано или поздно эмитит close с ненулевым кодом) - без
+        // этой проверки res.ok=false после отмены СНОВА перезаписывал
+        // статус на "failed" и показывал пугающее "движок завершился с
+        // кодом N" прямо поверх уже показанного пользователю "Остановлено".
+        if (jobsRef.current.find(j => j.id === jobId)?.status === "canceled") return;
         if (res.ok) {
           await finalize(jobId, true);
         } else {
@@ -519,6 +528,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
           await finalize(jobId, false, res.error);
         }
       } catch (e) {
+        if (jobsRef.current.find(j => j.id === jobId)?.status === "canceled") return;
         pushLog(jobId, "err", "engine", String(e));
         await finalize(jobId, false, String(e));
       }
@@ -565,6 +575,18 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     pushLog(id, "err", "abort", "canceled by user");
     toast("Декомпиляция остановлена. Прогресс не сохранён.", "warn");
   }, [patchJob, pushLog, toast]);
+
+  // По просьбе пользователя: если в очереди 2+ jar, "Остановить всё"
+  // останавливает текущий И не даёт автопродолжению (см. finalize() -
+  // через 400мс само подхватывает следующий status:"queued") забрать
+  // следующий - помечаем ВСЕ ожидающие job'ы отменёнными тоже, не только
+  // текущий.
+  const stopAll = useCallback(() => {
+    const wasRunning = runningIdRef.current !== null;
+    stopRunning();
+    setJobs(prev => prev.map(j => (j.status === "queued" ? { ...j, status: "canceled" } : j)));
+    if (!wasRunning) toast("Очередь очищена", "warn");
+  }, [stopRunning, toast]);
 
   // Добавление через реальный системный диалог (Electron) - единственный
   // надёжный способ получить настоящий абсолютный путь к .jar. Обычный
@@ -893,7 +915,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const api: EngineApi = {
     jobs, log, runningJob, runningElapsed, selectedJobId, selectedJob, openFileByJob,
     terminalOpen, logFilter, settings, settingsLoaded, settingsOpen, updateModalOpen, paletteOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, iconThumbnails, updateInfo, toasts, queuedCount, sidebarWidth, fileTreeWidth, terminalHeight,
-    addFiles, openFileDialog, startQueue, stopRunning, cancelJob, removeJob, clearQueue,
+    addFiles, openFileDialog, startQueue, stopRunning, stopAll, cancelJob, removeJob, clearQueue,
     selectJob, selectFile, setLogFilter, toggleTerminal, clearLog, copyLog, copyText,
     openOutput, setSettingsOpen, setUpdateModalOpen, setSidebarWidth, setFileTreeWidth, setTerminalHeight, saveSettings, completeSetup, setPaletteOpen,
     resolveEnvIssue, checkForUpdates, applyEngineUpdate, openClientDownload, checkEnv, toast, dismissToast,

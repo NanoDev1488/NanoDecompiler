@@ -63,6 +63,40 @@ function tokenizeYamlLine(line: string): Token[] {
   return out;
 }
 
+// .properties (Java): "# комментарий" (а также "!"), "ключ=значение" и
+// "ключ:значение" (формат Java Properties формально допускает оба
+// разделителя, а также просто пробел). БАГ-ФИКС (v1.7.2): раньше
+// .properties ошибочно роутились на tokenizeYamlLine(), чей YAML_KEY_RE
+// требует ":" - на реальных .properties (разделитель "=") regex не
+// совпадал никогда, ключи не подсвечивались. Отдельный токенизатор ниже
+// проверен .exec() на настоящих строках из EssentialsX messages_en.properties.
+const PROPERTIES_KEY_RE = /^(\s*)([^\s=:#!][^=:]*?)(\s*[=:]\s*|\s+)(.*)$/;
+
+function tokenizePropertiesLine(line: string): Token[] {
+  const commentOnly = YAML_LINE_RE.exec(line);
+  if (commentOnly && commentOnly[2]) {
+    const indent = commentOnly[1];
+    return indent ? [{ text: indent, cls: null }, { text: commentOnly[2], cls: "tok-c" }] : [{ text: commentOnly[2], cls: "tok-c" }];
+  }
+  const keyMatch = PROPERTIES_KEY_RE.exec(line);
+  const out: Token[] = [];
+  let rest = line;
+  if (keyMatch) {
+    out.push({ text: keyMatch[1], cls: null }, { text: keyMatch[2], cls: "tok-a" }, { text: keyMatch[3], cls: null });
+    rest = keyMatch[4];
+  }
+  let last = 0;
+  YAML_TOKEN_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = YAML_TOKEN_RE.exec(rest)) !== null) {
+    if (m.index > last) out.push({ text: rest.slice(last, m.index), cls: null });
+    out.push({ text: m[0], cls: "tok-s" });
+    last = m.index + m[0].length;
+  }
+  if (last < rest.length) out.push({ text: rest.slice(last), cls: null });
+  return out;
+}
+
 // XML: <!-- комментарий -->, <tag>, </tag>, атрибуты, строки-значения.
 const XML_TOKEN_RE = new RegExp(
   [
@@ -121,6 +155,11 @@ function renderShell(lines: ReactNode[], wrap?: boolean): ReactNode {
 
 export const YamlCode = memo(function YamlCode({ code, wrap }: { code: string; wrap?: boolean }) {
   const lines = useMemo(() => code.split("\n").map((l, i) => renderTokens(tokenizeYamlLine(l), i)), [code]);
+  return renderShell(lines, wrap);
+});
+
+export const PropertiesCode = memo(function PropertiesCode({ code, wrap }: { code: string; wrap?: boolean }) {
+  const lines = useMemo(() => code.split("\n").map((l, i) => renderTokens(tokenizePropertiesLine(l), i)), [code]);
   return renderShell(lines, wrap);
 });
 

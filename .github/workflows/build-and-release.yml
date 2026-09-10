@@ -122,8 +122,11 @@ jobs:
       - name: Проверка - собранный движок реально работает
         shell: bash
         run: |
-          resources/engine/NanoDecompilerCLI.exe test_jars/EryBuyer-v1.jar out_check_client_cli --no-legitimacy-check
-          if [ ! -d "out_check_client_cli" ]; then echo "движок: out_dir не создан"; exit 1; fi
+          # БАГ-ФИКС: раньше при падении причина оставалась невидимой -
+          # печатаем реальный вывод движка перед exit 1.
+          echo "=== вывод движка (обычный режим) ==="
+          resources/engine/NanoDecompilerCLI.exe test_jars/smoketest_plugin.jar out_check_client_cli --no-legitimacy-check
+          if [ ! -d "out_check_client_cli" ]; then echo "движок: out_dir не создан - см. вывод выше"; exit 1; fi
 
       - uses: actions/setup-node@v4
         with:
@@ -174,8 +177,11 @@ jobs:
 
       - name: Проверка - собранный движок реально работает
         run: |
-          resources/engine/NanoDecompilerCLI test_jars/EryBuyer-v1.jar out_check_client_cli --no-legitimacy-check
-          if [ ! -d "out_check_client_cli" ]; then echo "движок: out_dir не создан"; exit 1; fi
+          # БАГ-ФИКС: раньше при падении причина оставалась невидимой -
+          # печатаем реальный вывод движка перед exit 1.
+          echo "=== вывод движка (обычный режим) ==="
+          resources/engine/NanoDecompilerCLI test_jars/smoketest_plugin.jar out_check_client_cli --no-legitimacy-check
+          if [ ! -d "out_check_client_cli" ]; then echo "движок: out_dir не создан - см. вывод выше"; exit 1; fi
 
       - uses: actions/setup-node@v4
         with:
@@ -226,8 +232,11 @@ jobs:
 
       - name: Проверка - собранный движок реально работает
         run: |
-          resources/engine/NanoDecompilerCLI test_jars/EryBuyer-v1.jar out_check_client_cli --no-legitimacy-check
-          if [ ! -d "out_check_client_cli" ]; then echo "движок: out_dir не создан"; exit 1; fi
+          # БАГ-ФИКС: раньше при падении причина оставалась невидимой -
+          # печатаем реальный вывод движка перед exit 1.
+          echo "=== вывод движка (обычный режим) ==="
+          resources/engine/NanoDecompilerCLI test_jars/smoketest_plugin.jar out_check_client_cli --no-legitimacy-check
+          if [ ! -d "out_check_client_cli" ]; then echo "движок: out_dir не создан - см. вывод выше"; exit 1; fi
 
       - uses: actions/setup-node@v4
         with:
@@ -288,10 +297,19 @@ jobs:
         shell: pwsh
         working-directory: .
         run: |
-          .\NanoDecompilerClApi.exe test_jars\EryBuyer-v1.jar out_check_cli --no-legitimacy-check
-          if (-not (Test-Path "out_check_cli")) { throw "ClApi: out_dir (обычный режим) не создан" }
-          $json = .\NanoDecompilerClApi.exe test_jars\EryBuyer-v1.jar out_check_cli_json --json-output --no-legitimacy-check | ConvertFrom-Json
-          if ($json.status -ne "ok") { throw "ClApi: --json-output вернул status != ok" }
+          # БАГ-ФИКС: раньше вывод обычного (не --json-output) режима нигде
+          # не сохранялся - при падении ("out_dir не создан") причина
+          # оставалась полностью невидимой ни в логах, ни где-либо ещё.
+          # Печатаем реальный stdout/exit code движка ПЕРЕД throw, чтобы
+          # причина (отказ по размеру файла, битый .jar после чекаута и
+          # т.п.) была видна сразу в логе CI, а не требовала гадания.
+          $consoleOut = .\NanoDecompilerClApi.exe test_jars\smoketest_plugin.jar out_check_cli --no-legitimacy-check 2>&1 | Out-String
+          Write-Host "=== вывод движка (обычный режим) ==="
+          Write-Host $consoleOut
+          Write-Host "=== код выхода: $LASTEXITCODE ==="
+          if (-not (Test-Path "out_check_cli")) { throw "ClApi: out_dir (обычный режим) не создан - см. вывод движка выше" }
+          $json = .\NanoDecompilerClApi.exe test_jars\smoketest_plugin.jar out_check_cli_json --json-output --no-legitimacy-check | ConvertFrom-Json
+          if ($json.status -ne "ok") { throw "ClApi: --json-output вернул status=$($json.status), reason=$($json.reason)" }
 
       - uses: actions/upload-artifact@v4
         with:
@@ -314,10 +332,10 @@ jobs:
       - name: Проверка - бинарник реально работает
         run: |
           chmod +x NanoDecompilerClApi
-          ./NanoDecompilerClApi test_jars/EryBuyer-v1.jar out_check_cli --no-legitimacy-check
-          test -d out_check_cli || { echo "ClApi: out_dir не создан"; exit 1; }
-          JSON=$(./NanoDecompilerClApi test_jars/EryBuyer-v1.jar out_check_cli_json --json-output --no-legitimacy-check)
-          echo "$JSON" | grep -q '"status":"ok"' || { echo "ClApi: --json-output вернул status != ok"; exit 1; }
+          ./NanoDecompilerClApi test_jars/smoketest_plugin.jar out_check_cli --no-legitimacy-check
+          test -d out_check_cli || { echo "ClApi: out_dir не создан - см. вывод движка выше"; exit 1; }
+          JSON=$(./NanoDecompilerClApi test_jars/smoketest_plugin.jar out_check_cli_json --json-output --no-legitimacy-check)
+          echo "$JSON" | grep -q '"status":"ok"' || { echo "ClApi: --json-output вернул: $JSON"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:
@@ -337,10 +355,10 @@ jobs:
       - name: Проверка - бинарник реально работает
         run: |
           chmod +x NanoDecompilerClApi
-          ./NanoDecompilerClApi test_jars/EryBuyer-v1.jar out_check_cli --no-legitimacy-check
-          test -d out_check_cli || { echo "ClApi: out_dir не создан"; exit 1; }
-          JSON=$(./NanoDecompilerClApi test_jars/EryBuyer-v1.jar out_check_cli_json --json-output --no-legitimacy-check)
-          echo "$JSON" | grep -q '"status":"ok"' || { echo "ClApi: --json-output вернул status != ok"; exit 1; }
+          ./NanoDecompilerClApi test_jars/smoketest_plugin.jar out_check_cli --no-legitimacy-check
+          test -d out_check_cli || { echo "ClApi: out_dir не создан - см. вывод движка выше"; exit 1; }
+          JSON=$(./NanoDecompilerClApi test_jars/smoketest_plugin.jar out_check_cli_json --json-output --no-legitimacy-check)
+          echo "$JSON" | grep -q '"status":"ok"' || { echo "ClApi: --json-output вернул: $JSON"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:

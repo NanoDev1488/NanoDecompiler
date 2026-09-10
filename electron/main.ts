@@ -455,11 +455,40 @@ function checkVersionCmd(cmd: string, args: string[]): Promise<{ ok: boolean; te
   return new Promise((resolve) => {
     let out = "";
     let settled = false;
-    const proc = spawn(cmd, args, { env: { ...process.env }, shell: process.platform === "win32" });
+    // БАГ-ФИКС (реальный, по жалобе пользователя - "кракозябры/непонятный
+    // символ в версии Maven"): на Windows mvn.cmd - батник, запускается
+    // через cmd.exe (shell:true) - cmd.exe по умолчанию использует
+    // системную кодовую страницу консоли (обычно CP866/CP1251 на русской
+    // Windows), НЕ UTF-8. Node декодировал байты как UTF-8 (toString
+    // ("utf-8")) - несовпадение кодировок ломает любой не-ASCII байт в
+    // кракозябры. "chcp 65001" принудительно переключает консоль в UTF-8
+    // ПЕРЕД запуском самой команды - устраняет проблему у источника,
+    // а не пытается угадать/починить уже испорченные байты после.
+    let spawnCmd = cmd;
+    let spawnArgs = args;
+    let useShell = false;
+    if (process.platform === "win32") {
+      const quotedArgs = args.map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(" ");
+      spawnCmd = `chcp 65001>nul && "${cmd}" ${quotedArgs}`;
+      spawnArgs = [];
+      useShell = true;
+    }
+    const proc = spawn(spawnCmd, spawnArgs, { env: { ...process.env }, shell: useShell });
     const finish = (ok: boolean) => {
       if (settled) return;
       settled = true;
-      resolve({ ok, text: ok ? out.split(/\r?\n/)[0]?.trim() : undefined });
+      // БАГ-ФИКС: раньше брали ПЕРВУЮ строку вывода вслепую (out.split(...)[0])
+      // - если перед реальной строкой версии оказывался любой служебный
+      // вывод (баннер cmd.exe, побочный вывод батника и т.п.), в UI попадала
+      // именно эта строка-мусор вместо "Apache Maven 3.9.6 (...)"/
+      // "openjdk 17...". Ищем строку по надёжному якорю - маркеру, который
+      // ВСЕГДА есть именно в строке версии, а не берём позицию наугад.
+      let text: string | undefined;
+      if (ok) {
+        const lines = out.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+        text = lines.find((l) => /apache maven|openjdk|java version|^java\s/i.test(l)) ?? lines[0];
+      }
+      resolve({ ok, text });
     };
     proc.stdout.on("data", (d: Buffer) => (out += d.toString("utf-8")));
     proc.stderr.on("data", (d: Buffer) => (out += d.toString("utf-8")));

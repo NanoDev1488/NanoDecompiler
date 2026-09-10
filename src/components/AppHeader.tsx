@@ -12,6 +12,7 @@ export function AppHeader() {
     updateInfo,
     startQueue,
     stopRunning,
+    stopAll,
     openFileDialog,
     setSettingsOpen,
     setUpdateModalOpen,
@@ -65,10 +66,30 @@ export function AppHeader() {
       </button>
 
       {running ? (
-        <button className="btn btn-err flex-none" onClick={stopRunning}>
-          <Square size={13} />
-          Остановить
-        </button>
+        queuedCount > 0 ? (
+          // По просьбе пользователя: 2+ плагина в очереди (текущий + ещё
+          // хотя бы один ожидающий) - основная кнопка "Остановить всё"
+          // (текущий + вся очередь), маленькая рядом - остановить только
+          // текущий, не трогая очередь. Один плагин - как было раньше.
+          <div className="flex flex-none items-center gap-1">
+            <button className="btn btn-err flex-none" onClick={stopAll}>
+              <Square size={13} />
+              Остановить всё
+            </button>
+            <button
+              className="icon-btn h-8 w-8 flex-none border border-line"
+              onClick={stopRunning}
+              title="Остановить только текущий"
+            >
+              <Square size={11} />
+            </button>
+          </div>
+        ) : (
+          <button className="btn btn-err flex-none" onClick={stopRunning}>
+            <Square size={13} />
+            Остановить
+          </button>
+        )
       ) : (
         <button className="btn btn-acid flex-none" onClick={startQueue} disabled={queuedCount === 0}>
           <Play size={14} />

@@ -19,7 +19,16 @@ function statusLine(job: Job): string {
     case "running":
       return "декомпиляция…";
     case "done":
-      return `${fmtNum(job.classCount ?? 0)} классов · ${fmtSeconds(job.elapsedMs)}`;
+      // БАГ-ФИКС v1.7.2 (HANDOFF_NEXT_AGENT_HANDOVER п.15/18): classCount -
+      // это СЫРОЙ подсчёт .class-записей в архиве (jarSummary.ts/
+      // jar_summary.cpp читают ZIP-листинг напрямую, ДО декомпиляции - без
+      // фильтра известных библиотек, который применяет сам движок). На
+      // jar с забандленными библиотеками (h2/protobuf/gson и т.п.) это
+      // число может СИЛЬНО отличаться от терминального "X из Y методов" -
+      // не потому что где-то баг, а потому что это принципиально разные
+      // подсчёты (весь архив vs код именно плагина). Явно называем это
+      // "в архиве", чтобы не выглядело как нестыковка/баг статистики.
+      return `${fmtNum(job.classCount ?? 0)} классов в архиве · ${fmtSeconds(job.elapsedMs)}`;
     case "canceled":
       return "остановлено — запустите снова";
     case "failed":
