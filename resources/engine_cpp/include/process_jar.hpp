@@ -56,7 +56,16 @@ struct JarProcessResult {
 // Бросает std::runtime_error, если jar_path не открывается (битый zip и т.п.) -
 // зеркалит необработанное исключение zipfile.ZipFile(...) в оригинале
 // (main.py тоже ничего не ловит на этом уровне - падает выше, в main()/GUI).
-JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::string& out_dir, bool skip_legitimacy = false);
+// БАГ-ФИКС v1.7.3 (реальный краш CI - --json-output печатал текстовый
+// прогресс-бар ПЕРЕД JSON-блобом, ломая ConvertFrom-Json/json.loads у
+// потребителя): добавлен параметр print_progress (по умолчанию true -
+// поведение обычного CLI-режима не меняется ни на символ). run_json_output()
+// -> decompile_silent_json() теперь явно передаёт false - контракт "эта
+// функция работает МОЛЧА" (см. комментарий в api.cpp/HANDOFF_44) был
+// задокументирован ДО того, как в этой же сессии добавили прогресс-бар -
+// печать в этой ветке была честной регрессией, не входила в замысел.
+JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::string& out_dir, bool skip_legitimacy = false,
+                                         bool print_progress = true);
 
 // MAPPING_RU.txt - что было переименовано (пакеты/классы/методы/поля).
 void write_mapping_report(const std::string& out_dir, const Renamer& renamer);

@@ -58,7 +58,7 @@ std::string random_hex(int n) {
 std::string decompile_silent_json(const std::string& jar_path, const std::string& out_dir, bool skip_legitimacy) {
     auto t0 = std::chrono::steady_clock::now();
     try {
-        JarProcessResult jr = process_jar_with_stats(jar_path, out_dir, skip_legitimacy);
+        JarProcessResult jr = process_jar_with_stats(jar_path, out_dir, skip_legitimacy, /*print_progress=*/false);
         double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         return jar_process_result_to_json(jr, out_dir, elapsed);
     } catch (const std::exception& e) {

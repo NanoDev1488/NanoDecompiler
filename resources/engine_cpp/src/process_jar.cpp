@@ -55,7 +55,7 @@ bool looks_obfuscated_wrapper(const std::string& name, const std::string& kind) 
 
 }  // namespace
 
-JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::string& out_dir, bool skip_legitimacy) {
+JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::string& out_dir, bool skip_legitimacy, bool print_progress) {
     JarProcessResult jr;
     jr.out_dir = out_dir;
     ProjectStats& stats = jr.stats;
@@ -409,11 +409,13 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
             if (filled > kProgressBarWidth) filled = kProgressBarWidth;
             if (filled != last_bar_filled) {
                 last_bar_filled = filled;
-                int pct = static_cast<int>(static_cast<double>(rendered_so_far) / static_cast<double>(total_classes_to_render) * 100.0);
-                std::string bar(static_cast<size_t>(filled), '=');
-                bar += std::string(static_cast<size_t>(kProgressBarWidth - filled), '-');
-                std::cout << "[" << bar << "] " << pct << "%\n";
-                std::cout.flush();
+                if (print_progress) {
+                    int pct = static_cast<int>(static_cast<double>(rendered_so_far) / static_cast<double>(total_classes_to_render) * 100.0);
+                    std::string bar(static_cast<size_t>(filled), '=');
+                    bar += std::string(static_cast<size_t>(kProgressBarWidth - filled), '-');
+                    std::cout << "[" << bar << "] " << pct << "%\n";
+                    std::cout.flush();
+                }
             }
         }
     }
