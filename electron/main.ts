@@ -523,8 +523,26 @@ function findFallbackBinary(names: string[], searchRoots: string[]): string | nu
   return null;
 }
 
+// БАГ-ФИКС v1.8.0 (реальный репорт - "джава скачалась, вижу её на диске,
+// но в настройках всё равно 'не найдена в PATH'"): портативная установка
+// через кнопку "Установить" (см. toolinstaller.cpp::get_tools_dir()) кладёт
+// JDK/Maven в СВОЮ папку - %LOCALAPPDATA%\NanoDecompiler\tools на Windows,
+// ~/.nanodecompiler/tools на Linux/macOS - её понимает и ищет ТАМ движок
+// (find_local_java()/find_local_maven()), но env:check ниже об этой
+// папке вообще не знал - искал только по системным путям установки.
+// Точное совпадение конвенции с toolinstaller.cpp обязательно - если он
+// поменяется там, поменяй и здесь.
+function portableToolsDir(): string {
+  if (process.platform === "win32") {
+    const base = process.env.LOCALAPPDATA || process.env.USERPROFILE || ".";
+    return path.join(base, "NanoDecompiler", "tools");
+  }
+  const home = process.env.HOME || ".";
+  return path.join(home, ".nanodecompiler", "tools");
+}
+
 function javaSearchRoots(): string[] {
-  const roots: string[] = [];
+  const roots: string[] = [portableToolsDir()];
   if (process.env.JAVA_HOME) roots.push(path.join(process.env.JAVA_HOME, ".."));
   if (process.platform === "win32") {
     roots.push("C:\\Program Files\\Java", "C:\\Program Files\\Eclipse Adoptium", "C:\\Program Files\\Zulu");
@@ -537,7 +555,7 @@ function javaSearchRoots(): string[] {
 }
 
 function mavenSearchRoots(): string[] {
-  const roots: string[] = [];
+  const roots: string[] = [portableToolsDir()];
   if (process.env.MAVEN_HOME) roots.push(path.join(process.env.MAVEN_HOME, ".."));
   if (process.platform === "win32") {
     roots.push("C:\\Program Files\\Apache\\maven", "C:\\apache-maven", "C:\\maven");

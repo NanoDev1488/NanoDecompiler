@@ -34,6 +34,33 @@ export interface Job {
   elapsedMs: number;
   error?: string;
   files?: SourceFile[];
+  /** НОВОЕ v1.8.0: текущая стадия ("проверяю легитимность…" и т.п.),
+   * распознаётся из "##ND_STAGE:xxx##"-маркеров движка. Только для
+   * отображения под процентом - не влияет на статус job'а. */
+  phase?: string | null;
+  /** НОВОЕ v1.8.0: подробная статистика по jar - парсится из "##ND_RESULT:{json}##"
+   * в конце обычного вывода движка (см. onLog в engine.tsx). Для карточки
+   * плагина -> "Подробная информация". */
+  details?: JobDetails | null;
+}
+
+/** Подмножество JSON, который печатает jar_process_result_to_json() в движке -
+ * только то, что реально показываем в карточке (не весь blob 1-в-1). */
+export interface JobDetails {
+  status: string;
+  stats: {
+    classes_total: number;
+    classes_parsed: number;
+    library_classes_skipped: number;
+    library_names_hit: string[];
+    total_methods: number;
+    decompiled_methods: number;
+    fallback_methods: number;
+    decompiled_pct: number;
+    malware_findings: unknown[];
+    import_conflicts: Record<string, string[]>;
+    platform: string | null;
+  };
 }
 
 export type LogLevel = "info" | "ok" | "warn" | "err";
