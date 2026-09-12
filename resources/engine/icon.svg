@@ -1,0 +1,32 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0c100d"/>
+      <stop offset="1" stop-color="#070a08"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- Абстрактная идея декомпиляции: слева хаотичные "сырые" биты
+       (байткод), справа - выровненные строки (чистая структура). Один
+       чёткий геометрический жест вместо клипарта, в реальной палитре
+       приложения (acid green на тёмном), без градиентов/теней "под ИИ". -->
+  <g fill="none" stroke="#9bf246" stroke-width="20" stroke-linecap="round">
+    <!-- хаотичные штрихи слева -->
+    <line x1="120" y1="168" x2="152" y2="168" opacity="0.35"/>
+    <line x1="120" y1="216" x2="176" y2="216" opacity="0.55"/>
+    <line x1="120" y1="264" x2="140" y2="264" opacity="0.35"/>
+    <line x1="120" y1="312" x2="164" y2="312" opacity="0.55"/>
+    <line x1="120" y1="360" x2="148" y2="360" opacity="0.35"/>
+  </g>
+  <!-- стрелка трансформации по центру -->
+  <path d="M226 256 H286" stroke="#9bf246" stroke-width="22" stroke-linecap="round"/>
+  <path d="M266 226 L296 256 L266 286" fill="none" stroke="#9bf246" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- выровненные строки справа: результат -->
+  <g fill="none" stroke="#eaf0ea" stroke-width="20" stroke-linecap="round">
+    <line x1="336" y1="168" x2="392" y2="168"/>
+    <line x1="336" y1="216" x2="392" y2="216"/>
+    <line x1="336" y1="264" x2="392" y2="264"/>
+    <line x1="336" y1="312" x2="392" y2="312"/>
+    <line x1="336" y1="360" x2="392" y2="360"/>
+  </g>
+</svg>
