@@ -244,12 +244,24 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     // license, NOTICE, NOTICE.txt, license-НАЗВАНИЕ-БИБЛИОТЕКИ.txt) -
     // ловим по префиксу регистронезависимо, не только точное имя.
     static const std::regex meta_license_re(R"(^META-INF/(LICENSE|NOTICE)([._-].*)?$)", std::regex::icase);
+    // НОВОЕ v1.7.3 (реальная жалоба - "в ViaVersion/EssentialsX всё равно
+    // остаётся папка META-INF"): META-INF/proguard/* - ProGuard consumer-
+    // правила, которые БАНДЛИТ САМА библиотека (например gson.pro у
+    // com.google.code.gson) для тех, кто её потребляет через shrinker -
+    // их пишет только автор БИБЛИОТЕКИ, ни один разработчик плагина не
+    // добавляет их вручную в свой код - можно фильтровать так же надёжно,
+    // как LICENSE/NOTICE выше. НЕ трогаем META-INF/services/* (Java SPI) -
+    // формально ЧАЩЕ это тоже регистрация БИБЛИОТЕЧНОГО провайдера, но
+    // теоретически сам плагин может регистрировать там СВОЙ сервис -
+    // ложное удаление стоит дороже, чем один лишний файл в выводе.
+    static const std::regex meta_proguard_re(R"(^META-INF/proguard/.*)", std::regex::icase);
     for (auto& n : all_names) {
         if ((n.size() >= 6 && n.substr(n.size() - 6) == ".class") || (!n.empty() && n.back() == '/')) continue;
         if (n == "META-INF/MANIFEST.MF") continue;
         if (std::regex_match(n, meta_signature_re)) continue;
         if (std::regex_match(n, meta_maven_re)) continue;
         if (std::regex_match(n, meta_license_re)) continue;
+        if (std::regex_match(n, meta_proguard_re)) continue;
         bool skip = false;
         for (auto& p : skip_res_prefixes)
             if (starts_with(n, p)) {
@@ -358,6 +370,20 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
 
     // --- 13. Рендеринг классов. ---
     OrderedImports all_imports;
+    // НОВОЕ v1.7.3 (реальный запрос - раньше GUI ЧЕСТНО не имел откуда взять
+    // настоящий процент прогресса построчно, только время-экстраполяцию -
+    // см. HANDOFF-обсуждение в этой сессии). Печатаем минимальный текстовый
+    // прогресс-бар САМИ, символами - GUI (electron/src, classifyLine)
+    // распознаёт строки такого вида regex'ом и считает заполненность бара
+    // ПО КОЛИЧЕСТВУ символов '=' между скобками (а не только по отдельно
+    // напечатанному числу процентов - оно тут для удобства человека,
+    // который запустил CLI напрямую в терминале, без GUI). Обновляем
+    // строку ТОЛЬКО когда заполненность бара реально меняется (не чаще
+    // одного раза на изменение из 20 делений) - не спамим лог.
+    const size_t total_classes_to_render = class_files.size();
+    size_t rendered_so_far = 0;
+    int last_bar_filled = -1;
+    const int kProgressBarWidth = 20;
     for (auto& [internal, cf] : class_files) {
         if (synthetic_switchmap_classes.count(internal)) continue;
         std::string text;
@@ -375,6 +401,21 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
         write_text_file(dest, text);
         auto issues = check_brackets(text, new_internal + ".java");
         stats.bracket_issues.insert(stats.bracket_issues.end(), issues.begin(), issues.end());
+
+        rendered_so_far++;
+        if (total_classes_to_render > 0) {
+            int filled = static_cast<int>(static_cast<double>(rendered_so_far) / static_cast<double>(total_classes_to_render) *
+                                           kProgressBarWidth);
+            if (filled > kProgressBarWidth) filled = kProgressBarWidth;
+            if (filled != last_bar_filled) {
+                last_bar_filled = filled;
+                int pct = static_cast<int>(static_cast<double>(rendered_so_far) / static_cast<double>(total_classes_to_render) * 100.0);
+                std::string bar(static_cast<size_t>(filled), '=');
+                bar += std::string(static_cast<size_t>(kProgressBarWidth - filled), '-');
+                std::cout << "[" << bar << "] " << pct << "%\n";
+                std::cout.flush();
+            }
+        }
     }
 
     stats.import_conflicts = check_import_collisions(all_imports.items());
@@ -424,7 +465,27 @@ void write_mapping_report(const std::string& out_dir, const Renamer& renamer) {
     for (auto& [key, new_name] : renamer.method_map()) {
         auto& [owner, name, desc] = key;
         if (new_name != name) {
-            f << "  " << dotted_from_internal(owner) << "." << name << desc << "  ->  " << new_name << "\n";
+            // НОВОЕ v1.7.3 (HANDOFF-бэклог п.37 - "переписать MAPPING_RU.txt
+            // аналогично README_RU.txt"): раньше здесь печатался СЫРОЙ JVM-
+            // дескриптор как есть (например "(Ljava/lang/String;I)V") -
+            // читаемо только тому, кто знает формат дескрипторов классов.
+            // Конвертируем в обычную Java-сигнатуру (те же функции, что
+            // использует сам рендерер классов) - если конвертация вдруг не
+            // удалась (некорректный/нестандартный дескриптор), не роняем
+            // отчёт - тихо показываем исходный дескриптор как раньше.
+            std::string sig;
+            try {
+                auto [ret, params] = method_descriptor_to_java(desc);
+                std::string params_joined;
+                for (size_t i = 0; i < params.size(); ++i) {
+                    if (i) params_joined += ", ";
+                    params_joined += params[i];
+                }
+                sig = "(" + params_joined + "): " + ret;
+            } catch (...) {
+                sig = desc;
+            }
+            f << "  " << dotted_from_internal(owner) << "." << name << sig << "  ->  " << new_name << "\n";
             n++;
         }
     }
@@ -435,7 +496,15 @@ void write_mapping_report(const std::string& out_dir, const Renamer& renamer) {
     for (auto& [key, new_name] : renamer.field_map()) {
         auto& [owner, name, desc] = key;
         if (new_name != name) {
-            f << "  " << dotted_from_internal(owner) << "." << name << ":" << desc << "  ->  " << new_name << "\n";
+            // НОВОЕ v1.7.3: то же самое для полей - `Ljava/lang/String;` ->
+            // `String`, `I` -> `int` и т.д.
+            std::string jtype;
+            try {
+                jtype = field_descriptor_to_java(desc);
+            } catch (...) {
+                jtype = desc;
+            }
+            f << "  " << dotted_from_internal(owner) << "." << name << " : " << jtype << "  ->  " << new_name << "\n";
             n++;
         }
     }

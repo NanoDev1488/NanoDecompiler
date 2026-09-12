@@ -25,6 +25,18 @@ export function Terminal() {
     useEngine();
   const [stick, setStick] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // БАГ-ФИКС v1.7.3 (найдено сторонним ревью - реальная регрессия из
+  // v1.7.2): scrollTo({behavior:"smooth"}) анимируется НЕСКОЛЬКО кадров, и
+  // браузер шлёт ПРОМЕЖУТОЧНЫЕ события "scroll" по ходу анимации - на этих
+  // кадрах позиция ЕЩЁ не у самого низа, onScroll ниже видел
+  // "distance > 24" и сбрасывал stick=false ДО того, как анимация вообще
+  // успевала доехать до конца. В следующий раз эффект видел stick=false и
+  // просто не скроллил - автопрокрутка НАВСЕГДА глохла после первого же
+  // плавного скролла. Флаг ниже помечает "это мы сами скроллим
+  // программно, не пользователь" - onScroll игнорирует событие, пока флаг
+  // взведён (снимается по таймауту, покрывающему длительность анимации).
+  const isAutoScrollingRef = useRef(false);
+  const autoScrollTimeoutRef = useRef<number | null>(null);
   // invert=true - тянем ЗА ВЕРХНИЙ край терминала, движение мыши ВВЕРХ
   // должно УВЕЛИЧИВАТЬ высоту (терминал растёт вверх, а не вниз).
   const onResizeDown = useResizeDrag("y", terminalHeight, setTerminalHeight, 120, 560, true);
@@ -54,18 +66,36 @@ export function Terminal() {
     // долго и заметно отставать от реального конца лога - в этом случае
     // прыгаем мгновенно, как раньше.
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-    el.scrollTo({ top: el.scrollHeight, behavior: distance > 2000 ? "auto" : "smooth" });
+    const behavior: ScrollBehavior = distance > 2000 ? "auto" : "smooth";
+    if (behavior === "smooth") {
+      isAutoScrollingRef.current = true;
+      if (autoScrollTimeoutRef.current !== null) window.clearTimeout(autoScrollTimeoutRef.current);
+      // 500мс с запасом покрывает типичную длительность smooth-скролла в
+      // Chromium на дистанциях, которые тут вообще возможны (< 2000px,
+      // см. ветку behavior==="auto" выше для больших прыжков).
+      autoScrollTimeoutRef.current = window.setTimeout(() => {
+        isAutoScrollingRef.current = false;
+      }, 500);
+    }
+    el.scrollTo({ top: el.scrollHeight, behavior });
   }, [visible.length, stick, terminalOpen]);
 
   const onScroll = () => {
     const el = scrollRef.current;
-    if (!el) return;
+    if (!el || isAutoScrollingRef.current) return;
     setStick(el.scrollHeight - el.scrollTop - el.clientHeight < 24);
   };
 
   const jumpToEnd = () => {
     const el = scrollRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    if (el) {
+      isAutoScrollingRef.current = true;
+      if (autoScrollTimeoutRef.current !== null) window.clearTimeout(autoScrollTimeoutRef.current);
+      autoScrollTimeoutRef.current = window.setTimeout(() => {
+        isAutoScrollingRef.current = false;
+      }, 500);
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    }
     setStick(true);
   };
 

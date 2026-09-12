@@ -128,6 +128,28 @@ jobs:
           resources/engine/NanoDecompilerCLI.exe test_jars/smoketest_plugin.jar out_check_client_cli --no-legitimacy-check
           if [ ! -d "out_check_client_cli" ]; then echo "движок: out_dir не создан - см. вывод выше"; exit 1; fi
 
+      # НОВОЕ v1.7.3 (реальный краш в CI - STATUS_STACK_BUFFER_OVERRUN,
+      # 0xC0000409 - выше просто печатался exit-код без единой зацепки,
+      # где именно произошло переполнение; на Linux/macOS воспроизвести
+      # нельзя - платформенно-специфичный MinGW/Windows баг). Если движок
+      # УПАЛ (ненулевой код) - пересобираем с отладочными символами (-g,
+      # без -O2, чтобы стектрейс указывал на настоящие строки, а не на
+      # заинлайненный/переставленный оптимизатором код) и гоняем ПОД gdb,
+      # который поймает сигнал падения и распечатает реальный бэктрейс -
+      # СЛЕДУЮЩЕЕ падение (если оно не флейковое) даст точное место вместо
+      # голого числа. Не блокирует обычный успешный прогон - шаг ничего не
+      # делает, если предыдущий шаг уже прошёл (see if: failure()).
+      - name: Диагностика - пересобрать с отладкой и получить бэктрейс через gdb
+        if: failure()
+        shell: msys2 {0}
+        working-directory: resources/engine_cpp
+        run: |
+          pacman -S --noconfirm --needed mingw-w64-x86_64-gdb
+          cmake -S . -B build_debug -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-g -O0"
+          cmake --build build_debug --parallel
+          echo "=== бэктрейс падения (gdb batch-режим) ==="
+          gdb --batch -ex run -ex bt --args build_debug/NanoDecompilerCLI.exe ../../test_jars/smoketest_plugin.jar ../../out_check_client_cli_debug --no-legitimacy-check || true
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"

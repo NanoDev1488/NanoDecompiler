@@ -5,6 +5,28 @@ import * as path from "path";
 import * as crypto from "crypto";
 import { spawn } from "child_process";
 
+// БАГ-ФИКС v1.7.3 (найдено сторонним ревью, согласуется с реальным
+// репортом пользователя - краш CLI на Windows с версией/подозрением на
+// антивирус): fs.renameSync(src, dest) на Windows использует MoveFileExW
+// с MOVEFILE_REPLACE_EXISTING, но замена всё равно может упасть, если
+// dest ЗАБЛОКИРОВАН - антивирус ещё сканирует свежескачанный .exe, или
+// файл памятью-отображён/открыт другим хендлом. На POSIX rename() поверх
+// открытого файла работает всегда (старый inode просто живёт, пока не
+// закроют последний хендл) - разницы в поведении раньше не учитывались.
+// Явно удаляем старый файл на Windows ПЕРЕД переименованием - если файла
+// нет (первая установка) или удаление не удалось (тоже блокировка) -
+// ошибка/её отсутствие в обоих случаях всё равно всплывёт на renameSync.
+function safeReplaceFile(tmpPath: string, destPath: string): void {
+  if (process.platform === "win32") {
+    try {
+      fs.unlinkSync(destPath);
+    } catch {
+      /* файла не было - это нормально при первой установке */
+    }
+  }
+  fs.renameSync(tmpPath, destPath);
+}
+
 // Подтверждено пользователем: реальный владелец/репозиторий (не заглушка).
 const GITHUB_OWNER = "NanoDev1488";
 const GITHUB_REPO = "NanoDecompiler";
@@ -106,6 +128,13 @@ function httpsGetJson<T>(url: string): Promise<T> {
   return new Promise((resolve, reject) => {
     const req = https.get(url, { headers: { "User-Agent": "NanoDecompiler-updater" } }, (res) => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        // БАГ-ФИКС v1.7.3: res.resume() ОБЯЗАТЕЛЕН перед тем, как уйти в
+        // рекурсию по редиректу - иначе непрочитанный ответ держит сокет
+        // занятым (см. комментарий у safeReplaceFile() выше про находки
+        // стороннего ревью). Ветка "статус не 200" ниже это уже делала,
+        // ветка редиректа - нет, хотя именно она срабатывает чаще всего
+        // (GitHub API/релизы почти всегда отвечают редиректом).
+        res.resume();
         resolve(httpsGetJson<T>(res.headers.location));
         return;
       }
@@ -137,6 +166,9 @@ function httpsDownloadFile(
   return new Promise((resolve, reject) => {
     const req = https.get(url, { headers: { "User-Agent": "NanoDecompiler-updater" } }, (res) => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        // БАГ-ФИКС v1.7.3: см. комментарий в httpsGetJson выше - тот же
+        // пропущенный res.resume() перед редиректом.
+        res.resume();
         httpsDownloadFile(res.headers.location, destPath, onProgress).then(resolve, reject);
         return;
       }
@@ -171,8 +203,10 @@ function httpsDownloadFile(
           if (onProgress) onProgress(downloaded, total);
           // Атомарная замена - переименование внутри одной файловой системы
           // почти мгновенное, не оставляет "битого" файла на середине,
-          // если что-то пойдёт не так ДО этого момента.
-          fs.renameSync(tmpPath, destPath);
+          // если что-то пойдёт не так ДО этого момента. safeReplaceFile()
+          // (см. выше) добавляет предварительный unlink на Windows -
+          // см. БАГ-ФИКС v1.7.3 там же.
+          safeReplaceFile(tmpPath, destPath);
           resolve();
         });
       });
@@ -530,7 +564,7 @@ export function registerUpdateHandlers(
         // вовсе, раз основной httpsDownloadFile уже завершился без ошибки).
       }
 
-      fs.renameSync(tmpDest, dest);
+      safeReplaceFile(tmpDest, dest);
       if (process.platform !== "win32") {
         try {
           fs.chmodSync(dest, 0o755);

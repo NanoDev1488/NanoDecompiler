@@ -97,6 +97,50 @@ function tokenizePropertiesLine(line: string): Token[] {
   return out;
 }
 
+// JSON: "ключ": значение, где значение - строка/число/true/false/null/{/[.
+// НОВОЕ v1.7.3 (реальная жалоба - в просмотрщике нет подсветки для .json,
+// например fabric.mod.json из ViaVersion) - раньше .json вообще не имел
+// своего токенизатора, шёл через PlainCode (только pretty-print без
+// цвета, см. CodeView.tsx). Построчный подход, как у остальных
+// токенизаторов в этом файле - JSON построчно уже отформатирован
+// prettyPrintIfJson() в CodeView.tsx до попадания сюда, так что здесь
+// не нужен полноценный рекурсивный парсер, только по-строчная разметка.
+const JSON_KEY_RE = /^(\s*)("(?:[^"\\]|\\.)*")(\s*:)(.*)$/;
+const JSON_VALUE_TOKEN_RE = new RegExp(
+  [String.raw`("(?:[^"\\]|\\.)*")`, String.raw`\b(true|false|null)\b`, String.raw`(-?\d[\d.eE+-]*)\b`].join("|"),
+  "g",
+);
+
+function tokenizeJsonValuePart(text: string): Token[] {
+  const out: Token[] = [];
+  let last = 0;
+  JSON_VALUE_TOKEN_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = JSON_VALUE_TOKEN_RE.exec(text)) !== null) {
+    if (m.index > last) out.push({ text: text.slice(last, m.index), cls: null });
+    out.push({ text: m[0], cls: "tok-s" });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last), cls: null });
+  return out;
+}
+
+function tokenizeJsonLine(line: string): Token[] {
+  const keyMatch = JSON_KEY_RE.exec(line);
+  if (keyMatch) {
+    const out: Token[] = [
+      { text: keyMatch[1], cls: null },
+      { text: keyMatch[2], cls: "tok-a" },
+      { text: keyMatch[3], cls: null },
+    ];
+    out.push(...tokenizeJsonValuePart(keyMatch[4]));
+    return out;
+  }
+  // строка без ключа - элемент массива или просто "{"/"}"/"["/"]" - красим
+  // только сами значения (строки/числа/true/false/null), остальное как есть.
+  return tokenizeJsonValuePart(line);
+}
+
 // XML: <!-- комментарий -->, <tag>, </tag>, атрибуты, строки-значения.
 const XML_TOKEN_RE = new RegExp(
   [
@@ -160,6 +204,11 @@ export const YamlCode = memo(function YamlCode({ code, wrap }: { code: string; w
 
 export const PropertiesCode = memo(function PropertiesCode({ code, wrap }: { code: string; wrap?: boolean }) {
   const lines = useMemo(() => code.split("\n").map((l, i) => renderTokens(tokenizePropertiesLine(l), i)), [code]);
+  return renderShell(lines, wrap);
+});
+
+export const JsonCode = memo(function JsonCode({ code, wrap }: { code: string; wrap?: boolean }) {
+  const lines = useMemo(() => code.split("\n").map((l, i) => renderTokens(tokenizeJsonLine(l), i)), [code]);
   return renderShell(lines, wrap);
 });
 

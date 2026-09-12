@@ -60,22 +60,42 @@ std::string json_escape(const std::string& s) {
 // Порт banner_text() - БЕЗ ANSI-раскраски (см. HANDOFF_44 - classify_line()/
 // _supports_color()/isatty()-детект не переносились, печатаем всегда простым
 // текстом; смысл рамки и текста сохранён 1:1).
+// НОВОЕ v1.7.3: подсчёт "ширины" строки в БАЙТАХ (std::string::size()) ломает
+// рамку баннера на кириллице - каждый кириллический символ занимает 2 байта
+// в UTF-8, но 1 колонку на экране. Из-за этого `width` вычислялась сильно
+// больше настоящей видимой ширины (по самой длинной строке в БАЙТАХ, а не в
+// символах), и рамка получалась либо непропорционально широкой, либо
+// текст прижимался к правой границе неравномерно между строками с разным
+// соотношением кириллицы/латиницы. Смотри правильно: считаем ТОЛЬКО стартовые
+// байты UTF-8-последовательностей (не продолжения - 10xxxxxx), что даёт
+// число КОДОВЫХ ТОЧЕК = видимых колонок для нашего алфавита (ASCII +
+// кириллица, оба однодиапазонные - без учёта экзотики вроде emoji/CJK
+// широких символов, которые тут не встречаются).
+size_t utf8_display_width(const std::string& s) {
+    size_t n = 0;
+    for (unsigned char c : s)
+        if ((c & 0xC0) != 0x80) ++n;
+    return n;
+}
+
 std::string banner_text() {
     std::string line1 = std::string("\u273B ") + NANO_DECOMPILER_VERSION;
     std::string line2 = "   Java-декомпилятор/деобфускатор для Bukkit-плагинов";
-    size_t width = line2.size() > line1.size() ? line2.size() : line1.size();
+    size_t w1 = utf8_display_width(line1);
+    size_t w2 = utf8_display_width(line2);
+    size_t width = w2 > w1 ? w2 : w1;
     std::string top = "\u256D";
     for (size_t i = 0; i < width + 2; ++i) top += "\u2500";
     top += "\u256E";
     std::string bot = "\u2570";
     for (size_t i = 0; i < width + 2; ++i) bot += "\u2500";
     bot += "\u256F";
-    auto pad = [&](const std::string& s) {
+    auto pad = [&](const std::string& s, size_t visible_width) {
         std::string padded = s;
-        if (padded.size() < width) padded += std::string(width - padded.size(), ' ');
+        if (visible_width < width) padded += std::string(width - visible_width, ' ');
         return "\u2502 " + padded + " \u2502";
     };
-    return top + "\n" + pad(line1) + "\n" + pad(line2) + "\n" + bot;
+    return top + "\n" + pad(line1, w1) + "\n" + pad(line2, w2) + "\n" + bot;
 }
 
 void print_usage() {

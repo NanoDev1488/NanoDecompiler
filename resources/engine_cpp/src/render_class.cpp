@@ -559,9 +559,22 @@ std::pair<std::string, OrderedImports> render_class(
                                     if (fa->name == "$VALUES") {
                                         consumed = true;  // служебный массив - список констант выше и так его описывает
                                     } else {
+                                        // БАГ-ФИКС v1.7.3 (найдено сторонним ревью - критично для ОБФУСЦИРОВАННЫХ
+                                        // enum'ов, то есть для большинства реальных целей этого инструмента!):
+                                        // fa->name здесь - это ДРУЖЕЛЮБНОЕ имя поля (см. stackvm.cpp putstatic/
+                                        // ctx.field_name() -> renamer.friendly_field() уже применён внутри
+                                        // decompile_method_body), а f->name в enum_const_fields - СЫРОЕ имя поля
+                                        // прямо из classfile (до переименования). На неофбусцированных enum'ах
+                                        // (raw name == friendly name случайно совпадают) сравнение "работало"
+                                        // и маскировало баг; на обфусцированных - НИКОГДА не совпадало, is_const_field
+                                        // всегда false, реконструкция тихо не находила НИ ОДНОЙ константы и
+                                        // откатывалась на голые имена - именно там, где реконструкция нужнее всего.
+                                        // Сравниваем оба имени ЧЕРЕЗ ренеймер и используем ОДИНАКОВЫЙ (дружелюбный)
+                                        // ключ при сохранении в enum_const_args - ключ должен совпадать с тем,
+                                        // что используется при чтении карты в цикле печати констант ниже.
                                         bool is_const_field = false;
                                         for (auto f : enum_const_fields)
-                                            if (f->name == fa->name) {
+                                            if (renamer.friendly_field(internal, f->name, f->descriptor) == fa->name) {
                                                 is_const_field = true;
                                                 break;
                                             }
@@ -588,7 +601,10 @@ std::pair<std::string, OrderedImports> render_class(
                     if (!consumed) enum_leftover_stmts.push_back(s);
                 }
                 for (auto f : enum_const_fields)
-                    if (!enum_const_args.count(f->name)) ok = false;
+                    // БАГ-ФИКС v1.7.3: тот же ключ (дружелюбное имя), что и при
+                    // записи выше - иначе проверка ЛОЖНО провалится на обфусцированных
+                    // enum'ах, даже после починки самого сопоставления.
+                    if (!enum_const_args.count(renamer.friendly_field(internal, f->name, f->descriptor))) ok = false;
             }
             if (ok) {
                 enum_ctor_reconstructed = true;
@@ -623,7 +639,8 @@ std::pair<std::string, OrderedImports> render_class(
         for (auto f : enum_const_fields) {
             std::string one = renamer.friendly_field(internal, f->name, f->descriptor);
             if (enum_ctor_reconstructed) {
-                auto& args = enum_const_args[f->name];
+                // БАГ-ФИКС v1.7.3: та же история - ключ карты это дружелюбное имя.
+                auto& args = enum_const_args[one];
                 if (!args.empty()) {
                     std::string arg_strs_joined;
                     for (size_t ai = 0; ai < args.size(); ++ai) {

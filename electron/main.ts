@@ -761,36 +761,58 @@ ipcMain.handle("tools:install", async (_event, only?: "jdk" | "java" | "maven") 
     };
 
     let buf = "";
+    let stderrBuf = "";
     let finalResult: { java: string | null; maven: string | null; errors: string[] } | null = null;
 
-    const handleChunk = (chunk: Buffer) => {
+    // БАГ-ФИКС v1.7.3 (найдено сторонним ревью): раньше stdout И stderr
+    // писались в ОДНУ переменную `buf` через общий handleChunk - Node НЕ
+    // гарантирует порядок доставки между двумя независимыми потоками, так
+    // что байты stderr могли попасть В СЕРЕДИНУ ещё не долистанной строки
+    // NDJSON из stdout, ломая JSON.parse на абсолютно валидной строке.
+    // Парсим NDJSON ТОЛЬКО из stdout; stderr копим отдельно ИСКЛЮЧИТЕЛЬНО
+    // для диагностики (попадёт в текст ошибки, если процесс не дал ответа).
+    const handleStdoutChunk = (chunk: Buffer) => {
       buf += chunk.toString("utf-8");
       const lines = buf.split(/\r?\n/);
       buf = lines.pop() ?? "";
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        // --install-tools-json печатает ТОЛЬКО валидный NDJSON (см.
-        // main.py::_try_handle_install_tools_json) - но на случай, если
-        // что-то постороннее (напр. предупреждение интерпретатора) попадёт
-        // в тот же stdout, не даём одной кривой строке уронить весь парсинг.
-        try {
-          const evt = JSON.parse(line);
-          if (evt.type === "progress") send("tools:progress", evt);
-          else if (evt.type === "done") finalResult = evt;
-          else if (evt.type === "error") finalResult = { java: null, maven: null, errors: [evt.message] };
-        } catch {
-          /* игнорируем нераспарсенные строки */
-        }
-      }
+      for (const line of lines) parseInstallerLine(line);
     };
 
-    proc.stdout.on("data", handleChunk);
-    proc.stderr.on("data", handleChunk);
+    function parseInstallerLine(line: string) {
+      if (!line.trim()) return;
+      // --install-tools-json печатает ТОЛЬКО валидный NDJSON (см.
+      // main.py::_try_handle_install_tools_json) - но на случай, если
+      // что-то постороннее (напр. предупреждение интерпретатора) попадёт
+      // в тот же stdout, не даём одной кривой строке уронить весь парсинг.
+      try {
+        const evt = JSON.parse(line);
+        if (evt.type === "progress") send("tools:progress", evt);
+        else if (evt.type === "done") finalResult = evt;
+        else if (evt.type === "error") finalResult = { java: null, maven: null, errors: [evt.message] };
+      } catch {
+        /* игнорируем нераспарсенные строки */
+      }
+    }
+
+    proc.stdout.on("data", handleStdoutChunk);
+    proc.stderr.on("data", (chunk: Buffer) => {
+      stderrBuf += chunk.toString("utf-8");
+    });
 
     proc.on("close", () => {
       installingProc = null;
+      // БАГ-ФИКС v1.7.3: если последняя строка NDJSON не заканчивалась
+      // переводом строки (процесс завершился сразу после записи, не успев
+      // дописать "\n"), она оставалась в `buf` и никогда не парсилась -
+      // финальный "done"/"error" от установщика терялся молча, и
+      // пользователь видел общее "завершился без ответа" вместо реальной
+      // причины. Дочитываем остаток буфера тем же путём перед resolve().
+      if (buf.trim()) parseInstallerLine(buf);
       if (finalResult) resolve({ ok: finalResult.errors.length === 0, ...finalResult });
-      else resolve({ ok: false, error: "Установщик завершился без ответа - см. вывод декомпиляции для деталей" });
+      else {
+        const detail = stderrBuf.trim() ? ` (stderr: ${stderrBuf.trim().slice(0, 500)})` : "";
+        resolve({ ok: false, error: `Установщик завершился без ответа - см. вывод декомпиляции для деталей${detail}` });
+      }
     });
 
     proc.on("error", (err) => {

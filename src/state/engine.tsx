@@ -85,6 +85,8 @@ interface EngineApi {
   guiVersion: string | null;
   javaEnv: { ok: boolean; text?: string } | null;
   mavenEnv: { ok: boolean; text?: string } | null;
+  installingTool: "java" | "maven" | null;
+  installProgress: { type: "progress"; label: string; pct: number | null; downloaded_mb: number; total_mb: number | null } | null;
   iconThumbnails: { terminal: string | null; layers: string | null };
   sidebarWidth: number;
   fileTreeWidth: number;
@@ -122,6 +124,7 @@ interface EngineApi {
   applyEngineUpdate(): void;
   openClientDownload(): void;
   checkEnv(): void;
+  installTool(which: "java" | "maven"): void;
   toast(msg: string, kind?: ToastKind): void;
   dismissToast(id: number): void;
 }
@@ -199,6 +202,13 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const logIdRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const unsubscribeLogRef = useRef<(() => void) | null>(null);
+  // НОВОЕ v1.7.3: как только пришёл ХОТЬ ОДИН настоящий прогресс-бар от
+  // движка (см. parseEngineProgressBar) - время-экстраполяция в интервале
+  // ниже должна ПЕРЕСТАТЬ подталкивать прогресс вверх самостоятельно,
+  // иначе на медленном/сложном jar (движок реально ещё на 20%, но прошло
+  // уже 15 секунд) время-экстраполяция перебила бы настоящее значение
+  // выдуманным более высоким - хуже, чем не иметь реальных данных вообще.
+  const hasRealProgressRef = useRef(false);
 
   const dismissToast = useCallback((id: number) => {
     setToasts(prev => prev.filter(t => t.id !== id));
@@ -232,6 +242,42 @@ export function EngineProvider({ children }: { children: ReactNode }) {
         setMavenEnv({ ok: false });
       });
   }, []);
+
+  // НОВОЕ v1.7.3 (реальный запрос - установка Java/Maven прямо из настроек,
+  // backend-плюмбинг tools:install/tools:progress уже существовал
+  // (electron/main.ts, preload.ts) - не хватало только UI-триггера).
+  const [installingTool, setInstallingTool] = useState<"java" | "maven" | null>(null);
+  const [installProgress, setInstallProgress] = useState<{
+    type: "progress";
+    label: string;
+    pct: number | null;
+    downloaded_mb: number;
+    total_mb: number | null;
+  } | null>(null);
+
+  const installTool = useCallback(
+    (which: "java" | "maven") => {
+      if (installingTool) return;  // уже что-то ставим - не даём запустить второй установщик поверх
+      setInstallingTool(which);
+      setInstallProgress(null);
+      const unsubscribe = window.nano.onToolsProgress(e => setInstallProgress(e));
+      window.nano
+        .installTools(which)
+        .then(r => {
+          const ok = which === "java" ? !!r.java : !!r.maven;
+          if (ok) toast(`${which === "java" ? "Java" : "Maven"} установлен(а)`, "ok");
+          else toast(r.errors?.[0] ?? r.error ?? `Не удалось установить ${which === "java" ? "Java" : "Maven"}`, "err");
+        })
+        .catch(err => toast(String(err?.message ?? err), "err"))
+        .finally(() => {
+          unsubscribe();
+          setInstallingTool(null);
+          setInstallProgress(null);
+          checkEnv();  // подтягиваем реальный статус после установки (успешной или нет)
+        });
+    },
+    [installingTool, checkEnv, toast],
+  );
 
   const checkForUpdates = useCallback((silent = false) => {
     setUpdateInfo(u => ({ ...u, checking: true, error: undefined }));
@@ -397,10 +443,38 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   // JSON построчно (только один JSON в самом конце), так что это
   // эвристика по префиксам, которые движок реально печатает.
   const classifyLine = useCallback((line: string, stream: "stdout" | "stderr"): { level: LogLevel; tag: string } => {
+    // БАГ-ФИКС v1.7.3 (реальная жалоба - предупреждение о вредоносном коде
+    // "терялось" в потоке лога): движок печатает находки малварь-сканера как
+    // "ВНИМАНИЕ: обнаружены признаки потенциально вредоносного кода..."
+    // (см. malware_scan.hpp/process_jar.cpp) - слово "ВНИМАНИЕ" не содержит
+    // ни "warn", ни "предупрежд", так что строка проваливалась в default-
+    // ветку ниже и красилась как ОБЫЧНАЯ info-строка, неотличимая от рядового
+    // прогресса. Классифицируем как "err" (не просто "warn") - находка
+    // малварь-сканера серьёзнее обычного предупреждения и заслуживает
+    // самого заметного визуального оформления (красный фон строки в
+    // Terminal.tsx), которое сейчас есть только у уровня "err".
+    if (/вредоносн/i.test(line)) return { level: "err", tag: "malware" };
     if (stream === "stderr" || /error|ошибка|fail/i.test(line)) return { level: "err", tag: "stderr" };
-    if (/warn|предупрежд/i.test(line)) return { level: "warn", tag: "warn" };
+    if (/warn|предупрежд|внимание/i.test(line)) return { level: "warn", tag: "warn" };
     if (/\bok\b|готово|done|success/i.test(line)) return { level: "ok", tag: "engine" };
     return { level: "info", tag: "engine" };
+  }, []);
+
+  // НОВОЕ v1.7.3 (реальный запрос - прогресс-бар "застревал" на 2%, время-
+  // экстраполяция была лучше, чем ничего, но не настоящий прогресс): движок
+  // теперь сам печатает построчный текстовый прогресс-бар вида
+  // "[==========----------] 42%" (см. process_jar.cpp, kProgressBarWidth=20).
+  // Извлекаем долю ЗАПОЛНЕНИЯ БАРА ПО КОЛИЧЕСТВУ символов '=' между
+  // скобками (а не парсим отдельно напечатанное число процентов - оно там
+  // для человека, который запустил CLI напрямую) - при желании ширину бара
+  // можно поменять на стороне движка, GUI не привязан к конкретному числу.
+  const PROGRESS_BAR_RE = /^\[([=\-]+)\]\s+\d+%$/;
+  const parseEngineProgressBar = useCallback((line: string): number | null => {
+    const m = PROGRESS_BAR_RE.exec(line.trim());
+    if (!m) return null;
+    const bar = m[1];
+    const filled = (bar.match(/=/g) ?? []).length;
+    return bar.length > 0 ? filled / bar.length : null;
   }, []);
 
   const finalize = useCallback(
@@ -487,28 +561,72 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
       runningIdRef.current = jobId;
       startedAtRef.current = Date.now();
+      hasRealProgressRef.current = false;
       setRunningElapsed(0);
       setSelectedJobId(jobId);
       setLog(prev => prev.filter(l => l.jobId !== jobId));
 
       pushLog(jobId, "info", "engine", `spawn NanoDecompilerCLI · in=${runJob.fileName} out=${runJob.outDir}`);
-      patchJob(jobId, { status: "running", progress: 0.02, elapsedMs: 0 });
+      patchJob(jobId, { status: "running", progress: 0.05, elapsedMs: 0 });
 
       intervalRef.current = window.setInterval(() => {
         const el = Date.now() - startedAtRef.current;
         setRunningElapsed(el);
-        setJobs(prev => prev.map(j => (j.id === runningIdRef.current ? { ...j, elapsedMs: el } : j)));
+        // БАГ-ФИКС v1.7.3 (пункт #27 бэклога - "2% за 16 секунд" на больших/
+        // сложных jar вроде ViaVersion): прогресс раньше двигался ТОЛЬКО по
+        // событиям `onLog` (+0.015 за пачку строк). Движок печатает в stdout
+        // довольно редко на больших jar, а тяжёлые классы (структуризация
+        // CFG) могут занимать секунды БЕЗ единой строки вывода - индикатор
+        // выглядел замёршим, хотя реальная работа шла. Теперь на каждый тик
+        // таймера (97мс, уже существовал для elapsedMs) считаем МОНОТОННУЮ
+        // цель по прошедшему времени (асимптота к 0.92, темп подобран так,
+        // чтобы за ~12 секунд дойти примерно до 2/3 пути) и берём max с уже
+        // накопленным прогрессом от onLog - какой бы сигнал ни оказался
+        // "быстрее" в моменте, индикатор никогда не идёт назад и никогда не
+        // замирает надолго.
+        const timeBasedTarget = 0.92 * (1 - Math.exp(-el / 8000));
+        setJobs(prev =>
+          prev.map(j =>
+            j.id === runningIdRef.current && j.status === "running"
+              ? hasRealProgressRef.current
+                ? { ...j, elapsedMs: el }
+                : { ...j, elapsedMs: el, progress: Math.max(j.progress, timeBasedTarget) }
+              : j.id === runningIdRef.current
+                ? { ...j, elapsedMs: el }
+                : j,
+          ),
+        );
       }, 97);
 
       unsubscribeLogRef.current = window.nano.onLog(e => {
+        let realProgress: number | null = null;
         for (const l of e.lines) {
+          // НОВОЕ v1.7.3: строка прогресс-бара - служебный сигнал для GUI,
+          // не полезная информация для человека в терминале (20 делений -
+          // до 20 строк за job, не страшно, но текст вида "[===---] 42%"
+          // ничего не даёт по сравнению с уже видимым визуальным баром) -
+          // не пушим её в лог, только используем для реального прогресса.
+          const barFraction = parseEngineProgressBar(l.line);
+          if (barFraction !== null) {
+            realProgress = barFraction;
+            continue;
+          }
           const { level, tag } = classifyLine(l.line, l.stream);
           pushLog(jobId, level, tag, l.line);
         }
-        // реального численного прогресса CLI не сообщает построчно -
-        // плавно подводим индикатор к почти-концу, пока идёт вывод, чтобы
-        // не показывать замёршую полоску; 1.0 выставляется в finalize().
-        patchJob(jobId, { progress: Math.min(0.92, (jobsRef.current.find(j => j.id === jobId)?.progress ?? 0) + 0.015) });
+        // реального численного прогресса раньше CLI не сообщал построчно -
+        // теперь сообщает (см. parseEngineProgressBar выше); когда движок
+        // ещё не долистал до первого класса (парсинг jar, легитимность,
+        // построение имён) реальных данных ещё нет - в это время (и как
+        // подстраховка, если по какой-то причине бар не распознался) плавно
+        // подводим индикатор к почти-концу по времени by отдельному
+        // таймеру выше, чтобы не показывать замёршую полоску.
+        if (realProgress !== null) {
+          hasRealProgressRef.current = true;
+          patchJob(jobId, { progress: Math.max(0.02, Math.min(0.99, realProgress)) });
+        } else if (!hasRealProgressRef.current) {
+          patchJob(jobId, { progress: Math.min(0.92, (jobsRef.current.find(j => j.id === jobId)?.progress ?? 0) + 0.015) });
+        }
       });
 
       try {
@@ -914,11 +1032,11 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
   const api: EngineApi = {
     jobs, log, runningJob, runningElapsed, selectedJobId, selectedJob, openFileByJob,
-    terminalOpen, logFilter, settings, settingsLoaded, settingsOpen, updateModalOpen, paletteOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, iconThumbnails, updateInfo, toasts, queuedCount, sidebarWidth, fileTreeWidth, terminalHeight,
+    terminalOpen, logFilter, settings, settingsLoaded, settingsOpen, updateModalOpen, paletteOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, installingTool, installProgress, iconThumbnails, updateInfo, toasts, queuedCount, sidebarWidth, fileTreeWidth, terminalHeight,
     addFiles, openFileDialog, startQueue, stopRunning, stopAll, cancelJob, removeJob, clearQueue,
     selectJob, selectFile, setLogFilter, toggleTerminal, clearLog, copyLog, copyText,
     openOutput, setSettingsOpen, setUpdateModalOpen, setSidebarWidth, setFileTreeWidth, setTerminalHeight, saveSettings, completeSetup, setPaletteOpen,
-    resolveEnvIssue, checkForUpdates, applyEngineUpdate, openClientDownload, checkEnv, toast, dismissToast,
+    resolveEnvIssue, checkForUpdates, applyEngineUpdate, openClientDownload, checkEnv, installTool, toast, dismissToast,
   };
 
   return (

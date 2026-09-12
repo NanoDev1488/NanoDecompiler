@@ -82,21 +82,46 @@ PluginYmlFields fields_from_plugin_yml(const std::string& plugin_yml_text) {
 
 namespace {
 
-// Возвращает std::nullopt на любой ошибке (таймаут/сеть/ненулевой код
-// возврата curl) - зеркалит `except Exception: return None` в оригинале.
-std::optional<std::string> http_get(const std::string& url, double timeout_sec, const std::string& accept) {
-    // Экранирование url для shell: используем одинарные кавычки, экранируя
-    // встречающиеся одинарные кавычки как '\'' - url формируется нами же из
-    // urlencoded-компонентов (см. вызовы ниже), так что в норме туда не
-    // попадёт ничего опасного, но экранируем в любом случае, а не доверяем.
+// БАГ-ФИКС v1.7.3 (найдено сторонним ревью, подтверждено чтением кода):
+// на Windows popen()/system() запускают команду через cmd.exe, а НЕ bash -
+// cmd.exe не понимает одинарные кавычки как ограничитель аргумента (для
+// него это обычный символ, а не quote) и не знает файла "/dev/null"
+// (аналог - "NUL"). Экранирование ниже и синтаксис редиректа теперь
+// зависят от платформы; на POSIX поведение не изменилось ни на символ.
+#ifdef _WIN32
+std::string shell_quote_arg(const std::string& s) {
+    // cmd.exe передаёт аргумент как есть дочернему процессу, а РАЗБОР на
+    // отдельные argv[] делает уже сам curl.exe (стандартный MS CRT parser) -
+    // он понимает \" как экранированную кавычку внутри "..."-аргумента.
     std::string escaped;
-    for (char c : url) {
+    for (char c : s) {
+        if (c == '"') escaped += "\\\"";
+        else escaped += c;
+    }
+    return "\"" + escaped + "\"";
+}
+constexpr const char* kNullRedirect = "NUL";
+#else
+std::string shell_quote_arg(const std::string& s) {
+    std::string escaped;
+    for (char c : s) {
         if (c == '\'') escaped += "'\\''";
         else escaped += c;
     }
+    return "'" + escaped + "'";
+}
+constexpr const char* kNullRedirect = "/dev/null";
+#endif
+
+// Возвращает std::nullopt на любой ошибке (таймаут/сеть/ненулевой код
+// возврата curl) - зеркалит `except Exception: return None` в оригинале.
+std::optional<std::string> http_get(const std::string& url, double timeout_sec, const std::string& accept) {
+    // url формируется нами же из urlencoded-компонентов (см. вызовы ниже),
+    // так что в норме туда не попадёт ничего опасного, но экранируем в
+    // любом случае, а не доверяем - см. shell_quote_arg() выше.
     std::ostringstream cmd;
-    cmd << "curl -s -m " << timeout_sec << " -A 'Mozilla/5.0 (NanoDecompiler-LegitimacyCheck/1.1)' "
-        << "-H 'Accept: " << accept << "' '" << escaped << "' 2>/dev/null";
+    cmd << "curl -s -m " << timeout_sec << " -A " << shell_quote_arg("Mozilla/5.0 (NanoDecompiler-LegitimacyCheck/1.1)") << " "
+        << "-H " << shell_quote_arg("Accept: " + accept) << " " << shell_quote_arg(url) << " 2>" << kNullRedirect;
     FILE* pipe = popen(cmd.str().c_str(), "r");
     if (!pipe) return std::nullopt;
     std::string out;
@@ -175,16 +200,10 @@ std::string sha256_of_file(const std::string& path) {
 // весь остальной сетевой код здесь, тихо деградирует, а не падает.
 std::optional<std::string> download_and_sha256(const std::string& url, uint64_t max_bytes, double timeout_sec) {
     std::string tmp = (fs::temp_directory_path() / ("nd_legitimacy_dl_" + random_hex_local(16))).string();
-    std::string escaped;
-    for (char c : url) {
-        if (c == '\'')
-            escaped += "'\\''";
-        else
-            escaped += c;
-    }
     std::ostringstream cmd;
-    cmd << "curl -sL -m " << timeout_sec << " --max-filesize " << max_bytes << " -A 'Mozilla/5.0 (NanoDecompiler-LegitimacyCheck/1.1)' "
-        << "-o '" << tmp << "' '" << escaped << "' 2>/dev/null";
+    cmd << "curl -sL -m " << timeout_sec << " --max-filesize " << max_bytes << " -A "
+        << shell_quote_arg("Mozilla/5.0 (NanoDecompiler-LegitimacyCheck/1.1)") << " -o " << shell_quote_arg(tmp) << " "
+        << shell_quote_arg(url) << " 2>" << kNullRedirect;
     int rc = std::system(cmd.str().c_str());
     std::error_code ec;
     bool exists = fs::is_regular_file(tmp, ec);

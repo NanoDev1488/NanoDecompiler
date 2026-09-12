@@ -52,6 +52,9 @@ export function SettingsModal() {
     guiVersion,
     javaEnv,
     mavenEnv,
+    installingTool,
+    installProgress,
+    installTool,
     iconThumbnails,
     toast,
   } = useEngine();
@@ -151,17 +154,43 @@ export function SettingsModal() {
               <Row
                 label="Java"
                 hint={
-                  javaEnv === null
-                    ? "проверяю…"
-                    : envIssue
-                      ? "не найдена в PATH — не блокирует декомпиляцию, нужна только для ручной сборки (mvn compile) сгенерированного проекта"
-                      : (javaEnv.text ?? "найдена")
+                  // НОВОЕ v1.7.3 (реальный запрос - установка Java/Maven
+                  // прямо из настроек): пока идёт установка ИМЕННО Java,
+                  // подменяем hint на живой прогресс из installProgress
+                  // (label/pct приходят построчно от python-установщика
+                  // через tools:progress, см. electron/main.ts).
+                  installingTool === "java"
+                    ? (installProgress?.label ?? "устанавливаю…") +
+                      (installProgress?.pct != null ? ` · ${installProgress.pct}%` : "")
+                    : javaEnv === null
+                      ? "проверяю…"
+                      : envIssue
+                        ? "не найдена в PATH — не блокирует декомпиляцию, нужна только для ручной сборки (mvn compile) сгенерированного проекта"
+                        : (javaEnv.text ?? "найдена")
                 }
                 control={
-                  envIssue ? (
-                    <button className="btn btn-tonal h-7 text-[11.5px]" onClick={resolveEnvIssue}>
-                      Проверить снова
-                    </button>
+                  installingTool === "java" ? (
+                    <span className="chip border-warn/35 text-warn">
+                      <Loader2 size={12} className="animate-spin" />
+                      установка…
+                    </span>
+                  ) : envIssue ? (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        className="btn btn-tonal h-7 text-[11.5px]"
+                        disabled={installingTool !== null}
+                        onClick={() => installTool("java")}
+                      >
+                        Установить
+                      </button>
+                      <button
+                        className="btn btn-tonal h-7 text-[11.5px]"
+                        disabled={installingTool !== null}
+                        onClick={resolveEnvIssue}
+                      >
+                        Проверить снова
+                      </button>
+                    </div>
                   ) : (
                     <span className="chip border-acid/35 text-acid">
                       <span className="dot bg-acid" />
@@ -174,17 +203,35 @@ export function SettingsModal() {
               <Row
                 label="Maven"
                 hint={
-                  mavenEnv === null
-                    ? "проверяю…"
-                    : mavenEnv.ok
-                      ? (mavenEnv.text ?? "найден") + " · нужен только для ручной сборки (mvn compile), не для декомпиляции"
-                      : "не найден — не блокирует декомпиляцию, нужен только для ручной сборки"
+                  installingTool === "maven"
+                    ? (installProgress?.label ?? "устанавливаю…") +
+                      (installProgress?.pct != null ? ` · ${installProgress.pct}%` : "")
+                    : mavenEnv === null
+                      ? "проверяю…"
+                      : mavenEnv.ok
+                        ? (mavenEnv.text ?? "найден") + " · нужен только для ручной сборки (mvn compile), не для декомпиляции"
+                        : "не найден — не блокирует декомпиляцию, нужен только для ручной сборки"
                 }
                 control={
-                  <span className={cn("chip", !mavenEnv?.ok ? "opacity-40" : "border-acid/35 text-acid")}>
-                    {mavenEnv?.ok && <span className="dot bg-acid" />}
-                    {mavenEnv?.ok ? "найден" : "не найден"}
-                  </span>
+                  installingTool === "maven" ? (
+                    <span className="chip border-warn/35 text-warn">
+                      <Loader2 size={12} className="animate-spin" />
+                      установка…
+                    </span>
+                  ) : !mavenEnv?.ok ? (
+                    <button
+                      className="btn btn-tonal h-7 text-[11.5px]"
+                      disabled={installingTool !== null}
+                      onClick={() => installTool("maven")}
+                    >
+                      Установить
+                    </button>
+                  ) : (
+                    <span className={cn("chip", !mavenEnv?.ok ? "opacity-40" : "border-acid/35 text-acid")}>
+                      {mavenEnv?.ok && <span className="dot bg-acid" />}
+                      {mavenEnv?.ok ? "найден" : "не найден"}
+                    </span>
+                  )
                 }
               />
             </div>

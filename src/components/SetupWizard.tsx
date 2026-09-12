@@ -73,10 +73,11 @@ YOU DO NOT AGREE TO THESE TERMS, DO NOT INSTALL OR USE THE SOFTWARE.
    ensuring you have the right to decompile any file you provide to the
    Software.
 
-7. BETA STATUS
-   The Software may be distributed in a "BETA" state. Beta versions may
-   contain bugs, incomplete features, or produce inaccurate output, and
-   may change or be discontinued at any time without notice.
+7. ACTIVE DEVELOPMENT
+   The Software is under active, ongoing development. Regardless of any
+   specific version label, the Software may contain bugs, incomplete
+   features, or produce inaccurate output, and may change or be
+   discontinued at any time without notice.
 
 8. UPDATES
    The Software may check for and offer to install updates. You may

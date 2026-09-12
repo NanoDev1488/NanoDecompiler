@@ -19,6 +19,13 @@ declare global {
         error?: string;
       }>;
       getEngineVersion: () => Promise<{ ok: boolean; version?: string; error?: string }>;
+      // БАГ-ФИКС v1.7.3: checkEnv() существовал в preload.ts, но не был
+      // объявлен здесь - window.nano.checkEnv() формально был "any" для
+      // TypeScript (рассинхронизация между реальным API и его типом).
+      checkEnv: () => Promise<{
+        java: { ok: boolean; text?: string };
+        maven: { ok: boolean; text?: string };
+      }>;
       getGuiVersion: () => Promise<string>;
       minimizeWindow: () => Promise<void>;
       toggleMaximizeWindow: () => Promise<void>;

@@ -2,7 +2,7 @@ import { Copy, WrapText } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { useEngine } from "../state/engine";
 import { JavaCode } from "../lib/javaHighlight";
-import { PlainCode, PropertiesCode, XmlCode, YamlCode } from "../lib/textHighlight";
+import { PlainCode, PropertiesCode, JsonCode, XmlCode, YamlCode } from "../lib/textHighlight";
 import type { SourceFile } from "../lib/model";
 
 // БАГ-ФИКС: раньше ЛЮБОЙ файл в просмотрщике рендерился через JavaCode
@@ -15,6 +15,10 @@ function codeComponentFor(name: string) {
   // YAML_KEY_RE в YamlCode понимает только ":" - подсветка ключей никогда
   // не срабатывала. Отдельный токенизатор PropertiesCode понимает оба.
   if (/\.properties$/i.test(name)) return PropertiesCode;
+  // НОВОЕ v1.7.3 (реальная жалоба - "нет подсветки для .json, например
+  // fabric.mod.json") - раньше .json не имел своего токенизатора вообще,
+  // шёл через PlainCode (только pretty-print без цвета).
+  if (/\.json$/i.test(name)) return JsonCode;
   if (/\.xml$/i.test(name)) return XmlCode;
   return PlainCode;
 }
