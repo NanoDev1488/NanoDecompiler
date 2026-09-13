@@ -334,3 +334,25 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* НОВОЕ v1.8.0: маркеры цветовых кодов Minecraft (&a/§a) во вьюере кода. */
+.mc-code-swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin: 0 1px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  vertical-align: middle;
+  cursor: help;
+}
+.mc-code-marker {
+  display: inline-block;
+  padding: 0 3px;
+  border-radius: 2px;
+  margin: 0 1px;
+  font-size: 0.8em;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--faint, #8a93a3);
+  cursor: help;
+}

@@ -636,7 +636,7 @@ ipcMain.handle("jar:summary", async (_e, jarPath: string) => {
   // - оставлено как основной путь. Подпроцесс - только запасной вариант для
   // того, что быстрый путь сознательно не поддерживает (ZIP64 и т.п. edge-case).
   try {
-    return readJarSummaryNative(jarPath);
+    return await readJarSummaryNative(jarPath);
   } catch {
     let cmd: string, args: string[];
     try {
@@ -728,6 +728,61 @@ ipcMain.handle("fs:listDir", async (_e, root: string, relDir: string) => {
   } catch (e) {
     return { ok: false, error: String(e) };
   }
+});
+
+// НОВОЕ v1.8.0 (реальный запрос - "поиск слов в файле/проекте, минимум
+// 3 буквы, сейчас ищется вообще ужасно" - на деле ДО этого искать по
+// содержимому вообще было нельзя, был только фильтр по ИМЕНИ файла в
+// дереве). Поиск по файловой системе результата (НЕ по уже загруженным
+// в память file.code - большинство файлов ещё не открывались и не
+// прочитаны рендерером) - асинхронно, не блокирует главный процесс (см.
+// БАГ-ФИКС jarSummary.ts выше про синхронный I/O в Electron main).
+ipcMain.handle("search:inProject", async (_e, root: string, query: string) => {
+  const q = query.trim();
+  if (q.length < 3) return { ok: true, results: [], truncated: false };
+  const MAX_RESULTS = 300;
+  const qLower = q.toLowerCase();
+  const results: { relPath: string; line: number; snippet: string }[] = [];
+
+  async function walk(dir: string) {
+    if (results.length >= MAX_RESULTS) return;
+    let entries: fs.Dirent[];
+    try {
+      entries = await fs.promises.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (results.length >= MAX_RESULTS) return;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full);
+        continue;
+      }
+      // Ограничиваемся текстовыми расширениями, реально встречающимися в
+      // выводе декомпилятора - не тратим время на .class/.png/бинарники,
+      // которых в out_dir и так почти нет (декомпилятор их не пишет).
+      if (!/\.(java|ya?ml|properties|json|xml|txt|md|cfg|conf|toml)$/i.test(entry.name)) continue;
+      try {
+        const stat = await fs.promises.stat(full);
+        if (stat.size > MAX_TEXT_FILE_BYTES) continue;
+        const content = await fs.promises.readFile(full, "utf-8");
+        const lines = content.split(/\r?\n/);
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].toLowerCase().includes(qLower)) {
+            const relPath = path.relative(root, full).split(path.sep).join("/");
+            results.push({ relPath, line: i + 1, snippet: lines[i].trim().slice(0, 200) });
+            if (results.length >= MAX_RESULTS) break;
+          }
+        }
+      } catch {
+        // нечитаемый/удалённый в процессе файл - пропускаем, не роняем весь поиск
+      }
+    }
+  }
+
+  await walk(root);
+  return { ok: true, results, truncated: results.length >= MAX_RESULTS };
 });
 
 ipcMain.handle("fs:readTextFile", async (_e, root: string, relPath: string) => {

@@ -144,15 +144,20 @@ void ProjectStats::record_method(bool ok, const std::optional<std::string>& reas
         decompiled_methods += 1;
     } else {
         fallback_methods += 1;
-        bool found = false;
-        for (auto& [r, cnt] : fallback_reasons) {
-            if (r == reason) {
-                cnt += 1;
-                found = true;
-                break;
-            }
+        // ПРИЧЁСАНО v1.7.3.1 (по просьбе - "verify.cpp написан не очень
+        // красиво"): раньше здесь был ручной линейный поиск по вектору
+        // (`for` + `if` + флаг `found`) - ниже в этом же файле, в
+        // summary_text(), для АБСОЛЮТНО той же задачи ("посчитать по
+        // ключу, сохранив порядок первого появления") уже используется
+        // чистый паттерн map + вектор порядка (см. `grouped`/`grouped_order`).
+        // Применяем тот же паттерн здесь - меньше кода, тот же результат,
+        // единообразно с остальным файлом.
+        auto [it, inserted] = fallback_reason_index.try_emplace(reason, fallback_reasons.size());
+        if (inserted) {
+            fallback_reasons.emplace_back(reason, 1);
+        } else {
+            fallback_reasons[it->second].second += 1;
         }
-        if (!found) fallback_reasons.emplace_back(reason, 1);
     }
 }
 
@@ -174,23 +179,12 @@ std::string quality_rating(double p) {
 }
 
 namespace {
+// ПРИЧЁСАНО v1.7.3.1: три отдельных anonymous namespace в одном файле были
+// разбросаны по разным местам без причины - объединено в один блок
+// служебных хелперов файла (реального изменения поведения нет).
 bool starts_with(const std::string& s, const std::string& prefix) {
     return s.size() >= prefix.size() && s.compare(0, prefix.size(), prefix) == 0;
 }
-}  // namespace
-
-std::string group_reason(const std::optional<std::string>& reason_opt) {
-    if (!reason_opt.has_value()) return "неизвестно";
-    const std::string& reason = *reason_opt;
-    if (starts_with(reason, "нередуцируемый goto")) return "нередуцируемый goto (сложный control-flow, не сведённый к структурам)";
-    if (starts_with(reason, "несогласованная глубина")) return "многозначное пересечение стека между блоками (напр. arr[i] = cond ? a : b)";
-    if (starts_with(reason, "unrecognized <init>")) return "нестандартный паттерн вызова конструктора";
-    if (starts_with(reason, "внутренняя ошибка")) return "внутренняя ошибка декомпилятора (см. детали в логе)";
-    if (starts_with(reason, "неизвестная/неподдержанная инструкция")) return reason;
-    return reason;
-}
-
-namespace {
 std::string fmt1(double v) {
     std::ostringstream oss;
     oss.precision(1);
@@ -206,6 +200,17 @@ std::string join(const std::vector<std::string>& v, const std::string& sep) {
     return out;
 }
 }  // namespace
+
+std::string group_reason(const std::optional<std::string>& reason_opt) {
+    if (!reason_opt.has_value()) return "неизвестно";
+    const std::string& reason = *reason_opt;
+    if (starts_with(reason, "нередуцируемый goto")) return "нередуцируемый goto (сложный control-flow, не сведённый к структурам)";
+    if (starts_with(reason, "несогласованная глубина")) return "многозначное пересечение стека между блоками (напр. arr[i] = cond ? a : b)";
+    if (starts_with(reason, "unrecognized <init>")) return "нестандартный паттерн вызова конструктора";
+    if (starts_with(reason, "внутренняя ошибка")) return "внутренняя ошибка декомпилятора (см. детали в логе)";
+    if (starts_with(reason, "неизвестная/неподдержанная инструкция")) return reason;
+    return reason;
+}
 
 std::string ProjectStats::summary_text() const {
     std::vector<std::string> lines;

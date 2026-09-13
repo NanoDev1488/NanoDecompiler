@@ -1,4 +1,5 @@
 import { memo, useMemo, type ReactNode } from "react";
+import { MC_CODE_RE, renderMcColored } from "./mcColors";
 
 /* Однопроходный токенизатор: комментарии и строки не пересекаются,
    всё остальное — слова. Без полноценного парсера, для просмотра хватает. */
@@ -29,6 +30,11 @@ const TOKEN_RE = new RegExp(
 interface Token {
   text: string;
   cls: string | null;
+  // НОВОЕ v1.8.0 (по прямой просьбе - цвета Minecraft в коде "везде во
+  // всех файлах при вызове"): отдельно помечаем ИМЕННО строковый литерал
+  // (не char/число - все три раньше делили один cls="tok-s") - цвета
+  // майнкрафта имеет смысл разбирать только внутри настоящих строк.
+  isStr?: boolean;
 }
 
 function tokenizeLine(line: string): Token[] {
@@ -45,7 +51,7 @@ function tokenizeLine(line: string): Token[] {
     else if (ann) cls = "tok-a";
     else if (num) cls = "tok-s";
     else if (word && KEYWORDS.has(word)) cls = "tok-k";
-    out.push({ text: m[0], cls });
+    out.push({ text: m[0], cls, isStr: !!str });
     last = m.index + m[0].length;
   }
   if (last < line.length) out.push({ text: line.slice(last), cls: null });
@@ -57,7 +63,11 @@ function renderLine(line: string, key: number): ReactNode {
   return (
     <span key={key}>
       {tokens.map((t, i) =>
-        t.cls ? (
+        t.isStr && MC_CODE_RE.test(t.text) ? (
+          <span key={i} className="tok-s">
+            {renderMcColored(t.text)}
+          </span>
+        ) : t.cls ? (
           <span key={i} className={t.cls}>
             {t.text}
           </span>

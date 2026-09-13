@@ -16,5 +16,5 @@ namespace nd {
 // обычные ASCII-кавычки " внутри этой строки сломали бы JSON для
 // electron/updater.ts. Кавычки-ёлочки «» - другие Unicode-символы,
 // никак не пересекаются с JSON-синтаксисом, экранировать не нужно.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.7.3 «Ясность»";
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.7.3.1 «Ясность»";
 }

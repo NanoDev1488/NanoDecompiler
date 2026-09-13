@@ -32,6 +32,10 @@ struct ProjectStats {
     // добавляет новую пару в конец (эмулирует `dict.get(reason,0)+1`
     // с сохранением порядка первого появления).
     std::vector<std::pair<std::optional<std::string>, int>> fallback_reasons;
+    // ПРИЧЁСАНО v1.7.3.1: индекс "reason -> позиция в fallback_reasons" -
+    // избавляет record_method() от линейного перебора вектора на каждый
+    // вызов (см. .cpp). НЕ часть публичного API отчёта - служебное поле.
+    std::map<std::optional<std::string>, size_t> fallback_reason_index;
     int classes_total = 0;
     int classes_parsed = 0;
     std::vector<std::pair<std::string, std::string>> parse_errors;  // (name, error)

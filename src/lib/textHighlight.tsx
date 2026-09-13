@@ -1,4 +1,5 @@
 import { memo, useMemo, type ReactNode } from "react";
+import { MC_CODE_RE, renderMcColored } from "./mcColors";
 
 /* БАГ-ФИКС: раньше ЛЮБОЙ файл в мини-просмотрщике проходил через
    JavaCode (java-специфичный токенизатор) - plugin.yml/pom.xml
@@ -17,7 +18,18 @@ function renderTokens(tokens: Token[], key: number): ReactNode {
   return (
     <span key={key}>
       {tokens.map((t, i) =>
-        t.cls ? (
+        // НОВОЕ v1.8.0: цвета Minecraft ищем ВО ВСЕХ токенах (не только
+        // cls="tok-s") - значения .properties обычно БЕЗ кавычек
+        // (`msg=&aПривет`), такой текст вообще не получает cls в
+        // существующих токенизаторах ниже, но именно там чаще всего и
+        // живут реальные цветовые коды. Пропускаем только сами комментарии
+        // (tok-c) - код внутри "# закомментированного" текста красить не
+        // нужно, это не то, что реально отправится игроку.
+        t.cls !== "tok-c" && MC_CODE_RE.test(t.text) ? (
+          <span key={i} className={t.cls ?? undefined}>
+            {renderMcColored(t.text)}
+          </span>
+        ) : t.cls ? (
           <span key={i} className={t.cls}>
             {t.text}
           </span>

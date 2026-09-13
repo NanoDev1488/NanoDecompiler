@@ -89,4 +89,11 @@ contextBridge.exposeInMainWorld("nano", {
     ipcRenderer.invoke("fs:listDir", root, relDir),
   readTextFile: (root: string, relPath: string): Promise<{ ok: boolean; content?: string; size?: number; error?: string }> =>
     ipcRenderer.invoke("fs:readTextFile", root, relPath),
+  // НОВОЕ v1.8.0: поиск по содержимому всех файлов результата (не по
+  // имени - см. FileTree.tsx, тот фильтр остаётся отдельно).
+  searchInProject: (
+    root: string,
+    query: string,
+  ): Promise<{ ok: boolean; results: { relPath: string; line: number; snippet: string }[]; truncated: boolean }> =>
+    ipcRenderer.invoke("search:inProject", root, query),
 });

@@ -481,7 +481,13 @@ PomBuildResult build_pom(const std::string& jar_path, const std::string& plugin_
         if (explicit_keys.count(key)) continue;
         auto& [g, a] = guessed[key];
         std::string comment = guessed_comment[key];
-        std::string note = comment.empty() ? "" : (" (" + comment + ")");
+        // БАГ-ФИКС v1.8.0 (реальная жалоба - "почему в скобках примечания
+        // вообще" ): некоторые записи known_libs() САМИ содержат скобки в
+        // своём тексте (например "статистика/телеметрия (bStats)") - при
+        // оборачивании ЕЩЁ ОДНОЙ парой скобок получалось откровенно
+        // нечитаемое "(статистика/телеметрия (bStats))". Через тире -
+        // читается однозначно независимо от содержимого comment.
+        std::string note = comment.empty() ? "" : (" - " + comment);
         std::ostringstream part;
         part << "        <!-- ПРЕДПОЛОЖЕНИЕ по обнаруженным импортам" << note << " - версию нужно подобрать вручную -->\n"
              << "        <dependency>\n"
