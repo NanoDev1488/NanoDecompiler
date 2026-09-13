@@ -199,7 +199,7 @@ std::string sha256_of_file(const std::string& path) {
 // nullopt при любой ошибке (сеть/лимит размера/curl не найден) - как и
 // весь остальной сетевой код здесь, тихо деградирует, а не падает.
 std::optional<std::string> download_and_sha256(const std::string& url, uint64_t max_bytes, double timeout_sec) {
-    std::string tmp = (fs::temp_directory_path() / ("nd_legitimacy_dl_" + random_hex_local(16))).string();
+    std::string tmp = (fs::temp_directory_path() / ("nd_legitimacy_dl_" + random_hex_local(16))).u8string();
     std::ostringstream cmd;
     cmd << "curl -sL -m " << timeout_sec << " --max-filesize " << max_bytes << " -A "
         << shell_quote_arg("Mozilla/5.0 (NanoDecompiler-LegitimacyCheck/1.1)") << " -o " << shell_quote_arg(tmp) << " "
@@ -310,7 +310,7 @@ constexpr const char* LEGITIMACY_SITES_CONFIG_URL = "https://raw.githubuserconte
 }  // namespace
 
 std::vector<SiteConfig> load_legitimacy_sites_config() {
-    std::string cache_path = (fs::u8path(get_tools_dir()) / ".." / "legitimacy_sites.json").lexically_normal().string();
+    std::string cache_path = (fs::u8path(get_tools_dir()) / ".." / "legitimacy_sites.json").lexically_normal().u8string();
 
     auto fresh = http_get(LEGITIMACY_SITES_CONFIG_URL, 4.0, "application/json");
     if (fresh.has_value()) {

@@ -71,7 +71,7 @@ std::string json_escape(const std::string& s) {
 
 JarSummary jar_summary(const std::string& jar_path) {
     JarSummary info;
-    info.name = fs::u8path(jar_path).filename().string();
+    info.name = fs::u8path(jar_path).filename().u8string();
 
     try {
         info.size = format_size(static_cast<uint64_t>(fs::file_size(jar_path)));

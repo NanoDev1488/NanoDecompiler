@@ -197,8 +197,8 @@ std::optional<HttpRequest> read_request(socket_t fd) {
 }
 
 std::string default_out_dir_for(const std::string& jar_path) {
-    std::string base = fs::u8path(jar_path).stem().string();
-    return (fs::temp_directory_path() / (base + "_decompiled")).string();
+    std::string base = fs::u8path(jar_path).stem().u8string();
+    return (fs::temp_directory_path() / (base + "_decompiled")).u8string();
 }
 
 void handle_health(socket_t fd) { send_json(fd, 200, std::string("{\"status\":\"ok\",\"version\":\"") + NANO_DECOMPILER_VERSION + "\"}"); }
@@ -229,7 +229,7 @@ void handle_decompile(socket_t fd, const HttpRequest& req) {
             return;
         }
         jar_path = *jp->as_string();
-        if (!fs::is_regular_file(jar_path)) {
+        if (!fs::is_regular_file(fs::u8path(jar_path))) {
             send_json(fd, 400, json_error_response("файл не найден: " + jar_path));
             return;
         }
@@ -240,7 +240,7 @@ void handle_decompile(socket_t fd, const HttpRequest& req) {
             send_json(fd, 400, json_error_response("пустое тело запроса"));
             return;
         }
-        tmp_jar_path = (fs::temp_directory_path() / ("nanodecompiler_upload_" + random_hex(32) + ".jar")).string();
+        tmp_jar_path = (fs::temp_directory_path() / ("nanodecompiler_upload_" + random_hex(32) + ".jar")).u8string();
         std::ofstream f(tmp_jar_path, std::ios::binary);
         f.write(reinterpret_cast<const char*>(req.body.data()), static_cast<std::streamsize>(req.body.size()));
         f.close();

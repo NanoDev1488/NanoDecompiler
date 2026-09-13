@@ -54,7 +54,7 @@ std::vector<std::string> split_path_env() {
 
 bool is_executable_file(const std::string& path) {
     std::error_code ec;
-    if (!fs::is_regular_file(path, ec)) return false;
+    if (!fs::is_regular_file(fs::u8path(path), ec)) return false;
 #ifdef _WIN32
     return true;  // на Windows расширение (.exe/.cmd) уже говорит о типе
 #else
@@ -67,7 +67,7 @@ std::optional<std::string> which(const std::vector<std::string>& exe_names, cons
     dirs.insert(dirs.end(), extra_dirs.begin(), extra_dirs.end());
     for (auto& dir : dirs) {
         for (auto& name : exe_names) {
-            std::string full = (fs::u8path(dir) / name).string();
+            std::string full = (fs::u8path(dir) / name).u8string();
             if (is_executable_file(full)) return full;
         }
     }
@@ -115,37 +115,37 @@ std::vector<std::string> well_known_dirs(const std::string& kind) {
 
     if (kind == "java") {
         std::string java_home = getenv_s("JAVA_HOME");
-        if (!java_home.empty()) out.push_back((fs::u8path(java_home) / "bin").string());
+        if (!java_home.empty()) out.push_back((fs::u8path(java_home) / "bin").u8string());
         for (auto& pf : program_files) {
             if (pf.empty()) continue;
             for (auto vendor : {"Java", "Eclipse Adoptium", "Eclipse Foundation", "Microsoft", "Zulu"}) {
                 fs::path base = fs::u8path(pf) / vendor;
                 std::error_code ec;
                 if (!fs::is_directory(base, ec)) continue;
-                for (auto& entry : fs::directory_iterator(base, ec)) out.push_back((entry.path() / "bin").string());
+                for (auto& entry : fs::directory_iterator(base, ec)) out.push_back((entry.path() / "bin").u8string());
             }
         }
     } else if (kind == "maven") {
         for (auto var : {"MAVEN_HOME", "M2_HOME"}) {
             std::string home = getenv_s(var);
-            if (!home.empty()) out.push_back((fs::u8path(home) / "bin").string());
+            if (!home.empty()) out.push_back((fs::u8path(home) / "bin").u8string());
         }
         for (auto& pf : program_files) {
             if (pf.empty()) continue;
             fs::path base = fs::u8path(pf) / "Apache" / "maven";
             std::error_code ec;
-            if (fs::is_directory(base, ec)) out.push_back((base / "bin").string());
+            if (fs::is_directory(base, ec)) out.push_back((base / "bin").u8string());
             fs::path apache_base = fs::u8path(pf) / "Apache";
             if (fs::is_directory(apache_base, ec)) {
                 for (auto& entry : fs::directory_iterator(apache_base, ec)) {
-                    std::string name = entry.path().filename().string();
+                    std::string name = entry.path().filename().u8string();
                     std::string lower = name;
                     std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-                    if (lower.rfind("maven", 0) == 0) out.push_back((entry.path() / "bin").string());
+                    if (lower.rfind("maven", 0) == 0) out.push_back((entry.path() / "bin").u8string());
                 }
             }
         }
-        if (!user_profile.empty()) out.push_back((fs::u8path(user_profile) / "scoop" / "apps" / "maven" / "current" / "bin").string());
+        if (!user_profile.empty()) out.push_back((fs::u8path(user_profile) / "scoop" / "apps" / "maven" / "current" / "bin").u8string());
     }
     std::vector<std::string> filtered;
     for (auto& d : out) {
@@ -186,7 +186,7 @@ std::string get_tools_dir() {
     fs::path tools = base / "tools";
     std::error_code ec;
     fs::create_directories(tools, ec);
-    return tools.string();
+    return tools.u8string();
 }
 
 namespace {
@@ -196,13 +196,13 @@ std::optional<std::string> find_one(const std::string& tools_dir, const std::str
     if (!fs::is_directory(tools_dir, ec)) return std::nullopt;
     std::vector<std::string> candidates;
     for (auto& entry : fs::directory_iterator(tools_dir, ec)) {
-        std::string name = entry.path().filename().string();
+        std::string name = entry.path().filename().u8string();
         std::string lower = name;
         std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
         if (lower.rfind(dir_prefix_lower, 0) != 0) continue;
         fs::path full = entry.path();
         for (auto& part : rel_bin) full /= part;
-        if (fs::is_regular_file(full, ec)) candidates.push_back(full.string());
+        if (fs::is_regular_file(full, ec)) candidates.push_back(full.u8string());
     }
     if (candidates.empty()) return std::nullopt;
     std::sort(candidates.begin(), candidates.end());
@@ -488,7 +488,7 @@ std::string install_jdk(ProgressCallback progress_cb) {
     std::string url = "https://api.adoptium.net/v3/binary/latest/" + std::to_string(kAdoptiumFeatureVersion) + "/ga/" + adoptium_os() + "/" +
                        adoptium_arch() + "/jdk/hotspot/normal/eclipse";
     bool is_zip = adoptium_os() == "windows";
-    std::string tmp_archive = (fs::temp_directory_path() / ("nd_jdk_" + random_hex(16) + (is_zip ? ".zip" : ".tar.gz"))).string();
+    std::string tmp_archive = (fs::temp_directory_path() / ("nd_jdk_" + random_hex(16) + (is_zip ? ".zip" : ".tar.gz"))).u8string();
     curl_download(url, tmp_archive, "JDK", progress_cb);
 
     std::optional<std::string> root;
@@ -506,7 +506,7 @@ std::string install_jdk(ProgressCallback progress_cb) {
     if (!java_path.has_value()) {
         throw ToolInstallError("JDK скачан и распакован, но java не найдена внутри - возможно, Adoptium изменил структуру архива. "
                                 "Папка распаковки: " +
-                                (fs::u8path(tools_dir) / root.value_or("")).string());
+                                (fs::u8path(tools_dir) / root.value_or("")).u8string());
     }
     ensure_executable(*java_path);
     return *java_path;
@@ -529,7 +529,7 @@ std::string install_maven(ProgressCallback progress_cb) {
         "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/" + version + "/apache-maven-" + version + "-bin.zip",
         "https://dlcdn.apache.org/maven/maven-3/" + version + "/binaries/apache-maven-" + version + "-bin.zip",
     };
-    std::string tmp_archive = (fs::temp_directory_path() / ("nd_maven_" + random_hex(16) + ".zip")).string();
+    std::string tmp_archive = (fs::temp_directory_path() / ("nd_maven_" + random_hex(16) + ".zip")).u8string();
     std::vector<std::string> mirror_errors;
     bool downloaded = false;
     for (auto& url : urls) {
@@ -562,7 +562,7 @@ std::string install_maven(ProgressCallback progress_cb) {
     if (!mvn_path.has_value()) {
         throw ToolInstallError("Maven скачан и распакован, но mvn не найден внутри - возможно, изменилась структура архива. "
                                 "Папка распаковки: " +
-                                (fs::u8path(tools_dir) / root.value_or("")).string());
+                                (fs::u8path(tools_dir) / root.value_or("")).u8string());
     }
     ensure_executable(*mvn_path);
     return *mvn_path;

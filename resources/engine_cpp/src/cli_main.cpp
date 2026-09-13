@@ -282,7 +282,7 @@ int run_cli(int argc, char** argv) {
             std::cout << "{\"error\":\"использование: NanoDecompilerCLI --jar-summary plugin.jar\"}\n";
             return 0;
         }
-        if (!fs::is_regular_file(args[1])) {
+        if (!fs::is_regular_file(fs::u8path(args[1]))) {
             std::cout << "{\"error\":\"файл не найден: " << args[1] << "\"}\n";
             return 0;
         }
@@ -335,9 +335,9 @@ int run_cli(int argc, char** argv) {
             positional_rest.push_back(args[i]);
         }
     }
-    std::string out_dir = !positional_rest.empty() ? positional_rest[0] : (fs::u8path(jar_path).stem().string() + "_decompiled");
+    std::string out_dir = !positional_rest.empty() ? positional_rest[0] : (fs::u8path(jar_path).stem().u8string() + "_decompiled");
 
-    if (!fs::is_regular_file(jar_path)) {
+    if (!fs::is_regular_file(fs::u8path(jar_path))) {
         if (json_output) {
             std::cout << nd::json_error_response("файл не найден: " + jar_path) << "\n";
             return 1;
