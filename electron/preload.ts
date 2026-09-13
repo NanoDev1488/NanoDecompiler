@@ -96,4 +96,12 @@ contextBridge.exposeInMainWorld("nano", {
     query: string,
   ): Promise<{ ok: boolean; results: { relPath: string; line: number; snippet: string }[]; truncated: boolean }> =>
     ipcRenderer.invoke("search:inProject", root, query),
+  // НОВОЕ v1.8.0: поиск в открытом файле - см. main.ts::page:find.
+  findInPage: (text: string, forward: boolean): Promise<void> => ipcRenderer.invoke("page:find", text, forward),
+  stopFindInPage: (): Promise<void> => ipcRenderer.invoke("page:stopFind"),
+  onFindResult: (cb: (r: { activeMatchOrdinal: number; matches: number }) => void) => {
+    const handler = (_e: unknown, payload: { activeMatchOrdinal: number; matches: number }) => cb(payload);
+    ipcRenderer.on("page:findResult", handler);
+    return () => ipcRenderer.removeListener("page:findResult", handler);
+  },
 });

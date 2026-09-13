@@ -310,14 +310,14 @@ constexpr const char* LEGITIMACY_SITES_CONFIG_URL = "https://raw.githubuserconte
 }  // namespace
 
 std::vector<SiteConfig> load_legitimacy_sites_config() {
-    std::string cache_path = (fs::path(get_tools_dir()) / ".." / "legitimacy_sites.json").lexically_normal().string();
+    std::string cache_path = (fs::u8path(get_tools_dir()) / ".." / "legitimacy_sites.json").lexically_normal().string();
 
     auto fresh = http_get(LEGITIMACY_SITES_CONFIG_URL, 4.0, "application/json");
     if (fresh.has_value()) {
         auto parsed = parse_legitimacy_sites_config(*fresh);
         if (!parsed.empty()) {
             std::error_code ec;
-            fs::create_directories(fs::path(cache_path).parent_path(), ec);
+            fs::create_directories(fs::u8path(cache_path).parent_path(), ec);
             std::ofstream f(cache_path, std::ios::binary);
             f << *fresh;
             return parsed;

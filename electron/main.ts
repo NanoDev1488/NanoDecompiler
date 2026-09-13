@@ -184,6 +184,13 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
+
+  // НОВОЕ v1.8.0: результат поиска по странице (см. page:find выше) -
+  // "N из M" для FindBar.tsx.
+  mainWindow.webContents.on("found-in-page", (_event, result) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send("page:findResult", { activeMatchOrdinal: result.activeMatchOrdinal, matches: result.matches });
+  });
 }
 
 app.whenReady().then(() => {
@@ -730,13 +737,27 @@ ipcMain.handle("fs:listDir", async (_e, root: string, relDir: string) => {
   }
 });
 
-// НОВОЕ v1.8.0 (реальный запрос - "поиск слов в файле/проекте, минимум
-// 3 буквы, сейчас ищется вообще ужасно" - на деле ДО этого искать по
-// содержимому вообще было нельзя, был только фильтр по ИМЕНИ файла в
-// дереве). Поиск по файловой системе результата (НЕ по уже загруженным
-// в память file.code - большинство файлов ещё не открывались и не
-// прочитаны рендерером) - асинхронно, не блокирует главный процесс (см.
-// БАГ-ФИКС jarSummary.ts выше про синхронный I/O в Electron main).
+// НОВОЕ v1.8.0 (реальный запрос - "поиск в файле/проекте, хороший поиск,
+// сейчас ищется ужасно"): поиск ВНУТРИ ОТКРЫТОГО файла переиспользует
+// штатный Electron webContents.findInPage() - он уже умеет надёжно искать
+// текст ЧЕРЕЗ границы токенов подсветки синтаксиса (наши <span>'ы), с
+// подсветкой совпадений и подсчётом "N из M" - переизобретать то же самое
+// поверх React-рендера токенов было бы и рискованнее, и хуже (пришлось бы
+// разбирать/склеивать текст поперёк span'ов вручную). Минимум 2 буквы -
+// см. FindBar.tsx.
+ipcMain.handle("page:find", (_e, text: string, forward: boolean) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (!text) {
+    mainWindow.webContents.stopFindInPage("clearSelection");
+    return;
+  }
+  mainWindow.webContents.findInPage(text, { forward, matchCase: false });
+});
+ipcMain.handle("page:stopFind", () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.stopFindInPage("clearSelection");
+});
+
 ipcMain.handle("search:inProject", async (_e, root: string, query: string) => {
   const q = query.trim();
   if (q.length < 3) return { ok: true, results: [], truncated: false };

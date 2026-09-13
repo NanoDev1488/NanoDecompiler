@@ -189,7 +189,12 @@ function renderShell(lines: ReactNode[], wrap?: boolean): ReactNode {
   return (
     <>
       {lines.map((row, i) => (
-        <div key={i} className="flex">
+        // НОВОЕ v1.8.0: id на каждой строке - нужен для перехода к
+        // результату поиска (см. ProjectSearchModal.tsx/CodeView.tsx) -
+        // scrollIntoView ищет ИМЕННО этот id, единый формат для ВСЕХ
+        // токенизаторов (не только Java), раз он всё равно все проходят
+        // через этот общий renderShell().
+        <div key={i} id={`codeline-${i + 1}`} className="flex">
           <span
             aria-hidden
             className="mono w-12 flex-none pr-4 text-right text-[11px] leading-[1.75] text-faint select-none"

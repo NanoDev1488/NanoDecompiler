@@ -259,7 +259,7 @@ int run_install_tools_json(const std::optional<std::string>& only) {
 
 }  // namespace
 
-int main(int argc, char** argv) {
+int run_cli(int argc, char** argv) {
     std::vector<std::string> args(argv + 1, argv + argc);
     if (args.empty()) {
         print_usage();
@@ -335,7 +335,7 @@ int main(int argc, char** argv) {
             positional_rest.push_back(args[i]);
         }
     }
-    std::string out_dir = !positional_rest.empty() ? positional_rest[0] : (fs::path(jar_path).stem().string() + "_decompiled");
+    std::string out_dir = !positional_rest.empty() ? positional_rest[0] : (fs::u8path(jar_path).stem().string() + "_decompiled");
 
     if (!fs::is_regular_file(jar_path)) {
         if (json_output) {
@@ -349,4 +349,26 @@ int main(int argc, char** argv) {
     if (json_output) return nd::run_json_output(jar_path, out_dir, skip_legitimacy);
 
     return run_decompile_console(jar_path, out_dir, skip_legitimacy);
+}
+
+// БАГ-ФИКС v1.7.4 (реальный краш на Windows - необработанное исключение
+// std::filesystem::filesystem_error улетало прямо в std::terminate(),
+// пользователь видел сырой C++ "terminate called after throwing..." вместо
+// понятного сообщения). Первопричина (кодировка путей на Windows) исправлена
+// отдельно (см. fs::u8path() выше), но это - защита "на всякий случай":
+// ЛЮБОЕ другое непредвиденное исключение (в этой ли функции, в будущих ли
+// изменениях кода) теперь даёт читаемую ошибку и код возврата 1 вместо
+// падения самого процесса без единого пояснения.
+int main(int argc, char** argv) {
+    try {
+        return run_cli(argc, argv);
+    } catch (const std::exception& e) {
+        std::cerr << "[!] ВНУТРЕННЯЯ ОШИБКА движка: " << e.what() << "\n"
+                   << "    Пожалуйста, сообщите об этом разработчику вместе с именем .jar файла,\n"
+                   << "    который вызвал эту ошибку (см. README_RU.txt).\n";
+        return 1;
+    } catch (...) {
+        std::cerr << "[!] ВНУТРЕННЯЯ ОШИБКА движка: неизвестное исключение (не std::exception).\n";
+        return 1;
+    }
 }

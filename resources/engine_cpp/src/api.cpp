@@ -197,7 +197,7 @@ std::optional<HttpRequest> read_request(socket_t fd) {
 }
 
 std::string default_out_dir_for(const std::string& jar_path) {
-    std::string base = fs::path(jar_path).stem().string();
+    std::string base = fs::u8path(jar_path).stem().string();
     return (fs::temp_directory_path() / (base + "_decompiled")).string();
 }
 

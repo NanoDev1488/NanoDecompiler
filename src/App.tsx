@@ -9,11 +9,12 @@ import { StatusBar } from "./components/StatusBar";
 import { SettingsModal } from "./components/SettingsModal";
 import { UpdateModal } from "./components/UpdateModal";
 import { CommandPalette } from "./components/CommandPalette";
+import { ProjectSearchModal } from "./components/ProjectSearchModal";
 import { SetupWizard } from "./components/SetupWizard";
 import { Toasts } from "./components/Toasts";
 
 function Shell() {
-  const { settingsOpen, updateModalOpen, paletteOpen, settingsLoaded, settings } = useEngine();
+  const { settingsOpen, updateModalOpen, paletteOpen, projectSearchOpen, setProjectSearchOpen, settingsLoaded, settings } = useEngine();
 
   // браузер иначе открывает перетащенный файл как страницу
   useEffect(() => {
@@ -56,6 +57,7 @@ function Shell() {
       {settingsOpen && <SettingsModal />}
       {updateModalOpen && <UpdateModal />}
       {paletteOpen && <CommandPalette />}
+      {projectSearchOpen && <ProjectSearchModal onClose={() => setProjectSearchOpen(false)} />}
       <Toasts />
     </div>
   );

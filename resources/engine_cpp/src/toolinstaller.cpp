@@ -67,7 +67,7 @@ std::optional<std::string> which(const std::vector<std::string>& exe_names, cons
     dirs.insert(dirs.end(), extra_dirs.begin(), extra_dirs.end());
     for (auto& dir : dirs) {
         for (auto& name : exe_names) {
-            std::string full = (fs::path(dir) / name).string();
+            std::string full = (fs::u8path(dir) / name).string();
             if (is_executable_file(full)) return full;
         }
     }
@@ -115,11 +115,11 @@ std::vector<std::string> well_known_dirs(const std::string& kind) {
 
     if (kind == "java") {
         std::string java_home = getenv_s("JAVA_HOME");
-        if (!java_home.empty()) out.push_back((fs::path(java_home) / "bin").string());
+        if (!java_home.empty()) out.push_back((fs::u8path(java_home) / "bin").string());
         for (auto& pf : program_files) {
             if (pf.empty()) continue;
             for (auto vendor : {"Java", "Eclipse Adoptium", "Eclipse Foundation", "Microsoft", "Zulu"}) {
-                fs::path base = fs::path(pf) / vendor;
+                fs::path base = fs::u8path(pf) / vendor;
                 std::error_code ec;
                 if (!fs::is_directory(base, ec)) continue;
                 for (auto& entry : fs::directory_iterator(base, ec)) out.push_back((entry.path() / "bin").string());
@@ -128,14 +128,14 @@ std::vector<std::string> well_known_dirs(const std::string& kind) {
     } else if (kind == "maven") {
         for (auto var : {"MAVEN_HOME", "M2_HOME"}) {
             std::string home = getenv_s(var);
-            if (!home.empty()) out.push_back((fs::path(home) / "bin").string());
+            if (!home.empty()) out.push_back((fs::u8path(home) / "bin").string());
         }
         for (auto& pf : program_files) {
             if (pf.empty()) continue;
-            fs::path base = fs::path(pf) / "Apache" / "maven";
+            fs::path base = fs::u8path(pf) / "Apache" / "maven";
             std::error_code ec;
             if (fs::is_directory(base, ec)) out.push_back((base / "bin").string());
-            fs::path apache_base = fs::path(pf) / "Apache";
+            fs::path apache_base = fs::u8path(pf) / "Apache";
             if (fs::is_directory(apache_base, ec)) {
                 for (auto& entry : fs::directory_iterator(apache_base, ec)) {
                     std::string name = entry.path().filename().string();
@@ -145,7 +145,7 @@ std::vector<std::string> well_known_dirs(const std::string& kind) {
                 }
             }
         }
-        if (!user_profile.empty()) out.push_back((fs::path(user_profile) / "scoop" / "apps" / "maven" / "current" / "bin").string());
+        if (!user_profile.empty()) out.push_back((fs::u8path(user_profile) / "scoop" / "apps" / "maven" / "current" / "bin").string());
     }
     std::vector<std::string> filtered;
     for (auto& d : out) {
@@ -177,11 +177,11 @@ std::string get_tools_dir() {
     fs::path base;
 #ifdef _WIN32
     const char* local = std::getenv("LOCALAPPDATA");
-    base = local != nullptr ? fs::path(local) : fs::path(std::getenv("USERPROFILE") ? std::getenv("USERPROFILE") : ".");
+    base = local != nullptr ? fs::u8path(local) : fs::u8path(std::getenv("USERPROFILE") ? std::getenv("USERPROFILE") : ".");
     base /= "NanoDecompiler";
 #else
     const char* home = std::getenv("HOME");
-    base = fs::path(home != nullptr ? home : ".") / ".nanodecompiler";
+    base = fs::u8path(home != nullptr ? home : ".") / ".nanodecompiler";
 #endif
     fs::path tools = base / "tools";
     std::error_code ec;
@@ -312,7 +312,7 @@ std::optional<std::string> extract_zip(const std::string& zip_path, const std::s
         std::string root = slash == std::string::npos ? name : name.substr(0, slash);
         if (!root.empty()) roots.insert(root);
 
-        fs::path dest = fs::path(dest_dir) / name;
+        fs::path dest = fs::u8path(dest_dir) / name;
         if (!name.empty() && name.back() == '/') {
             std::error_code ec;
             fs::create_directories(dest, ec);
@@ -327,7 +327,7 @@ std::optional<std::string> extract_zip(const std::string& zip_path, const std::s
     if (roots.size() == 1) {
         std::string root = *roots.begin();
         std::error_code ec;
-        if (fs::is_directory(fs::path(dest_dir) / root, ec)) return root;
+        if (fs::is_directory(fs::u8path(dest_dir) / root, ec)) return root;
     }
     return std::nullopt;
 }
@@ -398,7 +398,7 @@ std::optional<std::string> extract_targz(const std::string& archive_path, const 
             if (!root.empty()) roots.insert(root);
         }
 
-        fs::path dest = fs::path(dest_dir) / name;
+        fs::path dest = fs::u8path(dest_dir) / name;
         std::error_code ec;
         if (hdr.typeflag == '5') {  // каталог
             fs::create_directories(dest, ec);
@@ -440,7 +440,7 @@ std::optional<std::string> extract_targz(const std::string& archive_path, const 
     if (roots.size() == 1) {
         std::string root = *roots.begin();
         std::error_code ec;
-        if (fs::is_directory(fs::path(dest_dir) / root, ec)) return root;
+        if (fs::is_directory(fs::u8path(dest_dir) / root, ec)) return root;
     }
     return std::nullopt;
 }
@@ -506,7 +506,7 @@ std::string install_jdk(ProgressCallback progress_cb) {
     if (!java_path.has_value()) {
         throw ToolInstallError("JDK скачан и распакован, но java не найдена внутри - возможно, Adoptium изменил структуру архива. "
                                 "Папка распаковки: " +
-                                (fs::path(tools_dir) / root.value_or("")).string());
+                                (fs::u8path(tools_dir) / root.value_or("")).string());
     }
     ensure_executable(*java_path);
     return *java_path;
@@ -562,7 +562,7 @@ std::string install_maven(ProgressCallback progress_cb) {
     if (!mvn_path.has_value()) {
         throw ToolInstallError("Maven скачан и распакован, но mvn не найден внутри - возможно, изменилась структура архива. "
                                 "Папка распаковки: " +
-                                (fs::path(tools_dir) / root.value_or("")).string());
+                                (fs::u8path(tools_dir) / root.value_or("")).string());
     }
     ensure_executable(*mvn_path);
     return *mvn_path;

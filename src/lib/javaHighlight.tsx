@@ -131,7 +131,7 @@ export const JavaCode = memo(function JavaCode({ code, wrap }: { code: string; w
   return (
     <>
       {lines.map((row, i) => (
-        <div key={i} className="flex">
+        <div key={i} id={`codeline-${i + 1}`} className="flex">
           <span
             aria-hidden
             className="mono w-12 flex-none pr-4 text-right text-[11px] leading-[1.75] text-faint select-none"

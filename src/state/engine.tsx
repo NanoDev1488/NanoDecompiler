@@ -81,6 +81,7 @@ interface EngineApi {
   settingsOpen: boolean;
   updateModalOpen: boolean;
   paletteOpen: boolean;
+  projectSearchOpen: boolean;
   envIssue: boolean;
   engineVersion: string | null;
   guiVersion: string | null;
@@ -120,6 +121,7 @@ interface EngineApi {
   saveSettings(next: Settings): void;
   completeSetup(): void;
   setPaletteOpen(open: boolean): void;
+  setProjectSearchOpen(open: boolean): void;
   resolveEnvIssue(): void;
   checkForUpdates(silent?: boolean): void;
   applyEngineUpdate(): void;
@@ -168,6 +170,8 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // НОВОЕ v1.8.0: поиск по проекту (Ctrl+Shift+F) - см. ProjectSearchModal.tsx.
+  const [projectSearchOpen, setProjectSearchOpen] = useState(false);
   const [envIssue, setEnvIssue] = useState(false);
   // БАГ-ФИКС: engineVersion раньше была захардкожена заглушкой "2.4.1" в
   // каждом компоненте отдельно (SettingsModal/AppHeader/Titlebar/
@@ -1076,10 +1080,16 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       } else if (mod && e.key.toLowerCase() === "l") {
         e.preventDefault();
         setLog([]);
+      } else if (mod && e.shiftKey && e.key.toLowerCase() === "f") {
+        // НОВОЕ v1.8.0: поиск по всему проекту (не путать с Ctrl+F - поиск
+        // в текущем открытом файле, см. CodeView.tsx/FindBar.tsx).
+        e.preventDefault();
+        setProjectSearchOpen(v => !v);
       } else if (e.key === "Escape") {
         setPaletteOpen(false);
         setSettingsOpen(false);
         setUpdateModalOpen(false);
+        setProjectSearchOpen(false);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -1095,10 +1105,10 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
   const api: EngineApi = {
     jobs, log, runningJob, runningElapsed, selectedJobId, selectedJob, openFileByJob,
-    terminalOpen, logFilter, settings, settingsLoaded, settingsOpen, updateModalOpen, paletteOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, installingTool, installProgress, iconThumbnails, updateInfo, toasts, queuedCount, sidebarWidth, fileTreeWidth, terminalHeight,
+    terminalOpen, logFilter, settings, settingsLoaded, settingsOpen, updateModalOpen, paletteOpen, projectSearchOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, installingTool, installProgress, iconThumbnails, updateInfo, toasts, queuedCount, sidebarWidth, fileTreeWidth, terminalHeight,
     addFiles, openFileDialog, startQueue, stopRunning, stopAll, cancelJob, removeJob, clearQueue,
     selectJob, selectFile, setLogFilter, toggleTerminal, clearLog, copyLog, copyText,
-    openOutput, setSettingsOpen, setUpdateModalOpen, setSidebarWidth, setFileTreeWidth, setTerminalHeight, saveSettings, completeSetup, setPaletteOpen,
+    openOutput, setSettingsOpen, setUpdateModalOpen, setSidebarWidth, setFileTreeWidth, setTerminalHeight, saveSettings, completeSetup, setPaletteOpen, setProjectSearchOpen,
     resolveEnvIssue, checkForUpdates, applyEngineUpdate, openClientDownload, checkEnv, installTool, toast, dismissToast,
   };
 

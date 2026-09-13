@@ -1,9 +1,10 @@
 import { Copy, WrapText } from "lucide-react";
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { useEngine } from "../state/engine";
 import { JavaCode } from "../lib/javaHighlight";
 import { PlainCode, PropertiesCode, JsonCode, XmlCode, YamlCode } from "../lib/textHighlight";
 import type { SourceFile } from "../lib/model";
+import { FindBar } from "./FindBar";
 
 // БАГ-ФИКС: раньше ЛЮБОЙ файл в просмотрщике рендерился через JavaCode
 // независимо от расширения - .yml подсвечивался java-ключевыми словами.
@@ -41,6 +42,22 @@ function prettyPrintIfJson(name: string, code: string): string {
 export const CodeView = memo(function CodeView({ file, jobId }: { file: SourceFile | null; jobId?: string }) {
   const { copyText, selectFile } = useEngine();
   const [wrap, setWrap] = useState(false);
+  // НОВОЕ v1.8.0 (реальный запрос - "хороший поиск в файле"): Ctrl+F
+  // локально в этом компоненте (не глобальный шорткат в engine.tsx) -
+  // поиск в файле имеет смысл, только пока файл вообще открыт.
+  const [findOpen, setFindOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setFindOpen(true);
+      } else if (e.key === "Escape") {
+        setFindOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   // useMemo вызывается БЕЗУСЛОВНО (до раннего return ниже) - иначе при
   // переключении file между null/не-null менялось бы число вызванных хуков
   // между рендерами, что React запрещает (Rules of Hooks).
@@ -61,7 +78,8 @@ export const CodeView = memo(function CodeView({ file, jobId }: { file: SourceFi
   const CodeComponent = codeComponentFor(file.name);
 
   return (
-    <section className="flex min-w-0 flex-1 flex-col bg-bg">
+    <section className="relative flex min-w-0 flex-1 flex-col bg-bg">
+      {findOpen && <FindBar onClose={() => setFindOpen(false)} />}
       <div className="flex h-9 flex-none items-center gap-2.5 border-b border-line px-3">
         <nav className="mono flex min-w-0 items-center gap-1 text-[11.5px] text-faint" aria-label="Путь к файлу">
           {crumbs.map((c, i) => (

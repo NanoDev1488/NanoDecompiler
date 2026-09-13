@@ -28,14 +28,28 @@ namespace nd {
 
 namespace {
 
+// БАГ-ФИКС v1.7.4 (реальный краш на Windows - std::filesystem::filesystem_error
+// "Cannot convert character sequence: Illegal byte sequence", падал сразу
+// на старте с реальным jar): fs::path(std::string) на MinGW/Windows
+// конвертирует narrow-строку в wchar_t через ТЕКУЩУЮ СИСТЕМНУЮ КОДОВУЮ
+// СТРАНИЦУ (ACP), а НЕ через UTF-8 - если строка (имя записи в jar с
+// нестандартной кодировкой, ПУТЬ ПОЛЬЗОВАТЕЛЯ с кириллическим именем
+// Windows-профиля и т.п.) содержит байты, которые не образуют валидную
+// последовательность в этой кодовой странице - конвертация БРОСАЕТ
+// исключение вместо тихого искажения текста. У нас ВЕЗДЕ строки в UTF-8
+// по конвенции проекта - fs::u8path() вместо fs::path() гарантированно
+// трактует байты как UTF-8 независимо от системной локали/кодовой
+// страницы - на Linux/macOS (где narrow=UTF-8 и так) поведение не
+// меняется НИ НА БАЙТ, разница только на Windows. Заменено ВЕЗДЕ в
+// движке (не только здесь) - см. HANDOFF_NEXT_AGENT_HANDOVER.md.
 void write_text_file(const std::string& path, const std::string& text) {
-    fs::create_directories(fs::path(path).parent_path());
+    fs::create_directories(fs::u8path(path).parent_path());
     std::ofstream f(path, std::ios::binary);
     f << text;
 }
 
 void write_binary_file(const std::string& path, const std::vector<uint8_t>& data) {
-    fs::create_directories(fs::path(path).parent_path());
+    fs::create_directories(fs::u8path(path).parent_path());
     std::ofstream f(path, std::ios::binary);
     if (!data.empty()) f.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
 }
@@ -108,7 +122,7 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     print_stage("scanning");
     jr.malware_findings = scan_jar(jar_path);
 
-    std::string src_dir = (fs::path(out_dir) / "src" / "main" / "java").string();
+    std::string src_dir = (fs::u8path(out_dir) / "src" / "main" / "java").string();
     fs::create_directories(src_dir);
 
     ZipReader zr(jar_path);
@@ -233,7 +247,7 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
         (void)coords;
         skip_res_prefixes.push_back(dotted_to_path_prefix(prefix));
     }
-    std::string res_dir = (fs::path(out_dir) / "src" / "main" / "resources").string();
+    std::string res_dir = (fs::u8path(out_dir) / "src" / "main" / "resources").string();
     static const std::regex maven_meta_re(R"(META-INF/maven/([^/]+)/([^/]+)/)");
     // БАГ-ФИКС: MANIFEST.MF и файлы подписи из META-INF копировались как
     // обычные ресурсы. MANIFEST.MF - это манифест ИСХОДНОГО jar (Main-Class,
@@ -325,7 +339,7 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
         } catch (...) {
             continue;
         }
-        write_binary_file((fs::path(res_dir) / n).string(), data);
+        write_binary_file((fs::u8path(res_dir) / n).string(), data);
         if (n == "plugin.yml") {
             plugin_yml_text = std::string(data.begin(), data.end());
         }
@@ -357,7 +371,7 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     // как fallback для Velocity/Bungee (без Bukkit-style plugin.yml) -
     // раньше в этом случае artifactId всегда брался из имени файла jar.
     auto pom_result = build_pom(jar_path, plugin_yml_text.value_or(""), external_dotted, all_names, zr, jr.platform.name);
-    write_text_file((fs::path(out_dir) / "pom.xml").string(), pom_result.pom_xml);
+    write_text_file((fs::u8path(out_dir) / "pom.xml").string(), pom_result.pom_xml);
 
     // --- 9. Проверка легитимности (см. legitimacy_check.hpp) - ВСЕГДА все
     // источники, если явно не выключена. См. header legitimacy_check.hpp -
@@ -439,7 +453,7 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
         }
         for (auto& [d, s] : cls_imports.items()) all_imports.set(d, s);
         std::string new_internal = renamer.friendly_class(internal);
-        std::string dest = (fs::path(src_dir) / (new_internal + ".java")).string();
+        std::string dest = (fs::u8path(src_dir) / (new_internal + ".java")).string();
         write_text_file(dest, text);
         auto issues = check_brackets(text, new_internal + ".java");
         stats.bracket_issues.insert(stats.bracket_issues.end(), issues.begin(), issues.end());
@@ -554,7 +568,7 @@ void write_mapping_report(const std::string& out_dir, const Renamer& renamer) {
     }
     if (n == 0) f << "  (ни одно имя поля не было изменено)\n";
 
-    write_text_file((fs::path(out_dir) / "MAPPING_RU.txt").string(), f.str());
+    write_text_file((fs::u8path(out_dir) / "MAPPING_RU.txt").string(), f.str());
 }
 
 void write_readme(const std::string& out_dir, const std::string& jar_path, int n_classes,
@@ -570,7 +584,7 @@ void write_readme(const std::string& out_dir, const std::string& jar_path, int n
     // источник статистики парсинга/декомпиляции (см. summary_text() ниже),
     // здесь только заголовок и деобфускация - без пересечения по темам.
     std::ostringstream f;
-    std::string base = fs::path(jar_path).filename().string();
+    std::string base = fs::u8path(jar_path).filename().string();
     f << std::string(70, '=') << "\n";
     f << "NanoDecompiler - результат декомпиляции: " << base << "\n";
     f << std::string(70, '=') << "\n";
@@ -648,7 +662,7 @@ void write_readme(const std::string& out_dir, const std::string& jar_path, int n
          "    комментарий \"ВНИМАНИЕ: конструктор этого enum принимает аргументы\" -\n"
          "    там же указаны типы нужных аргументов.\n";
 
-    write_text_file((fs::path(out_dir) / "README_RU.txt").string(), f.str());
+    write_text_file((fs::u8path(out_dir) / "README_RU.txt").string(), f.str());
 }
 
 }  // namespace nd

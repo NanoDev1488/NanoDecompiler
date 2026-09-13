@@ -77,6 +77,9 @@ declare global {
         root: string,
         query: string,
       ) => Promise<{ ok: boolean; results: { relPath: string; line: number; snippet: string }[]; truncated: boolean }>;
+      findInPage: (text: string, forward: boolean) => Promise<void>;
+      stopFindInPage: () => Promise<void>;
+      onFindResult: (cb: (r: { activeMatchOrdinal: number; matches: number }) => void) => () => void;
     };
   }
 }
