@@ -359,9 +359,53 @@ int run_cli(int argc, char** argv) {
 // ЛЮБОЕ другое непредвиденное исключение (в этой ли функции, в будущих ли
 // изменениях кода) теперь даёт читаемую ошибку и код возврата 1 вместо
 // падения самого процесса без единого пояснения.
+#ifdef _WIN32
+#include <windows.h>
+
+// БАГ-ФИКС v1.7.5 (реальный краш ВСЁ ЕЩЁ повторялся у пользователя ПОСЛЕ
+// u8path()/u8string() фиксов - копали не в ту сторону): main(argc, char**
+// argv) на Windows/MinGW получает аргументы командной строки УЖЕ
+// сконвертированными CRT-стартапом в АНСИ-кодовую страницу (НЕ UTF-8!) -
+// если реальный путь (например, содержащий кириллическое имя профиля
+// пользователя Windows) не укладывается в текущую ANSI-кодовую страницу,
+// argv[] УЖЕ содержит испорченные/потерянные байты ДО того, как наш код
+// вообще успевает что-то сделать - fs::u8path() на УЖЕ испорченной строке
+// всё равно бросает то же исключение, потому что байты не валидны в UTF-8
+// (это не "наши" байты, это то, что получилось после ANSI-конвертации).
+// Единственный надёжный способ получить РЕАЛЬНЫЕ (не потерянные) аргументы
+// командной строки на Windows - взять их в ШИРОКОМ (UTF-16) виде через
+// GetCommandLineW()+CommandLineToArgvW() (не проходят через ANSI вообще) и
+// перекодировать САМИМ в UTF-8 явно (WideCharToMultiByte с CP_UTF8) - то
+// есть, по сути, свой собственный "wmain", т.к. использовать wmain()
+// напрямую с MinGW менее переносимо между вариантами тулчейна.
+std::vector<std::string> get_utf8_argv() {
+    int wargc = 0;
+    LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
+    std::vector<std::string> out;
+    if (!wargv) return out;
+    for (int i = 0; i < wargc; ++i) {
+        int len = WideCharToMultiByte(CP_UTF8, 0, wargv[i], -1, nullptr, 0, nullptr, nullptr);
+        std::string s(len > 0 ? len - 1 : 0, '\0');
+        if (len > 0) WideCharToMultiByte(CP_UTF8, 0, wargv[i], -1, s.data(), len, nullptr, nullptr);
+        out.push_back(std::move(s));
+    }
+    LocalFree(wargv);
+    return out;
+}
+#endif
+
 int main(int argc, char** argv) {
     try {
+#ifdef _WIN32
+        // Игнорируем ANSI-испорченный argv целиком - берём собственный,
+        // честно перекодированный из UTF-16 в UTF-8 (см. get_utf8_argv()).
+        std::vector<std::string> wide_args = get_utf8_argv();
+        std::vector<char*> fake_argv;
+        for (auto& s : wide_args) fake_argv.push_back(s.data());
+        return run_cli(static_cast<int>(fake_argv.size()), fake_argv.data());
+#else
         return run_cli(argc, argv);
+#endif
     } catch (const std::exception& e) {
         std::cerr << "[!] ВНУТРЕННЯЯ ОШИБКА движка: " << e.what() << "\n"
                    << "    Пожалуйста, сообщите об этом разработчику вместе с именем .jar файла,\n"

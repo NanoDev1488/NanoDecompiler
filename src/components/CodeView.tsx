@@ -1,4 +1,4 @@
-import { Copy, WrapText } from "lucide-react";
+import { Copy, Search, WrapText } from "lucide-react";
 import { memo, useEffect, useMemo, useState } from "react";
 import { useEngine } from "../state/engine";
 import { JavaCode } from "../lib/javaHighlight";
@@ -99,6 +99,14 @@ export const CodeView = memo(function CodeView({ file, jobId }: { file: SourceFi
         <div className="flex-1" />
 
         <span className="mono hidden text-[10.5px] text-faint md:inline">{file.loc} строк · read-only</span>
+        {/* НОВОЕ v1.7.5 (реальная жалоба - "поиск вообще не работает"):
+            раньше поиск открывался ТОЛЬКО горячими клавишами (Ctrl+F/
+            Ctrl+Shift+F) без единой видимой кнопки - пользователь просто
+            не мог узнать, что фича существует. Видимая кнопка + подсказка
+            с сочетанием клавиш в title. */}
+        <button className="icon-btn h-7 w-7" title="Найти в файле (Ctrl+F)" onClick={() => setFindOpen(true)}>
+          <Search size={14} />
+        </button>
         <button
           className="icon-btn h-7 w-7"
           title={wrap ? "Отключить перенос строк" : "Переносить строки"}

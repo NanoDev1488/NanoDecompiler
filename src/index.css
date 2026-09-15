@@ -356,3 +356,9 @@ body {
   color: var(--faint, #8a93a3);
   cursor: help;
 }
+.mc-code-unknown {
+  text-decoration: underline wavy currentColor;
+  text-decoration-color: var(--acid, #b6ff3c);
+  text-underline-offset: 3px;
+  cursor: help;
+}

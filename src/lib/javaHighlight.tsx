@@ -1,5 +1,12 @@
 import { memo, useMemo, type ReactNode } from "react";
-import { MC_CODE_RE, renderMcColored } from "./mcColors";
+import {
+  COLOR_METHOD_CALL_RE,
+  GENERIC_COLOR_CALL_RE,
+  MC_CODE_RE,
+  renderMcColored,
+  renderNamedColorText,
+  renderUnknownColorMarked,
+} from "./mcColors";
 
 /* Однопроходный токенизатор: комментарии и строки не пересекаются,
    всё остальное — слова. Без полноценного парсера, для просмотра хватает. */
@@ -35,6 +42,10 @@ interface Token {
   // (не char/число - все три раньше делили один cls="tok-s") - цвета
   // майнкрафта имеет смысл разбирать только внутри настоящих строк.
   isStr?: boolean;
+  // НОВОЕ v1.7.5: если это строковый аргумент вызова вида `.GREEN("...")`
+  // или кастомного `.Color("...")` - см. tokenizeLine() ниже.
+  colorMethod?: string | null;
+  isGenericColorCall?: boolean;
 }
 
 function tokenizeLine(line: string): Token[] {
@@ -51,7 +62,22 @@ function tokenizeLine(line: string): Token[] {
     else if (ann) cls = "tok-a";
     else if (num) cls = "tok-s";
     else if (word && KEYWORDS.has(word)) cls = "tok-k";
-    out.push({ text: m[0], cls, isStr: !!str });
+    let colorMethod: string | null = null;
+    let isGenericColorCall = false;
+    if (str) {
+      // НОВОЕ v1.7.5 (по прямой просьбе - "детект вызовов цветовых
+      // методов, не только сырых &-кодов"): смотрим на текст ПЕРЕД этой
+      // строкой на ТОЙ ЖЕ строке кода - `line.slice(0, m.index)` - ищем
+      // паттерн вида `.GREEN(` прямо перед открывающей кавычкой аргумента.
+      const before = line.slice(0, m.index);
+      const namedMatch = COLOR_METHOD_CALL_RE.exec(before);
+      if (namedMatch) {
+        colorMethod = namedMatch[1];
+      } else if (GENERIC_COLOR_CALL_RE.test(before)) {
+        isGenericColorCall = true;
+      }
+    }
+    out.push({ text: m[0], cls, isStr: !!str, colorMethod, isGenericColorCall });
     last = m.index + m[0].length;
   }
   if (last < line.length) out.push({ text: line.slice(last), cls: null });
@@ -63,7 +89,15 @@ function renderLine(line: string, key: number): ReactNode {
   return (
     <span key={key}>
       {tokens.map((t, i) =>
-        t.isStr && MC_CODE_RE.test(t.text) ? (
+        t.isStr && t.colorMethod ? (
+          <span key={i} className="tok-s">
+            {renderNamedColorText(t.text, t.colorMethod)}
+          </span>
+        ) : t.isStr && t.isGenericColorCall ? (
+          <span key={i} className="tok-s">
+            {renderUnknownColorMarked(t.text)}
+          </span>
+        ) : t.isStr && MC_CODE_RE.test(t.text) ? (
           <span key={i} className="tok-s">
             {renderMcColored(t.text)}
           </span>

@@ -23,5 +23,5 @@ namespace nd {
 // уровне main(). Название отражает суть релиза лучше, чем техническое
 // "Windows Bug Fix" - именно устойчивость к крашам, а не единственно
 // платформа.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.7.4 «Устойчивость»";
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.7.5 «Устойчивость»";
 }

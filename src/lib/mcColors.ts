@@ -38,63 +38,114 @@ const MC_COLOR_HEX: Record<string, string> = {
 // путать с обычным текстом).
 const MC_FORMAT_CODES = new Set(["k", "l", "m", "n", "o", "r"]);
 
+// НОВОЕ v1.7.5 (по прямой просьбе - детект НЕ только сырых &-кодов, но и
+// ВЫЗОВОВ методов, которые семантически красят текст: `foo.GREEN("text")`
+// (именованная цветовая константа - Bukkit ChatColor или собственный
+// аналог плагина) или `foo.Color("&AAAA")` (кастомный метод-транслятор с
+// СВОИМ форматом кодов, который движок не может знать заранее - в таком
+// случае честно помечаем "это будет цветной текст в игре", не угадывая
+// точный итоговый цвет из неизвестного формата).
+export const MC_COLOR_NAME_HEX: Record<string, string> = {
+  black: "#000000",
+  dark_blue: "#0000AA",
+  dark_green: "#00AA00",
+  dark_aqua: "#00AAAA",
+  dark_red: "#AA0000",
+  dark_purple: "#AA00AA",
+  gold: "#FFAA00",
+  gray: "#AAAAAA",
+  grey: "#AAAAAA",
+  dark_gray: "#555555",
+  dark_grey: "#555555",
+  blue: "#5555FF",
+  green: "#55FF55",
+  aqua: "#55FFFF",
+  red: "#FF5555",
+  light_purple: "#FF55FF",
+  purple: "#FF55FF",
+  yellow: "#FFFF55",
+  white: "#FFFFFF",
+};
+
+// `.RED(`, `.someClass.DARK_AQUA(` и т.п. - завершается ИМЕННО одним из
+// известных цветовых имён прямо перед открывающей скобкой вызова.
+export const COLOR_METHOD_CALL_RE = new RegExp(`\\.(${Object.keys(MC_COLOR_NAME_HEX).join("|")})\\s*\\(\\s*$`, "i");
+// Обобщённый случай - имя метода САМО содержит "color"/"colour"/"paint" -
+// формат внутри неизвестен (может быть что угодно, включая "AAAA" из
+// примера), поэтому просто помечаем строку как "будет обработана как
+// цвет", не пытаясь угадать итоговый оттенок.
+export const GENERIC_COLOR_CALL_RE = /\.\w*(colou?r|paint)\w*\s*\(\s*$/i;
+
 export const MC_CODE_RE = /[&§]([0-9a-fA-Fk-oK-OrR])/;
 const MC_CODE_RE_G = /[&§]([0-9a-fA-Fk-oK-OrR])/g;
 
+/** Строка передаётся в `.GREEN("текст")`-подобный вызов - красим ЦЕЛИКОМ
+ * жирным известным цветом (само имя метода уже однозначно говорит, какой
+ * цвет применится в игре - в отличие от кастомного Color(), тут гадать
+ * не нужно). */
+export function renderNamedColorText(text: string, colorName: string): ReactNode {
+  const hex = MC_COLOR_NAME_HEX[colorName.toLowerCase()];
+  return createElement("span", { style: hex ? { color: hex, fontWeight: 700 } : undefined }, text);
+}
+
+/** Строка передаётся в СВОЙ метод плагина типа `.Color("&AAAA")` -
+ * формат кодов внутри неизвестен движку (может быть что угодно), поэтому
+ * НЕ угадываем итоговый цвет - честно подчёркиваем волнистой линией
+ * "это будет обработано как цвет в игре", реальный оттенок пользователь
+ * увидит только запустив код. */
+export function renderUnknownColorMarked(text: string): ReactNode {
+  return createElement("span", { className: "mc-code-unknown", title: "Похоже на вызов цветовой функции - формат кодов свой, конкретный цвет неизвестен" }, text);
+}
+
 /**
- * Разбирает текст на сегменты по цветовым кодам и возвращает JSX: перед
- * каждым куском текста, к которому применяется код, - маленький квадратик-
- * образец цвета (чтобы код был виден И читаем одновременно, а не просто
- * красил весь остаток строки без объяснения почему), сам текст красится
- * inline через style (не через CSS-класс - палитра Minecraft фиксная и не
- * зависит от темы редактора).
+ * Разбирает текст на сегменты по цветовым кодам и возвращает JSX: сам код
+ * (&a/§a) остаётся виден, но приглушённым/мелким (не пропадает - иначе
+ * невозможно понять, ГДЕ именно он стоит и что дальше правится вручную),
+ * а весь ТЕКСТ ПОСЛЕ кода красится + становится жирным - так нагляднее
+ * видно результат (как реально будет выглядеть сообщение в игре), чем
+ * маленький квадратик-образец перед обычным текстом.
  */
 export function renderMcColored(text: string): ReactNode[] {
   const out: ReactNode[] = [];
   let last = 0;
   let currentColor: string | null = null;
+  let currentBold = false;
   let key = 0;
   MC_CODE_RE_G.lastIndex = 0;
   let m: RegExpExecArray | null;
-  const pushText = (s: string, end: number) => {
+  const pushText = (s: string) => {
     if (!s) return;
+    const style: { color?: string; fontWeight?: number } = {};
+    if (currentColor) style.color = currentColor;
+    if (currentBold) style.fontWeight = 700;
+    out.push(createElement("span", { key: key++, style: Object.keys(style).length ? style : undefined }, s));
+  };
+  while ((m = MC_CODE_RE_G.exec(text)) !== null) {
+    pushText(text.slice(last, m.index));
+    const code = m[1].toLowerCase();
+    // Сам код печатаем мелким приглушённым текстом, а НЕ отдельным
+    // квадратиком - так видно ТОЧНОЕ место, где стоит код, не разрывая
+    // визуально строку декоративным элементом.
     out.push(
       createElement(
         "span",
-        { key: key++, style: currentColor ? { color: currentColor } : undefined },
-        s,
+        { key: key++, className: "mc-code-marker", title: MC_FORMAT_CODES.has(code) ? `формат: ${m[0]}` : `цвет: ${m[0]}` },
+        m[0],
       ),
     );
-    void end;
-  };
-  while ((m = MC_CODE_RE_G.exec(text)) !== null) {
-    pushText(text.slice(last, m.index), m.index);
-    const code = m[1].toLowerCase();
-    if (MC_FORMAT_CODES.has(code)) {
-      // формат-код (жирный/курсив/сброс и т.п.) - не меняет цвет, просто
-      // помечаем маленькой серой меткой, чтобы код не выглядел "съеденным".
-      out.push(
-        createElement(
-          "span",
-          { key: key++, className: "mc-code-marker", title: `Minecraft формат-код: ${m[0]}` },
-          m[0],
-        ),
-      );
-      if (code === "r") currentColor = null;
+    if (code === "r") {
+      currentColor = null;
+      currentBold = false;
+    } else if (code === "l") {
+      currentBold = true;
+    } else if (MC_FORMAT_CODES.has(code)) {
+      // k/m/n/o (обфускация/зачёркнутый/подчёркнутый/курсив) - цвет не
+      // меняют, жирность тоже не трогаем, только сам код уже показан выше.
     } else {
-      const hex = MC_COLOR_HEX[code];
-      out.push(
-        createElement("span", {
-          key: key++,
-          className: "mc-code-swatch",
-          title: `Minecraft цвет: ${m[0]}`,
-          style: { background: hex },
-        }),
-      );
-      currentColor = hex ?? currentColor;
+      currentColor = MC_COLOR_HEX[code] ?? currentColor;
     }
     last = m.index + m[0].length;
   }
-  pushText(text.slice(last), text.length);
+  pushText(text.slice(last));
   return out;
 }

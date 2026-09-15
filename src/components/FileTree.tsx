@@ -113,7 +113,7 @@ function collectAllResKeys(nodes: ResTreeNode[]): string[] {
 }
 
 export const FileTree = memo(function FileTree({ files, openId, onSelect }: Props) {
-  const { fileTreeWidth, setFileTreeWidth } = useEngine();
+  const { fileTreeWidth, setFileTreeWidth, setProjectSearchOpen } = useEngine();
   const onResizeDown = useResizeDrag("x", fileTreeWidth, setFileTreeWidth, 180, 420);
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -138,7 +138,30 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect }: Prop
       map.set(f.pkg, arr);
     }
     for (const arr of map.values()) arr.sort((a, b) => compareFiles(a, b, sortMode));
-    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    // НОВОЕ v1.7.5 (реальный запрос - "сортировка ПАКЕТОВ нужна, а не
+    // только файлов внутри них"): раньше сортировка ВСЕГДА применялась
+    // только к файлам ВНУТРИ пакета, сам порядок пакетов был ЖЁСТКО
+    // алфавитным независимо от sortMode. Теперь режим влияет и на порядок
+    // самих пакетов: "size" - по суммарному LOC пакета (больше сверху),
+    // "warnings" - пакеты с хотя бы одним предупреждением сначала, "name" -
+    // как раньше, алфавит.
+    const entries = [...map.entries()];
+    if (sortMode === "size") {
+      entries.sort((a, b) => {
+        const sizeA = a[1].reduce((s, f) => s + f.loc, 0);
+        const sizeB = b[1].reduce((s, f) => s + f.loc, 0);
+        return sizeB - sizeA || a[0].localeCompare(b[0]);
+      });
+    } else if (sortMode === "warnings") {
+      entries.sort((a, b) => {
+        const warnA = a[1].some(f => f.note) ? 1 : 0;
+        const warnB = b[1].some(f => f.note) ? 1 : 0;
+        return warnB - warnA || a[0].localeCompare(b[0]);
+      });
+    } else {
+      entries.sort((a, b) => a[0].localeCompare(b[0]));
+    }
+    return entries;
   }, [visible, sortMode]);
 
   const resourceTree = useMemo(() => {
@@ -223,6 +246,15 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect }: Prop
         <span className="kicker">Исходники</span>
         <span className="chip h-[18px] px-1.5 text-[10px]">{files.length} файл(ов)</span>
         <div className="flex-1" />
+        {/* НОВОЕ v1.7.5 (реальная жалоба - "поиск вообще не работает",
+            причина - не было видимой кнопки, только Ctrl+Shift+F). */}
+        <button
+          className="icon-btn h-6 w-6"
+          title="Поиск по всему проекту (Ctrl+Shift+F)"
+          onClick={() => setProjectSearchOpen(true)}
+        >
+          <Search size={13} />
+        </button>
         {/* НОВОЕ v1.7.3: настраиваемая сортировка файлов - по клику
             переключает "имя -> размер -> предупреждения -> имя…" (без
             выпадающего меню - в проекте нигде нет кастомного select/popover

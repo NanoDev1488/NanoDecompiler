@@ -7,7 +7,9 @@
 #include "render_class.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
+#include <map>
 #include <regex>
 #include <sstream>
 
@@ -849,13 +851,14 @@ std::pair<std::string, OrderedImports> render_class(
         }
         std::string mname = renamer.friendly_method(internal, m.name, m.descriptor);
         bool is_enum_ctor = is_enum && m.name == "<init>";
-        int arg_offset = 0;
         if (m.name == "<init>") {
             mname = simple;
             ret_disp = "";
             if (is_enum_ctor && params_disp.size() >= 2) {
                 params_disp.erase(params_disp.begin(), params_disp.begin() + 2);
-                arg_offset = 2;
+                // arg_offset (было тут раньше) больше не нужен - имена
+                // параметров v1.7.5 выводятся из ТИПА (params_disp уже без
+                // 2 синтетических записей выше), а не из числового индекса.
             }
         }
         std::string renamed_note = (mname == m.name) ? "" : ("  // было: " + m.name);
@@ -882,7 +885,42 @@ std::pair<std::string, OrderedImports> render_class(
             if (names.size() == params_disp.size()) param_names = names;
         }
         if (param_names.empty() && !params_disp.empty()) {
-            for (size_t i = 0; i < params_disp.size(); ++i) param_names.push_back("arg" + std::to_string(i + static_cast<size_t>(arg_offset)));
+            // НОВОЕ v1.7.5: та же идея, что и в stackvm.cpp, для абстрактных/
+            // интерфейсных методов (без тела - здесь result->ok будет false,
+            // локальных переменных вообще нет, но ТИПЫ параметров уже
+            // отображены в params_disp) - выводим имя из простого имени типа
+            // вместо голого "arg0"/"arg1", с цифрой только при коллизии типов.
+            std::map<std::string, int> type_total, type_seen;
+            auto base_type_name = [](std::string t) {
+                auto lt = t.find('<');
+                if (lt != std::string::npos) t = t.substr(0, lt);
+                bool is_arr = t.size() >= 2 && t.substr(t.size() - 2) == "[]";
+                if (is_arr) t = t.substr(0, t.size() - 2);
+                auto dot = t.find_last_of('.');
+                if (dot != std::string::npos) t = t.substr(dot + 1);
+                return std::make_pair(t, is_arr);
+            };
+            for (auto& t : params_disp) type_total[base_type_name(t).first]++;
+            static const std::map<std::string, std::string> kPrimitiveNames = {
+                {"int", "n"}, {"long", "n"}, {"double", "d"}, {"float", "f"}, {"boolean", "flag"},
+                {"char", "c"}, {"byte", "b"}, {"short", "n"}, {"String", "s"}, {"Object", "obj"},
+            };
+            for (size_t i = 0; i < params_disp.size(); ++i) {
+                auto [base, is_arr] = base_type_name(params_disp[i]);
+                auto pit = kPrimitiveNames.find(base);
+                std::string lname;
+                if (pit != kPrimitiveNames.end()) {
+                    lname = pit->second;
+                } else if (!base.empty()) {
+                    lname = base;
+                    lname[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(lname[0])));
+                } else {
+                    lname = "arg";
+                }
+                if (is_arr && pit == kPrimitiveNames.end()) lname += "s";
+                int idx = ++type_seen[base];
+                param_names.push_back(type_total[base] > 1 ? lname + std::to_string(idx) : lname);
+            }
         }
 
         // НОВОЕ v1.7.2 (HANDOFF_50 "что дальше" п.1, HANDOFF_NEXT_AGENT_

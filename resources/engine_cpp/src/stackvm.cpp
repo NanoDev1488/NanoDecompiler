@@ -3,10 +3,12 @@
 #include "stackvm.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <charconv>
 #include <cmath>
 #include <cstdio>
 #include <functional>
+#include <map>
 #include <sstream>
 
 #include "javatypes.hpp"
@@ -801,12 +803,57 @@ void MethodCtx::init_params() {
         params = {};
     }
     ret_type = ret;
+    // НОВОЕ v1.7.5 (реальный вопрос - "почему столько arg0 в коде"):
+    // без LocalVariableTable (у большинства реальных скомпилированных
+    // плагинов её просто нет в байткоде - JLS её не требует, восстановить
+    // ФИЗИЧЕСКИ невозможно) раньше параметры называли голым "arg0"/"arg1".
+    // Вместо этого выводим ЧИТАЕМОЕ имя из ПРОСТОГО ИМЕНИ ТИПА параметра -
+    // Player -> player, ItemStack -> itemStack, Player[] -> players -
+    // цифра добавляется ТОЛЬКО если в одном методе реально несколько
+    // параметров ОДНОГО типа (иначе не нужна, только шум). Само собой -
+    // не восстанавливает РЕАЛЬНОЕ авторское имя, но человеку читать
+    // "player" куда понятнее, чем "arg0", и он куда ближе к вероятной
+    // правде статистически (Bukkit API кишит параметрами типа Player/
+    // ItemStack/Location/CommandSender и т.п.)
+    std::map<std::string, int> type_total_count;
+    for (auto& p : params) {
+        bool is_array = p.size() >= 2 && p.substr(p.size() - 2) == "[]";
+        std::string base = is_array ? p.substr(0, p.size() - 2) : p;
+        size_t dot = base.find_last_of('.');
+        if (dot != std::string::npos) base = base.substr(dot + 1);
+        type_total_count[base]++;
+    }
+    std::map<std::string, int> type_seen_count;
     for (size_t i = 0; i < params.size(); ++i) {
         const std::string& p = params[i];
         bool is_array = p.size() >= 2 && p.substr(p.size() - 2) == "[]";
         char cat = is_array ? 'A' : cat_of(p);
         auto lvt = lvt_name_for(slot);
-        std::string name = lvt.has_value() ? *lvt : ("arg" + std::to_string(i));
+        std::string name;
+        if (lvt.has_value()) {
+            name = *lvt;
+        } else {
+            static const std::map<std::string, std::string> kPrimitiveNames = {
+                {"int", "n"}, {"long", "n"}, {"double", "d"}, {"float", "f"}, {"boolean", "flag"},
+                {"char", "c"}, {"byte", "b"}, {"short", "n"}, {"String", "s"}, {"Object", "obj"},
+            };
+            std::string base = is_array ? p.substr(0, p.size() - 2) : p;
+            size_t dot = base.find_last_of('.');
+            if (dot != std::string::npos) base = base.substr(dot + 1);
+            auto pit = kPrimitiveNames.find(base);
+            std::string lname;
+            if (pit != kPrimitiveNames.end()) {
+                lname = pit->second;
+            } else if (!base.empty()) {
+                lname = base;
+                lname[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(lname[0])));
+            } else {
+                lname = "arg";
+            }
+            if (is_array && pit == kPrimitiveNames.end()) lname += "s";  // players, items - множественное число для читаемых имён-объектов
+            int idx = ++type_seen_count[base];
+            name = type_total_count[base] > 1 ? lname + std::to_string(idx) : lname;
+        }
         LocalInfo info;
         info.name = name;
         info.type = map_type(p);

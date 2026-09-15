@@ -102,4 +102,7 @@ if(MINGW)
   # MSVC + #pragma comment(lib,...), которого здесь и нет) - "undefined
   # reference to __imp_WSAStartup" и т.п. на реальной сборке в CI.
   target_link_libraries(NanoDecompilerCLI PRIVATE ws2_32)
+  # НОВОЕ v1.7.5: shell32 - там живёт CommandLineToArgvW (см. cli_main.cpp,
+  # get_utf8_argv() - фикс аргументов командной строки с не-ASCII байтами).
+  target_link_libraries(NanoDecompilerCLI PRIVATE shell32)
 endif()
