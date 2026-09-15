@@ -8,6 +8,8 @@ declare global {
       openPath: (target: string) => Promise<void>;
       openExternal: (url: string) => Promise<void>;
       openInVSCode: (target: string) => Promise<{ ok: boolean; error?: string }>;
+      detectApps: () => Promise<Record<string, boolean>>;
+      openWith: (editorId: string, target: string) => Promise<{ ok: boolean; error?: string }>;
       jarSummary: (jarPath: string) => Promise<{
         name: string;
         size: string;

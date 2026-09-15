@@ -285,6 +285,65 @@ ipcMain.handle("shell:openExternal", async (_e, url: string) => {
   }
 });
 
+// НОВОЕ v1.7.6 (реальный запрос - "открыть в..." мульти-кнопка со списком
+// установленных редакторов): реестр известных редакторов - каждый со
+// своей CLI-командой (все они добавляют её в PATH при установке, опция
+// обычно включена по умолчанию - как и `code` для VS Code выше). Определяем
+// доступность через `where`/`which` (НЕ пытаясь реально запустить редактор -
+// это было бы куда медленнее и могло бы мигнуть окном).
+type EditorId = "vscode" | "antigravity" | "sublime" | "notepadpp" | "notepad";
+const EDITOR_REGISTRY: Record<EditorId, { label: string; command: string; winOnly?: boolean; alwaysOnWin?: boolean }> = {
+  vscode: { label: "VS Code", command: "code" },
+  // Antigravity (форк VS Code) - CLI-команда по аналогии с самим VS Code,
+  // на котором он основан - НЕ подтверждено вживую (нет доступа к
+  // установленному Antigravity в песочнице), если команда другая -
+  // сообщите точное имя, поправим одной строкой.
+  antigravity: { label: "Antigravity", command: "antigravity" },
+  sublime: { label: "Sublime Text", command: "subl" },
+  notepadpp: { label: "Notepad++", command: "notepad++", winOnly: true },
+  notepad: { label: "Блокнот", command: "notepad", winOnly: true, alwaysOnWin: true },
+};
+
+function isCommandAvailable(cmd: string): Promise<boolean> {
+  return new Promise(resolve => {
+    const checker = process.platform === "win32" ? "where" : "which";
+    const proc = spawn(checker, [cmd], { shell: true, windowsHide: true });
+    proc.on("error", () => resolve(false));
+    proc.on("close", code => resolve(code === 0));
+  });
+}
+
+ipcMain.handle("apps:detect", async () => {
+  const result: Record<string, boolean> = {};
+  for (const [id, editor] of Object.entries(EDITOR_REGISTRY)) {
+    if (editor.winOnly && process.platform !== "win32") {
+      result[id] = false;
+      continue;
+    }
+    // "Блокнот" - системный компонент Windows, ставится с ОС всегда, не
+    // нужно (и не через что) детектить через where/which отдельно.
+    result[id] = editor.alwaysOnWin ? true : await isCommandAvailable(editor.command);
+  }
+  return result;
+});
+
+ipcMain.handle("apps:openWith", async (_e, editorId: EditorId, target: string) => {
+  const editor = EDITOR_REGISTRY[editorId];
+  if (!editor) return { ok: false, error: "Неизвестный редактор" };
+  return new Promise(resolve => {
+    const proc = spawn(editor.command, [expandHome(target)], { shell: true, windowsHide: true });
+    let errored = false;
+    proc.on("error", () => {
+      errored = true;
+      resolve({ ok: false, error: `${editor.label} не найден в PATH (команда \`${editor.command}\`)` });
+    });
+    proc.on("close", code => {
+      if (errored) return;
+      resolve(code === 0 ? { ok: true } : { ok: false, error: `${editor.command} завершился с кодом ${code}` });
+    });
+  });
+});
+
 ipcMain.handle("shell:openInVSCode", async (_e, target: string) => {
   // `code` - это shell-команда, которую сам VS Code добавляет в PATH при
   // установке (опция "Add to PATH" в инсталляторе, включена по умолчанию

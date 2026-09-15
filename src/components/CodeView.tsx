@@ -3,8 +3,9 @@ import { memo, useEffect, useMemo, useState } from "react";
 import { useEngine } from "../state/engine";
 import { JavaCode } from "../lib/javaHighlight";
 import { PlainCode, PropertiesCode, JsonCode, XmlCode, YamlCode } from "../lib/textHighlight";
-import type { SourceFile } from "../lib/model";
+import { joinOutDir, type SourceFile } from "../lib/model";
 import { FindBar } from "./FindBar";
+import { OpenInMenu } from "./OpenInMenu";
 
 // БАГ-ФИКС: раньше ЛЮБОЙ файл в просмотрщике рендерился через JavaCode
 // независимо от расширения - .yml подсвечивался java-ключевыми словами.
@@ -39,7 +40,15 @@ function prettyPrintIfJson(name: string, code: string): string {
   }
 }
 
-export const CodeView = memo(function CodeView({ file, jobId }: { file: SourceFile | null; jobId?: string }) {
+export const CodeView = memo(function CodeView({
+  file,
+  jobId,
+  outDir,
+}: {
+  file: SourceFile | null;
+  jobId?: string;
+  outDir?: string;
+}) {
   const { copyText, selectFile } = useEngine();
   const [wrap, setWrap] = useState(false);
   // НОВОЕ v1.8.0 (реальный запрос - "хороший поиск в файле"): Ctrl+F
@@ -99,6 +108,9 @@ export const CodeView = memo(function CodeView({ file, jobId }: { file: SourceFi
         <div className="flex-1" />
 
         <span className="mono hidden text-[10.5px] text-faint md:inline">{file.loc} строк · read-only</span>
+        {outDir && (
+          <OpenInMenu filePath={joinOutDir(outDir, file.relPath)} projectDir={outDir} />
+        )}
         {/* НОВОЕ v1.7.5 (реальная жалоба - "поиск вообще не работает"):
             раньше поиск открывался ТОЛЬКО горячими клавишами (Ctrl+F/
             Ctrl+Shift+F) без единой видимой кнопки - пользователь просто

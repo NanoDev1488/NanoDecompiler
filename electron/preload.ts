@@ -31,6 +31,9 @@ contextBridge.exposeInMainWorld("nano", {
   openPath: (target: string): Promise<void> => ipcRenderer.invoke("shell:openPath", target),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke("shell:openExternal", url),
   openInVSCode: (target: string): Promise<ShellResult> => ipcRenderer.invoke("shell:openInVSCode", target),
+  // НОВОЕ v1.7.6: "Открыть в..." - список редакторов + проверка доступности.
+  detectApps: (): Promise<Record<string, boolean>> => ipcRenderer.invoke("apps:detect"),
+  openWith: (editorId: string, target: string): Promise<ShellResult> => ipcRenderer.invoke("apps:openWith", editorId, target),
   jarSummary: (jarPath: string): Promise<JarSummary> => ipcRenderer.invoke("jar:summary", jarPath),
   getEngineVersion: (): Promise<{ ok: boolean; version?: string; error?: string }> =>
     ipcRenderer.invoke("engine:version"),
