@@ -1,5 +1,6 @@
 import { memo, useMemo, type ReactNode } from "react";
 import {
+  COLOR_CONCAT_RE,
   COLOR_METHOD_CALL_RE,
   GENERIC_COLOR_CALL_RE,
   MC_CODE_RE,
@@ -70,7 +71,7 @@ function tokenizeLine(line: string): Token[] {
       // строкой на ТОЙ ЖЕ строке кода - `line.slice(0, m.index)` - ищем
       // паттерн вида `.GREEN(` прямо перед открывающей кавычкой аргумента.
       const before = line.slice(0, m.index);
-      const namedMatch = COLOR_METHOD_CALL_RE.exec(before);
+      const namedMatch = COLOR_METHOD_CALL_RE.exec(before) ?? COLOR_CONCAT_RE.exec(before);
       if (namedMatch) {
         colorMethod = namedMatch[1];
       } else if (GENERIC_COLOR_CALL_RE.test(before)) {

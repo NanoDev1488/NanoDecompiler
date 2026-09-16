@@ -61,6 +61,8 @@ export function SettingsModal() {
   const [draft, setDraft] = useState(settings);
   const [checking, setChecking] = useState<"idle" | "busy" | "ok">("idle");
   const [tab, setTab] = useState<Tab>("general");
+  // НОВОЕ v1.7.6: под-вкладки внутри "О сервисе" - см. рендер ниже.
+  const [aboutSubTab, setAboutSubTab] = useState<"overview" | "features" | "team">("overview");
 
   const checkEngine = () => {
     setChecking("busy");
@@ -380,39 +382,76 @@ export function SettingsModal() {
             </div>
           </div>
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-            <p className="kicker pt-1 pb-2">Что это</p>
-            <div className="rounded-xl border border-line bg-bg px-3.5 py-3 text-[12.5px] leading-relaxed text-ink/85">
-              <p>
-                <span className="font-semibold text-ink">NanoDecompiler</span> — декомпилятор Java-байткода (.class/.jar)
-                в читаемый исходный код .java. Движок написан на C++17: разбирает constant pool и байткод JVM,
-                восстанавливает control-flow (if/while/for/switch/try-catch) из низкоуровневых инструкций и
-                stack-based VM в структурированные Java-выражения, затем генерирует компилируемые .java-файлы и
-                Maven-проект (pom.xml) вокруг них.
-              </p>
-              <p className="mt-2">
-                Изначально заточен под декомпиляцию Bukkit/Spigot-плагинов для Minecraft (учитывает <code className="mono text-[11px]">plugin.yml</code>,
-                фильтрует библиотечные классы, распознаёт паттерны байткода, которые генерирует именно javac для
-                типичных плагинных конструкций), но одинаково разбирает любой обычный .jar.
-              </p>
+          <div className="flex min-h-0 flex-1 flex-col">
+            {/* НОВОЕ v1.7.6 (реальный запрос - "раздели 'О сервисе' на
+                побольше вкладок, красивее") - раньше все 3 секции шли
+                одним длинным полотном друг под другом, теперь отдельные
+                под-вкладки внутри "О сервисе". */}
+            <div className="flex flex-none items-center gap-1 border-b border-line px-4 pt-2 pb-1">
+              {(
+                [
+                  ["overview", "Обзор"],
+                  ["features", "Возможности"],
+                  ["team", "Команда"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 text-[11px] transition-colors",
+                    aboutSubTab === id ? "bg-acid/10 text-acid" : "text-faint hover:text-ink",
+                  )}
+                  onClick={() => setAboutSubTab(id)}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-
-            <p className="kicker pt-4 pb-2">Возможности</p>
-            <div className="rounded-xl border border-line bg-bg px-3.5 py-3">
-              <ul className="space-y-1.5 text-[12px] leading-relaxed text-ink/80">
-                <li>— восстановление структурного control-flow (if/while/for/switch/try-catch, а не плоский байткод с goto)</li>
-                <li>— переименование обфусцированных членов по эвристике сигнатур</li>
-                <li>— проверка легитимности .jar перед декомпиляцией (база известных вредоносных сигнатур)</li>
-                <li>— автогенерация pom.xml с восстановленными Maven-зависимостями (в т.ч. из META-INF/maven/*)</li>
-                <li>— мини-IDE прямо в приложении: дерево пакетов, подсветка синтаксиса, просмотр без внешнего редактора</li>
-                <li>— работает офлайн — движок не отправляет ваш .jar никуда за пределы вашей машины</li>
-              </ul>
-            </div>
-
-            <p className="kicker pt-4 pb-2">Команда</p>
-            <div className="space-y-2">
-              <TelegramCredit handle="radoqi" role="Кодер, основатель проекта" />
-              <TelegramCredit handle="dyrachuna" role="GUI-разработчик" />
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+              {aboutSubTab === "overview" && (
+                <>
+                  <p className="kicker pt-1 pb-2">Что это</p>
+                  <div className="rounded-xl border border-line bg-bg px-3.5 py-3 text-[12.5px] leading-relaxed text-ink/85">
+                    <p>
+                      <span className="font-semibold text-ink">NanoDecompiler</span> — декомпилятор Java-байткода
+                      (.class/.jar) в читаемый исходный код .java. Движок написан на C++17: разбирает constant pool и
+                      байткод JVM, восстанавливает control-flow (if/while/for/switch/try-catch) из низкоуровневых
+                      инструкций и stack-based VM в структурированные Java-выражения, затем генерирует компилируемые
+                      .java-файлы и Maven-проект (pom.xml) вокруг них.
+                    </p>
+                    <p className="mt-2">
+                      Изначально заточен под декомпиляцию Bukkit/Spigot-плагинов для Minecraft (учитывает{" "}
+                      <code className="mono text-[11px]">plugin.yml</code>, фильтрует библиотечные классы, распознаёт
+                      паттерны байткода, которые генерирует именно javac для типичных плагинных конструкций), но
+                      одинаково разбирает любой обычный .jar.
+                    </p>
+                  </div>
+                </>
+              )}
+              {aboutSubTab === "features" && (
+                <>
+                  <p className="kicker pt-1 pb-2">Возможности</p>
+                  <div className="rounded-xl border border-line bg-bg px-3.5 py-3">
+                    <ul className="space-y-1.5 text-[12px] leading-relaxed text-ink/80">
+                      <li>— восстановление структурного control-flow (if/while/for/switch/try-catch, а не плоский байткод с goto)</li>
+                      <li>— переименование обфусцированных членов по эвристике сигнатур</li>
+                      <li>— проверка легитимности .jar перед декомпиляцией (база известных вредоносных сигнатур)</li>
+                      <li>— автогенерация pom.xml с восстановленными Maven-зависимостями (в т.ч. из META-INF/maven/*)</li>
+                      <li>— мини-IDE прямо в приложении: дерево пакетов, подсветка синтаксиса, просмотр без внешнего редактора</li>
+                      <li>— работает офлайн — движок не отправляет ваш .jar никуда за пределы вашей машины</li>
+                    </ul>
+                  </div>
+                </>
+              )}
+              {aboutSubTab === "team" && (
+                <>
+                  <p className="kicker pt-1 pb-2">Команда</p>
+                  <div className="space-y-2">
+                    <TelegramCredit handle="radoqi" role="Кодер, основатель проекта" />
+                    <TelegramCredit handle="dyrachuna" role="GUI-разработчик" />
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}

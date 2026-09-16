@@ -22,6 +22,11 @@ export type AppSettings = {
   autoUpdateCheck: boolean;
   appIcon: "terminal" | "layers";
   setupCompleted: boolean;
+  // НОВОЕ v1.7.6 (реальный запрос - настраиваемый язык интерфейса). Пока
+  // переведена только сама панель настроек (см. src/lib/i18n.ts) -
+  // полный перевод всех экранов приложения - отдельная большая задача,
+  // это ПЕРВЫЙ ШАГ (инфраструктура + один экран), не полное покрытие.
+  language: "ru" | "en";
 };
 
 contextBridge.exposeInMainWorld("nano", {

@@ -55,12 +55,15 @@ type Settings = {
   // пока false. По просьбе пользователя - лицензия на английском
   // (LICENSE_EULA.txt в корне проекта), автор NanoDev, t.me/NanoDev_mc.
   setupCompleted: boolean;
+  // НОВОЕ v1.7.6: язык интерфейса.
+  language: "ru" | "en";
 };
 const DEFAULT_SETTINGS: Settings = {
   legitimacyCheck: true,
   autoUpdateCheck: true,
   appIcon: "terminal",
   setupCompleted: false,
+  language: "ru",
 };
 
 function settingsPath(): string {
@@ -80,6 +83,7 @@ function loadSettings(): Settings {
       autoUpdateCheck: typeof parsed.autoUpdateCheck === "boolean" ? parsed.autoUpdateCheck : DEFAULT_SETTINGS.autoUpdateCheck,
       appIcon: parsed.appIcon === "terminal" || parsed.appIcon === "layers" ? parsed.appIcon : DEFAULT_SETTINGS.appIcon,
       setupCompleted: typeof parsed.setupCompleted === "boolean" ? parsed.setupCompleted : DEFAULT_SETTINGS.setupCompleted,
+      language: parsed.language === "ru" || parsed.language === "en" ? parsed.language : DEFAULT_SETTINGS.language,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -818,6 +822,16 @@ ipcMain.handle("page:stopFind", () => {
 });
 
 ipcMain.handle("search:inProject", async (_e, root: string, query: string) => {
+  // БАГ-ФИКС v1.7.6 (реальная жалоба - "Ctrl+Shift+F не работает, не
+  // может найти"): забыл развернуть "~" в реальный домашний каталог -
+  // job.outDir хранится как "~/NanoDecompiler/out/..." (буквально с
+  // тильдой, см. настройку outputDir по умолчанию), а Node.js НЕ
+  // разворачивает "~" сам - это фича ШЕЛЛА, а не fs-API. Без expandHome()
+  // fs.promises.readdir("~/...") тихо падал с ENOENT (каталог "~" в
+  // текущей рабочей директории просто не существует), ошибка гасилась в
+  // try/catch внутри walk() ниже - пользователь просто видел "ничего не
+  // найдено" без единой подсказки, что искалось не в том месте вообще.
+  root = path.resolve(expandHome(root));
   const q = query.trim();
   if (q.length < 3) return { ok: true, results: [], truncated: false };
   const MAX_RESULTS = 300;

@@ -70,6 +70,14 @@ export const MC_COLOR_NAME_HEX: Record<string, string> = {
 // `.RED(`, `.someClass.DARK_AQUA(` и т.п. - завершается ИМЕННО одним из
 // известных цветовых имён прямо перед открывающей скобкой вызова.
 export const COLOR_METHOD_CALL_RE = new RegExp(`\\.(${Object.keys(MC_COLOR_NAME_HEX).join("|")})\\s*\\(\\s*$`, "i");
+// БАГ-ФИКС v1.7.6 (реальная жалоба - "ChatColor.RED(...) + текст не
+// подсвечивается"): настоящий Bukkit ChatColor.RED - это ENUM-КОНСТАНТА,
+// а НЕ метод! Реальный код выглядит как `ChatColor.RED + "текст"`
+// (конкатенация), а НЕ `ChatColor.RED("текст")` (вызов) - паттерн выше
+// ловит только вызовы, но самый частый РЕАЛЬНЫЙ случай - именно
+// конкатенация. Тот же список цветовых имён, но перед строкой стоит `+`,
+// а не `(`.
+export const COLOR_CONCAT_RE = new RegExp(`\\.(${Object.keys(MC_COLOR_NAME_HEX).join("|")})\\s*\\+\\s*$`, "i");
 // Обобщённый случай - имя метода САМО содержит "color"/"colour"/"paint" -
 // формат внутри неизвестен (может быть что угодно, включая "AAAA" из
 // примера), поэтому просто помечаем строку как "будет обработана как
@@ -82,10 +90,19 @@ const MC_CODE_RE_G = /[&§]([0-9a-fA-Fk-oK-OrR])/g;
 /** Строка передаётся в `.GREEN("текст")`-подобный вызов - красим ЦЕЛИКОМ
  * жирным известным цветом (само имя метода уже однозначно говорит, какой
  * цвет применится в игре - в отличие от кастомного Color(), тут гадать
- * не нужно). */
+ * не нужно). НОВОЕ v1.7.6 (по просьбе - "цвета чуть ярче для новых"):
+ * лёгкое text-shadow свечение тем же цветом - визуально выделяет ИМЕННО
+ * эти (выведенные из имени метода, не из сырого &-кода) совпадения на
+ * фоне остального текста, не трогая исходную палитру MC_COLOR_HEX
+ * (используется и здесь, и в renderMcColored для сырых кодов - если
+ * бы просто "осветлил" сам цвет, старые &-коды тоже стали бы ярче). */
 export function renderNamedColorText(text: string, colorName: string): ReactNode {
   const hex = MC_COLOR_NAME_HEX[colorName.toLowerCase()];
-  return createElement("span", { style: hex ? { color: hex, fontWeight: 700 } : undefined }, text);
+  return createElement(
+    "span",
+    { style: hex ? { color: hex, fontWeight: 700, textShadow: `0 0 6px ${hex}66` } : undefined },
+    text,
+  );
 }
 
 /** Строка передаётся в СВОЙ метод плагина типа `.Color("&AAAA")` -

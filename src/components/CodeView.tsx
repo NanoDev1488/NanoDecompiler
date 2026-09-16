@@ -1,5 +1,5 @@
 import { Copy, Search, WrapText } from "lucide-react";
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useEngine } from "../state/engine";
 import { JavaCode } from "../lib/javaHighlight";
 import { PlainCode, PropertiesCode, JsonCode, XmlCode, YamlCode } from "../lib/textHighlight";
@@ -51,6 +51,21 @@ export const CodeView = memo(function CodeView({
 }) {
   const { copyText, selectFile } = useEngine();
   const [wrap, setWrap] = useState(false);
+  // НОВОЕ v1.7.6: ref именно на контейнер С КОДОМ (не на весь CodeView) -
+  // FindBar ищет ТОЛЬКО внутри него, см. БАГ-ФИКС в FindBar.tsx.
+  const codeContainerRef = useRef<HTMLDivElement>(null);
+  // НОВОЕ v1.7.6 (реальная жалоба - "если в .txt много текста, тяжело
+  // читать" - у ViaVersion и похожих есть настраиваемые .txt-файлы с
+  // длинными абзацами): по умолчанию включаем перенос строк ИМЕННО для
+  // прозы (.txt/.md), а не для кода - код без переноса читать привычнее
+  // (сохраняет визуальную структуру отступов), а длинный абзац текста без
+  // переноса требует горизонтальной прокрутки для каждой строки. Ручную
+  // кнопку переноса это не отменяет - просто разумный дефолт на каждый
+  // новый открытый файл.
+  useEffect(() => {
+    if (!file) return;
+    setWrap(/\.(txt|md)$/i.test(file.name));
+  }, [file?.id]);
   // НОВОЕ v1.8.0 (реальный запрос - "хороший поиск в файле"): Ctrl+F
   // локально в этом компоненте (не глобальный шорткат в engine.tsx) -
   // поиск в файле имеет смысл, только пока файл вообще открыт.
@@ -88,7 +103,7 @@ export const CodeView = memo(function CodeView({
 
   return (
     <section className="relative flex min-w-0 flex-1 flex-col bg-bg">
-      {findOpen && <FindBar onClose={() => setFindOpen(false)} />}
+      {findOpen && <FindBar containerRef={codeContainerRef} onClose={() => setFindOpen(false)} />}
       <div className="flex h-9 flex-none items-center gap-2.5 border-b border-line px-3">
         <nav className="mono flex min-w-0 items-center gap-1 text-[11.5px] text-faint" aria-label="Путь к файлу">
           {crumbs.map((c, i) => (
@@ -137,7 +152,7 @@ export const CodeView = memo(function CodeView({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto py-3">
+      <div ref={codeContainerRef} className="min-h-0 flex-1 overflow-auto py-3">
         {file.note && (
           <div className="mono mx-4 mb-3 rounded-lg border border-warn/25 bg-warn/5 px-3 py-2 text-[11px] leading-relaxed text-warn/90">
             {file.note}

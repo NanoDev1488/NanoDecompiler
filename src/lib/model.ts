@@ -97,6 +97,9 @@ export interface Settings {
   /** мастер первого запуска (EULA) показан и подтверждён - см.
    * electron/main.ts::Settings.setupCompleted. */
   setupCompleted: boolean;
+  /** НОВОЕ v1.7.6: язык интерфейса - пока переведена только сама панель
+   * настроек (см. src/lib/i18n.ts), это первый шаг инфраструктуры. */
+  language: "ru" | "en";
 }
 
 export type ToastKind = LogLevel;

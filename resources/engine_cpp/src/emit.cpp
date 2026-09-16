@@ -270,7 +270,26 @@ std::vector<std::string> emit_stmt(const StmtPtr& s, int indent) {
         }
         case StmtKind::SwitchStmt: {
             const auto* sw = static_cast<const SwitchStmt*>(s.get());
-            std::vector<std::string> out = {pad + "switch (" + emit_expr(sw->selector) + ") {"};
+            std::string selector_str = emit_expr(sw->selector);
+            std::vector<std::string> out;
+            // НОВОЕ v1.7.6 (реальный вопрос - "почему в switch какие-то
+            // случайные цифры"): это не мусор и не баг - javac РЕАЛЬНО
+            // компилирует switch(String) именно так (сначала switch по
+            // hashCode() строки с if(!s.equals(...))-проверкой внутри
+            // каждого case, потом отдельный switch по вычисленному
+            // индексу) - показанные числа это НАСТОЯЩИЕ String.hashCode()
+            // из байткода, декомпилятор их не выдумывает. Полноценная
+            // пересборка обратно в чистый switch(String) с оригинальными
+            // строковыми case - отдельная, рискованная задача (см.
+            // HANDOFF по structure.cpp) - пока просто ЧЕСТНО поясняем,
+            // что здесь происходит и почему, прямо в самом коде.
+            if (selector_str.size() > 11 && selector_str.compare(selector_str.size() - 11, 11, ".hashCode()") == 0) {
+                out.push_back(pad + "// ПРИМЕЧАНИЕ: это switch(String) в оригинале - javac компилирует его именно");
+                out.push_back(pad + "// так (switch по hashCode() строки + проверка equals() внутри каждого case),");
+                out.push_back(pad + "// числа ниже - настоящие String.hashCode() из байткода, не потеряны и не");
+                out.push_back(pad + "// выдуманы декомпилятором.");
+            }
+            out.push_back(pad + "switch (" + selector_str + ") {");
             for (auto& c : sw->cases) {
                 if (c.is_default) out.push_back(pad + IND + "default:");
                 for (auto& v : c.values) out.push_back(pad + IND + "case " + v + ":");

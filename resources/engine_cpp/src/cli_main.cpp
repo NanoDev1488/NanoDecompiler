@@ -282,9 +282,20 @@ int run_cli(int argc, char** argv) {
             std::cout << "{\"error\":\"использование: NanoDecompilerCLI --jar-summary plugin.jar\"}\n";
             return 0;
         }
-        if (!fs::is_regular_file(fs::u8path(args[1]))) {
-            std::cout << "{\"error\":\"файл не найден: " << args[1] << "\"}\n";
-            return 0;
+        {
+            // БАГ-ФИКС v1.7.6: см. подробный комментарий у аналогичной
+            // проверки ниже (обычный/json режим декомпиляции) - та же
+            // путаница "нет прав" -> "файл не найден" была и здесь.
+            std::error_code ec;
+            bool is_reg = fs::is_regular_file(fs::u8path(args[1]), ec);
+            if (!is_reg) {
+                if (ec && ec == std::errc::permission_denied) {
+                    std::cout << "{\"error\":\"нет прав на чтение файла: " << args[1] << "\"}\n";
+                } else {
+                    std::cout << "{\"error\":\"файл не найден: " << args[1] << "\"}\n";
+                }
+                return 0;
+            }
         }
         std::cout << nd::jar_summary_to_json(nd::jar_summary(args[1])) << "\n";
         return 0;
@@ -337,12 +348,33 @@ int run_cli(int argc, char** argv) {
     }
     std::string out_dir = !positional_rest.empty() ? positional_rest[0] : (fs::u8path(jar_path).stem().u8string() + "_decompiled");
 
-    if (!fs::is_regular_file(fs::u8path(jar_path))) {
+    // БАГ-ФИКС v1.7.6 (реальная жалоба пользователя - "не может декомпить
+    // плагин на диске С, будто нет прав, но через Загрузки всё ок"):
+    // fs::is_regular_file() без std::error_code при ошибке ДОСТУПА (не
+    // "файла нет", а "нет прав его прочитать/статнуть" - например, если
+    // jar лежит в защищённой системной папке типа Program Files/Windows)
+    // просто возвращает false - неотличимо от "файла реально нет". Отсюда
+    // вводящее в заблуждение "файл не найден", хотя файл РЕАЛЬНО есть,
+    // просто движку не хватает прав его открыть. Различаем причины через
+    // std::error_code явно и даём разные, куда более полезные сообщения.
+    std::error_code jar_check_ec;
+    bool jar_is_regular = fs::is_regular_file(fs::u8path(jar_path), jar_check_ec);
+    if (!jar_is_regular) {
+        std::string msg;
+        if (jar_check_ec && jar_check_ec == std::errc::permission_denied) {
+            msg = "нет прав на чтение файла: " + jar_path +
+                  " - попробуйте переместить .jar в другую папку (например, в \"Загрузки\") "
+                  "или запустить программу от имени администратора";
+        } else if (jar_check_ec) {
+            msg = "не удалось проверить файл: " + jar_path + " (" + jar_check_ec.message() + ")";
+        } else {
+            msg = "файл не найден: " + jar_path;
+        }
         if (json_output) {
-            std::cout << nd::json_error_response("файл не найден: " + jar_path) << "\n";
+            std::cout << nd::json_error_response(msg) << "\n";
             return 1;
         }
-        std::cerr << "[!] ОШИБКА: файл не найден: " << jar_path << "\n";
+        std::cerr << "[!] ОШИБКА: " << msg << "\n";
         return 1;
     }
 

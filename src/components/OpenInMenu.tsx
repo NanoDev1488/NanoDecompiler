@@ -40,7 +40,7 @@ export function OpenInMenu({ filePath, projectDir }: { filePath?: string; projec
   return (
     <div className="relative">
       <button
-        className="icon-btn h-7 gap-1 px-2 text-[11.5px]"
+        className="btn btn-tonal h-7 text-[11.5px]"
         title="Открыть в внешнем редакторе"
         onClick={() => {
           setOpen(v => !v);

@@ -122,7 +122,31 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect }: Prop
   // сами пакеты/папки остаются в алфавитном порядке (предсказуемая
   // навигация, как в большинстве IDE - "сортировка" это про файлы, не про
   // перестановку структуры дерева).
-  const [sortMode, setSortMode] = useState<SortMode>("name");
+  const [sortMode, setSortModeState] = useState<SortMode>(() => {
+    // НОВОЕ v1.7.6 (реальный запрос - "запоминать состояние между
+    // сессиями"): режим сортировки переживает перезапуск приложения.
+    // localStorage тут безопасен - это настоящее Electron-приложение с
+    // постоянным профилем пользователя, а не sandboxed-артефакт.
+    try {
+      const saved = localStorage.getItem("nd:fileTreeSortMode");
+      if (saved === "name" || saved === "size" || saved === "warnings") return saved;
+    } catch {
+      // localStorage недоступен (крайне маловероятно в Electron) - просто
+      // используем дефолт, не роняем компонент.
+    }
+    return "name";
+  });
+  const setSortMode = (updater: SortMode | ((m: SortMode) => SortMode)) => {
+    setSortModeState(prev => {
+      const next = typeof updater === "function" ? (updater as (m: SortMode) => SortMode)(prev) : updater;
+      try {
+        localStorage.setItem("nd:fileTreeSortMode", next);
+      } catch {
+        // не критично - просто не запомнится до следующего запуска
+      }
+      return next;
+    });
+  };
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();

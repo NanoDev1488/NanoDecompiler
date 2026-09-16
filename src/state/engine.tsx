@@ -144,6 +144,7 @@ const DEFAULT_SETTINGS: Settings = {
   autoUpdateCheck: true,
   appIcon: "terminal",
   setupCompleted: false,
+  language: "ru",
 };
 
 export interface UpdateInfo {
