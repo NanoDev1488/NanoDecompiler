@@ -14,6 +14,7 @@ export type JarSummary = {
   packages: number;
   java: string;
   plugin_name: string | null;
+  plugin_author?: string | null;
   error?: string;
 };
 
@@ -39,6 +40,15 @@ contextBridge.exposeInMainWorld("nano", {
   // НОВОЕ v1.7.6: "Открыть в..." - список редакторов + проверка доступности.
   detectApps: (): Promise<Record<string, boolean>> => ipcRenderer.invoke("apps:detect"),
   openWith: (editorId: string, target: string): Promise<ShellResult> => ipcRenderer.invoke("apps:openWith", editorId, target),
+  // НОВОЕ v1.7.6: поиск похожих репозиториев на GitHub.
+  searchGithubSimilar: (
+    pluginName: string | null,
+    author: string | null,
+  ): Promise<{
+    ok: boolean;
+    error?: string;
+    results?: { name: string; fullName: string; url: string; description: string | null; stars: number }[];
+  }> => ipcRenderer.invoke("github:searchSimilar", pluginName, author),
   jarSummary: (jarPath: string): Promise<JarSummary> => ipcRenderer.invoke("jar:summary", jarPath),
   getEngineVersion: (): Promise<{ ok: boolean; version?: string; error?: string }> =>
     ipcRenderer.invoke("engine:version"),

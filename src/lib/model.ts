@@ -42,6 +42,10 @@ export interface Job {
    * в конце обычного вывода движка (см. onLog в engine.tsx). Для карточки
    * плагина -> "Подробная информация". */
   details?: JobDetails | null;
+  // НОВОЕ v1.7.6: для поиска похожих репозиториев на GitHub - берётся из
+  // jarSummary() при добавлении файла (см. engine.tsx).
+  pluginName?: string | null;
+  pluginAuthor?: string | null;
 }
 
 /** Подмножество JSON, который печатает jar_process_result_to_json() в движке -

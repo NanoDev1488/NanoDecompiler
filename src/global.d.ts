@@ -10,6 +10,14 @@ declare global {
       openInVSCode: (target: string) => Promise<{ ok: boolean; error?: string }>;
       detectApps: () => Promise<Record<string, boolean>>;
       openWith: (editorId: string, target: string) => Promise<{ ok: boolean; error?: string }>;
+      searchGithubSimilar: (
+        pluginName: string | null,
+        author: string | null,
+      ) => Promise<{
+        ok: boolean;
+        error?: string;
+        results?: { name: string; fullName: string; url: string; description: string | null; stars: number }[];
+      }>;
       jarSummary: (jarPath: string) => Promise<{
         name: string;
         size: string;
@@ -18,6 +26,7 @@ declare global {
         packages: number;
         java: string;
         plugin_name: string | null;
+        plugin_author?: string | null;
         error?: string;
       }>;
       getEngineVersion: () => Promise<{ ok: boolean; version?: string; error?: string }>;

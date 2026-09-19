@@ -40,6 +40,12 @@ char cat_of(const std::string& java_type);  // 'I'|'L'|'F'|'D'|'A'
 std::string default_type_for_cat(char cat);
 
 std::string java_string_literal(const std::string& s);
+
+// НОВОЕ v1.7.6: пересборка switch(String) из javac'овской hashCode-формы
+// обратно в читаемый switch(String) - см. реализацию и подробный
+// комментарий в stackvm.cpp. Мутирует stmts НА МЕСТЕ, только если форма
+// РОВНО совпала с ожидаемой (иначе не трогает ничего).
+void collapse_string_switches(std::vector<StmtPtr>& stmts);
 std::string java_float_literal(double v, const std::string& suffix = "f");
 std::string char_literal(int codepoint);
 

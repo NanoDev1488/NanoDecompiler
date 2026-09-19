@@ -14,6 +14,7 @@ import { spawn, ChildProcessWithoutNullStreams } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
+import * as https from "https";
 import { registerUpdateHandlers } from "./updater";
 import { readJarSummaryNative } from "./jarSummary";
 
@@ -316,6 +317,79 @@ function isCommandAvailable(cmd: string): Promise<boolean> {
     proc.on("close", code => resolve(code === 0));
   });
 }
+
+// НОВОЕ v1.7.6 (реальный запрос - "поиск похожих репозиториев на GitHub по
+// авторам и их проектам" - для сверки декомпилированного плагина с
+// возможным оригинальным исходником). Публичный GitHub Search API, БЕЗ
+// токена (лимит 10 запросов/мин на IP для неаутентифицированных запросов -
+// достаточно для разового ручного поиска, не для батч-обработки). Два
+// независимых запроса - по НАЗВАНИЮ плагина (ищет репозитории с похожим
+// именем у ЛЮБОГО автора) и по АВТОРУ из plugin.yml (ищет ВСЕ репозитории
+// именно этого автора - вдруг оригинал называется иначе) - результаты
+// объединяются, дубли (один и тот же repo найден обоими запросами)
+// убираются по full_name, сортировка по звёздам.
+type GithubRepoResult = { name: string; fullName: string; url: string; description: string | null; stars: number };
+
+function githubApiGet(query: string): Promise<{ items?: unknown[] } | null> {
+  return new Promise(resolve => {
+    const req = https.get(
+      {
+        hostname: "api.github.com",
+        path: `/search/repositories?q=${encodeURIComponent(query)}&sort=stars&order=desc&per_page=8`,
+        headers: { "User-Agent": "NanoDecompiler", Accept: "application/vnd.github+json" },
+        timeout: 8000,
+      },
+      res => {
+        let data = "";
+        res.on("data", chunk => (data += chunk));
+        res.on("end", () => {
+          try {
+            resolve(JSON.parse(data));
+          } catch {
+            resolve(null);
+          }
+        });
+      },
+    );
+    req.on("error", () => resolve(null));
+    req.on("timeout", () => {
+      req.destroy();
+      resolve(null);
+    });
+  });
+}
+
+ipcMain.handle("github:searchSimilar", async (_e, pluginName: string | null, author: string | null) => {
+  const byFullName = new Map<string, GithubRepoResult>();
+  const queries: string[] = [];
+  if (pluginName && pluginName.trim()) queries.push(`${pluginName.trim()} in:name`);
+  if (author && author.trim()) queries.push(`user:${author.trim()}`);
+  if (queries.length === 0) return { ok: false, error: "не удалось определить ни имя плагина, ни автора из plugin.yml" };
+
+  for (const q of queries) {
+    const res = await githubApiGet(q);
+    const items = (res?.items ?? []) as Array<{
+      name: string;
+      full_name: string;
+      html_url: string;
+      description: string | null;
+      stargazers_count: number;
+    }>;
+    for (const it of items) {
+      if (!byFullName.has(it.full_name)) {
+        byFullName.set(it.full_name, {
+          name: it.name,
+          fullName: it.full_name,
+          url: it.html_url,
+          description: it.description,
+          stars: it.stargazers_count,
+        });
+      }
+    }
+  }
+  const results = [...byFullName.values()].sort((a, b) => b.stars - a.stars).slice(0, 12);
+  return { ok: true, results };
+});
 
 ipcMain.handle("apps:detect", async () => {
   const result: Record<string, boolean> = {};

@@ -841,7 +841,12 @@ export function EngineProvider({ children }: { children: ReactNode }) {
               // стирал точку вместе с буквами -> "15", а не ~1500000) - реальное
               // искажение на порядки. sizeBytes теперь отдельное числовое поле
               // напрямую из jarSummary.ts/jar_summary.cpp, без реконструкции.
-              patchJob(j.id, { classCount: s.classes, sizeBytes: s.sizeBytes ?? j.sizeBytes });
+              patchJob(j.id, {
+                classCount: s.classes,
+                sizeBytes: s.sizeBytes ?? j.sizeBytes,
+                pluginName: s.plugin_name,
+                pluginAuthor: s.plugin_author,
+              });
             })
             .catch(e => {
               // БАГ-ФИКС: раньше молча глотал любую ошибку - если jarSummary()

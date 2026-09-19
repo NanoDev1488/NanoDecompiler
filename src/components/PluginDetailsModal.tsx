@@ -1,4 +1,5 @@
-import { X, FolderOpen, TriangleAlert } from "lucide-react";
+import { ExternalLink, X, FolderOpen, Github, Star, TriangleAlert } from "lucide-react";
+import { useState } from "react";
 import { fmtBytes, fmtNum, fmtSeconds, type Job } from "../lib/model";
 import { useEngine } from "../state/engine";
 
@@ -11,8 +12,28 @@ import { useEngine } from "../state/engine";
 // строки) - details будет null, показываем честное "недоступно" вместо
 // пустых нулей.
 export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => void }) {
-  const { openOutput } = useEngine();
+  const { openOutput, toast } = useEngine();
   const d = job.details;
+  // НОВОЕ v1.7.6: поиск похожих репозиториев на GitHub по имени плагина
+  // и автору из plugin.yml (см. jarSummary.ts/main.ts::github:searchSimilar).
+  const [ghLoading, setGhLoading] = useState(false);
+  const [ghResults, setGhResults] = useState<
+    { name: string; fullName: string; url: string; description: string | null; stars: number }[] | null
+  >(null);
+  const searchGithub = () => {
+    setGhLoading(true);
+    window.nano
+      .searchGithubSimilar(job.pluginName ?? null, job.pluginAuthor ?? null)
+      .then(r => {
+        if (!r.ok) {
+          toast(r.error ?? "Не удалось выполнить поиск на GitHub", "err");
+          setGhResults([]);
+        } else {
+          setGhResults(r.results ?? []);
+        }
+      })
+      .finally(() => setGhLoading(false));
+  };
 
   return (
     <div
@@ -80,6 +101,32 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
                   <span className="text-dim">Признаков вредоносного кода не обнаружено (эвристика, не гарантия)</span>
                 )}
               </div>
+
+              {/* НОВОЕ v1.7.6: похожие репозитории на GitHub - по имени
+                  плагина и автору из plugin.yml. */}
+              {ghResults !== null && (
+                <div className="flex flex-col gap-1.5 rounded-lg border border-line bg-bg px-3 py-2">
+                  <p className="kicker">Похожие репозитории на GitHub</p>
+                  {ghResults.length === 0 ? (
+                    <p className="text-[11.5px] text-faint">ничего не найдено</p>
+                  ) : (
+                    ghResults.map(r => (
+                      <button
+                        key={r.fullName}
+                        className="flex items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-raised"
+                        onClick={() => window.nano.openExternal(r.url)}
+                      >
+                        <Github size={12} className="flex-none text-faint" />
+                        <span className="mono flex-1 truncate text-[11.5px] text-ink/90">{r.fullName}</span>
+                        <span className="flex flex-none items-center gap-0.5 text-[10px] text-faint">
+                          <Star size={10} /> {r.stars}
+                        </span>
+                        <ExternalLink size={11} className="flex-none text-faint" />
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -93,6 +140,12 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
             <FolderOpen size={12} />
             Открыть папку результата
           </button>
+          {d && (
+            <button className="btn btn-tonal h-7 flex-1 text-[11.5px]" disabled={ghLoading} onClick={searchGithub}>
+              <Github size={12} />
+              {ghLoading ? "Ищу…" : "Найти на GitHub"}
+            </button>
+          )}
         </div>
       </div>
     </div>

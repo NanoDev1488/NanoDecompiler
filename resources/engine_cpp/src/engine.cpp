@@ -2176,6 +2176,11 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
         std::vector<std::string> local_names;
         for (auto& [idx, info] : ctx.locals) local_names.push_back(info.name);
         set_shadow_context(local_names);
+        // НОВОЕ v1.7.6: пересборка switch(String) - ДО emit_stmts, чтобы
+        // и текстовый вывод, и result.stmts (используется, например, для
+        // реконструкции enum-констант в render_class.cpp) видели уже
+        // слитый switch, а не исходную hashCode-форму javac.
+        collapse_string_switches(stmts);
         auto body_lines = emit_stmts(stmts, indent);
         result.ok = true;
         result.stmts = stmts;

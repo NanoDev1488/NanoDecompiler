@@ -71,6 +71,204 @@ std::string java_string_literal(const std::string& s) {
     return out;
 }
 
+// НОВОЕ v1.7.6 (по прямой просьбе - реальная пересборка switch(String)
+// вместо просто пояснительного комментария к сырым hashCode-числам).
+//
+// javac компилирует `switch (s) { case "a": ...; case "b": ...; }` в ДВА
+// последовательных switch: первый - по `s.hashCode()`, с телом каждого
+// case вида `if (!s.equals("a")) break; idx = N; break;`, и сразу следом -
+// второй switch по вычисленному `idx` с РЕАЛЬНЫМИ телами case. Ниже -
+// точное распознавание ИМЕННО этой формы и слияние обратно в один
+// switch(String) с восстановленными строковыми case - если ХОТЬ ОДНА
+// деталь формы не совпадает с ожидаемой (лишняя инструкция, коллизия
+// hashCode с несколькими значениями в одном case, другой порядок и т.п.)
+// - функция ЦЕЛИКОМ откатывается и оставляет оба switch как есть (тот же
+// принцип DecompileAbort, что и везде в проекте - не гадать частично).
+namespace {
+
+std::optional<std::string> match_equals_literal(const ExprPtr& e, const std::string& var_name) {
+    if (!e || e->kind != ExprKind::MethodCall) return std::nullopt;
+    auto* mc = static_cast<MethodCall*>(e.get());
+    if (mc->name != "equals" || mc->args.size() != 1) return std::nullopt;
+    if (!mc->target || mc->target->kind != ExprKind::Local) return std::nullopt;
+    if (static_cast<Local*>(mc->target.get())->name != var_name) return std::nullopt;
+    if (mc->args[0]->kind != ExprKind::Const) return std::nullopt;
+    auto* c = static_cast<Const*>(mc->args[0].get());
+    return c->raw;  // std::nullopt, если это не String-константа
+}
+
+struct HashCaseInfo {
+    std::string literal;
+    std::string index_value;
+};
+
+std::optional<HashCaseInfo> match_hash_case_body(const std::vector<StmtPtr>& body, const std::string& var_name,
+                                                  std::string& index_var_inout) {
+    if (body.size() < 2) return std::nullopt;
+    size_t idx = 0;
+    if (body[idx]->kind != StmtKind::IfStmt) return std::nullopt;
+    auto* ifs = static_cast<IfStmt*>(body[idx].get());
+    if (ifs->else_body.has_value()) return std::nullopt;
+    if (ifs->then_body.size() != 1 || ifs->then_body[0]->kind != StmtKind::BreakStmt) return std::nullopt;
+    if (!ifs->cond || ifs->cond->kind != ExprKind::UnOp) return std::nullopt;
+    auto* notop = static_cast<UnOp*>(ifs->cond.get());
+    if (notop->op != "!") return std::nullopt;
+    auto lit = match_equals_literal(notop->expr, var_name);
+    if (!lit.has_value()) return std::nullopt;
+    idx++;
+
+    if (idx >= body.size() || body[idx]->kind != StmtKind::ExprStmt) return std::nullopt;
+    auto* es = static_cast<ExprStmtNode*>(body[idx].get());
+    if (!es->expr || es->expr->kind != ExprKind::Assign) return std::nullopt;
+    auto* asg = static_cast<Assign*>(es->expr.get());
+    if (asg->op != "=" || !asg->target || asg->target->kind != ExprKind::Local) return std::nullopt;
+    std::string this_index_var = static_cast<Local*>(asg->target.get())->name;
+    if (index_var_inout.empty())
+        index_var_inout = this_index_var;
+    else if (index_var_inout != this_index_var)
+        return std::nullopt;
+    if (!asg->value || asg->value->kind != ExprKind::Const) return std::nullopt;
+    std::string idx_val = static_cast<Const*>(asg->value.get())->literal;
+    idx++;
+
+    // Остаток тела (если есть) должен быть ТОЛЬКО завершающими break -
+    // ничего смыслового после присвоения индекса быть не должно.
+    for (; idx < body.size(); ++idx)
+        if (body[idx]->kind != StmtKind::BreakStmt) return std::nullopt;
+    return HashCaseInfo{*lit, idx_val};
+}
+
+// Пытается слить stmts[i] (switch по hashCode) с stmts[i+1] (switch по
+// индексу) в один switch(String). Возвращает true и мутирует stmts, если
+// форма совпала полностью; иначе false и stmts не тронут.
+bool try_collapse_string_switch(std::vector<StmtPtr>& stmts, size_t i) {
+    // НОВОЕ v1.7.6 (найдено на реальном примере - "не сработало"): очень
+    // частая для Bukkit-команд форма - `if (args.length > 0) { ...
+    // switch(hashCode) } else { справка; return; }`, а switch(индекс) идёт
+    // уже СНАРУЖИ, СРАЗУ ПОСЛЕ этого if/else целиком - то есть switch по
+    // hashCode физически лежит НЕ в stmts[i] напрямую, а последним
+    // оператором в then-теле if на месте stmts[i]. Ищем ОБА варианта:
+    // либо stmts[i] сам switch, либо if, чьё then-тело ЗАКАНЧИВАЕТСЯ им.
+    SwitchStmt* sw1 = nullptr;
+    std::vector<StmtPtr>* sw1_container = nullptr;
+    size_t sw1_pos = 0;
+    if (stmts[i]->kind == StmtKind::SwitchStmt) {
+        sw1 = static_cast<SwitchStmt*>(stmts[i].get());
+        sw1_container = &stmts;
+        sw1_pos = i;
+    } else if (stmts[i]->kind == StmtKind::IfStmt) {
+        auto* ifs = static_cast<IfStmt*>(stmts[i].get());
+        if (!ifs->then_body.empty() && ifs->then_body.back()->kind == StmtKind::SwitchStmt) {
+            sw1 = static_cast<SwitchStmt*>(ifs->then_body.back().get());
+            sw1_container = &ifs->then_body;
+            sw1_pos = ifs->then_body.size() - 1;
+        }
+    }
+    if (!sw1 || !sw1_container) return false;
+    if (!sw1->selector || sw1->selector->kind != ExprKind::MethodCall) return false;
+    auto* hc = static_cast<MethodCall*>(sw1->selector.get());
+    if (hc->name != "hashCode" || !hc->args.empty() || !hc->target || hc->target->kind != ExprKind::Local) return false;
+    std::string var_name = static_cast<Local*>(hc->target.get())->name;
+
+    if (i + 1 >= stmts.size() || stmts[i + 1]->kind != StmtKind::SwitchStmt) return false;
+    auto* sw2 = static_cast<SwitchStmt*>(stmts[i + 1].get());
+    if (!sw2->selector || sw2->selector->kind != ExprKind::Local) return false;
+    std::string index_var = static_cast<Local*>(sw2->selector.get())->name;
+
+    std::string detected_index_var;
+    std::map<std::string, std::string> index_to_literal;
+    for (auto& c : sw1->cases) {
+        if (c.is_default) {
+            for (auto& st : c.body)
+                if (st->kind != StmtKind::BreakStmt) return false;
+            continue;
+        }
+        if (c.values.size() != 1) return false;  // коллизия hashCode на несколько строк - редкость, не рискуем
+        auto info = match_hash_case_body(c.body, var_name, detected_index_var);
+        if (!info.has_value()) return false;
+        if (index_to_literal.count(info->index_value)) return false;
+        index_to_literal[info->index_value] = info->literal;
+    }
+    if (detected_index_var.empty() || detected_index_var != index_var) return false;
+    if (index_to_literal.empty()) return false;
+
+    std::vector<SwitchCase> new_cases;
+    for (auto& c : sw2->cases) {
+        if (c.is_default) {
+            new_cases.push_back(c);
+            continue;
+        }
+        std::vector<std::string> new_values;
+        for (auto& v : c.values) {
+            auto it = index_to_literal.find(v);
+            if (it == index_to_literal.end()) return false;  // case без соответствия - что-то не так с формой, откат
+            new_values.push_back(java_string_literal(it->second));
+        }
+        SwitchCase nc;
+        nc.values = new_values;
+        nc.body = c.body;
+        nc.is_default = false;
+        new_cases.push_back(nc);
+    }
+
+    auto new_selector = std::make_shared<Local>(var_name, "String");
+    (*sw1_container)[sw1_pos] = std::make_shared<SwitchStmt>(std::move(new_selector), std::move(new_cases), sw2->label);
+    stmts.erase(stmts.begin() + static_cast<long>(i) + 1);
+    return true;
+}
+
+void collapse_recursive(std::vector<StmtPtr>& stmts) {
+    // Сначала рекурсивно обрабатываем ВЛОЖЕННЫЕ списки операторов (внутри
+    // if/while/for/case-тел и т.п.) - switch(String) может быть где угодно
+    // по вложенности, не только на верхнем уровне метода.
+    for (auto& s : stmts) {
+        switch (s->kind) {
+            case StmtKind::IfStmt: {
+                auto* n = static_cast<IfStmt*>(s.get());
+                collapse_recursive(n->then_body);
+                if (n->else_body.has_value()) collapse_recursive(*n->else_body);
+                break;
+            }
+            case StmtKind::WhileStmt:
+                collapse_recursive(static_cast<WhileStmt*>(s.get())->body);
+                break;
+            case StmtKind::DoWhileStmt:
+                collapse_recursive(static_cast<DoWhileStmt*>(s.get())->body);
+                break;
+            case StmtKind::ForStmt:
+                collapse_recursive(static_cast<ForStmt*>(s.get())->body);
+                break;
+            case StmtKind::BlockStmt:
+                collapse_recursive(static_cast<BlockStmt*>(s.get())->stmts);
+                break;
+            case StmtKind::SwitchStmt:
+                for (auto& c : static_cast<SwitchStmt*>(s.get())->cases) collapse_recursive(c.body);
+                break;
+            case StmtKind::TryStmt: {
+                auto* t = static_cast<TryStmt*>(s.get());
+                collapse_recursive(t->body);
+                for (auto& cc : t->catches) collapse_recursive(cc.body);
+                if (t->finally_body.has_value()) collapse_recursive(*t->finally_body);
+                break;
+            }
+            default:
+                break;
+        }
+    }
+    // Затем на ТЕКУЩЕМ уровне ищем и сливаем соседние пары switch - справа
+    // налево, чтобы erase() не сбивал индексы ещё не обработанных пар.
+    for (size_t i = stmts.size(); i-- > 0;) {
+        if (i + 1 < stmts.size()) try_collapse_string_switch(stmts, i);
+    }
+}
+
+}  // namespace
+
+void collapse_string_switches(std::vector<StmtPtr>& stmts) {
+    collapse_recursive(stmts);
+}
+
+
 namespace {
 // Аналог Python repr(float): кратчайшая десятичная запись, однозначно
 // round-trip'ящаяся обратно в то же double, с ТЕМ ЖЕ правилом выбора

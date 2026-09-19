@@ -51,6 +51,8 @@ export type JarSummary = {
   packages: number;
   java: string;
   plugin_name: string | null;
+  // НОВОЕ v1.7.6: для поиска похожих репозиториев на GitHub.
+  plugin_author: string | null;
 };
 
 /** Та же формула, что и java_version_from_major() в jar_summary.cpp -
@@ -157,15 +159,38 @@ export async function readJarSummaryNative(jarPath: string): Promise<JarSummary>
     }
 
     let pluginName: string | null = null;
+    let pluginAuthor: string | null = null;
     const pluginYml = entries.find((e) => e.name === "plugin.yml");
     if (pluginYml) {
       try {
         const text = (await readEntryData(fh, pluginYml)).toString("utf-8");
-        for (const line of text.split(/\r?\n/)) {
-          const t = line.trim();
-          if (t.startsWith("name:")) {
+        const lines = text.split(/\r?\n/);
+        for (let i = 0; i < lines.length; i++) {
+          const t = lines[i].trim();
+          if (pluginName === null && t.startsWith("name:")) {
             pluginName = t.slice(5).trim().replace(/^['"]|['"]$/g, "");
-            break;
+          } else if (pluginAuthor === null && t.startsWith("author:")) {
+            pluginAuthor = t.slice(7).trim().replace(/^['"]|['"]$/g, "");
+          } else if (pluginAuthor === null && t.startsWith("authors:")) {
+            // НОВОЕ v1.7.6 (для поиска похожих репозиториев на GitHub -
+            // нужен автор). "authors:" бывает ИЛИ инлайн-массивом
+            // ("authors: [A, B]"), ИЛИ многострочным YAML-списком
+            // ("authors:\n  - A\n  - B") - берём только ПЕРВОГО автора,
+            // этого достаточно для поиска, не разбираем YAML целиком.
+            const inline = t.slice(8).trim();
+            if (inline.startsWith("[")) {
+              const first = inline.replace(/^\[|\]$/g, "").split(",")[0];
+              pluginAuthor = first?.trim().replace(/^['"]|['"]$/g, "") || null;
+            } else if (!inline) {
+              for (let j = i + 1; j < lines.length; j++) {
+                const t2 = lines[j].trim();
+                if (t2.startsWith("- ")) {
+                  pluginAuthor = t2.slice(2).trim().replace(/^['"]|['"]$/g, "");
+                  break;
+                }
+                if (t2 && !t2.startsWith("#")) break; // следующее YAML-поле - список закончился
+              }
+            }
           }
         }
       } catch {
@@ -181,6 +206,7 @@ export async function readJarSummaryNative(jarPath: string): Promise<JarSummary>
       packages: packages.size,
       java,
       plugin_name: pluginName,
+      plugin_author: pluginAuthor,
     };
   } finally {
     await fh.close();
