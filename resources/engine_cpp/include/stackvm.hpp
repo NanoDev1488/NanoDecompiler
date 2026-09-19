@@ -46,6 +46,8 @@ std::string java_string_literal(const std::string& s);
 // комментарий в stackvm.cpp. Мутирует stmts НА МЕСТЕ, только если форма
 // РОВНО совпала с ожидаемой (иначе не трогает ничего).
 void collapse_string_switches(std::vector<StmtPtr>& stmts);
+// НОВОЕ v1.8.0 (HANDOFF_URGENT п.14) - см. реализацию/комментарий в stackvm.cpp.
+void collapse_array_literals(std::vector<StmtPtr>& stmts);
 std::string java_float_literal(double v, const std::string& suffix = "f");
 std::string char_literal(int codepoint);
 

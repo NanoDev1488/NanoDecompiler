@@ -316,6 +316,24 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     // ниже, но под другим префиксом пути).
     static const std::regex meta_paperclip_lib_re(R"(^META-INF/libraries/.*\.jar(\.patch)?$)", std::regex::icase);
     static const std::regex meta_paperclip_patch_re(R"(^META-INF/versions/.*\.jar\.patch$)", std::regex::icase);
+    // НОВОЕ v1.8.0 (HANDOFF_URGENT п.6, реальный пример пользователя -
+    // NanoCore-bundle.jar бандлит velocity-patched.jar/BungeeCord-
+    // patched.jar/2× paper-*-nanocore.jar под bundled/...): честно
+    // сообщаем о найденных ВЛОЖЕННЫХ jar'ах, а не молча пропускаем их как
+    // обычный бинарный ресурс. Рекурсивная декомпиляция НЕ реализована
+    // (отдельная большая фича - нужен UI confirm-диалог, там пользователь
+    // может не ожидать, что нажатие "декомпилировать" развернёт вложенные
+    // jar'ы в десятки раз больше исходного размера) - см. jr.embedded_jars
+    // в JSON-выводе (stats_json.cpp). Пути из уже объяснённого шума
+    // (META-INF/libraries/, META-INF/versions/*.patch - чужой maven-кэш
+    // загрузчика, см. фикс п.15 выше) НЕ считаем "настоящими" вложенными
+    // jar'ами - там дублей может быть сотни, это другая, уже отдельно
+    // обработанная категория.
+    for (auto& n : all_names) {
+        if (n.size() < 4 || n.substr(n.size() - 4) != ".jar") continue;
+        if (std::regex_match(n, meta_paperclip_lib_re)) continue;
+        jr.embedded_jars.push_back(n);
+    }
     for (auto& n : all_names) {
         if ((n.size() >= 6 && n.substr(n.size() - 6) == ".class") || (!n.empty() && n.back() == '/')) continue;
         if (n == "META-INF/MANIFEST.MF") continue;

@@ -84,6 +84,17 @@ export const COLOR_CONCAT_RE = new RegExp(`\\.(${Object.keys(MC_COLOR_NAME_HEX).
 // цвет", не пытаясь угадать итоговый оттенок.
 export const GENERIC_COLOR_CALL_RE = /\.\w*(colou?r|paint)\w*\s*\(\s*$/i;
 
+// НОВОЕ (HANDOFF_URGENT п.8, реальный пример пользователя -
+// `"§c✖ " + FancyFont.stylize("текст")`): метод НЕ содержит "color" в
+// имени (GENERIC_COLOR_CALL_RE выше его не поймает), но раз он вызывается
+// сразу после конкатенации с частью, где УЖЕ есть §/&-код - на практике
+// это почти всегда тоже часть того же самого цветного сообщения (свой
+// метод форматирования текста типа FancyFont/small-caps/транслитерация
+// и т.п.). Ловим сам факт "+ Вызов(" перед открывающей кавычкой - решение,
+// красить ли эту строку тоже, принимает вызывающий код (javaHighlight.tsx)
+// на основе того, встречался ли цветовой сигнал РАНЕЕ на этой же строке.
+export const CHAIN_CALL_AFTER_PLUS_RE = /\+\s*[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\(\s*$/;
+
 export const MC_CODE_RE = /[&§]([0-9a-fA-Fk-oK-OrR])/;
 const MC_CODE_RE_G = /[&§]([0-9a-fA-Fk-oK-OrR])/g;
 

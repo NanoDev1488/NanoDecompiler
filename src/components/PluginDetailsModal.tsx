@@ -1,7 +1,32 @@
-import { ExternalLink, X, FolderOpen, Github, Star, TriangleAlert } from "lucide-react";
+import { ExternalLink, X, FolderOpen, Star, TriangleAlert } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { fmtBytes, fmtNum, fmtSeconds, type Job } from "../lib/model";
 import { useEngine } from "../state/engine";
+
+// БАГ-ФИКС v1.8.0 «срочный CI-фикс» (реальный сбой сборки на macOS/Linux/
+// Windows-раннерах - "Github" is not exported by lucide-react): брендовые
+// иконки логотипов (в отличие от обычных UI-иконок вроде X/Star) - именно
+// то, что чаще всего переименовывают или убирают между мажорными версиями
+// icon-библиотек, а `lucide-react` запинен диапазоном "^1.34.0" (caret -
+// любая 1.x), так что CI мог подтянуть версию, где `Github` уже нет.
+// Чтобы больше не зависеть от того, есть ли конкретная брендовая иконка в
+// конкретной версии lucide-react, рисуем её сами - маленький инлайн-SVG с
+// тем же API (`size`/`className`), что и у lucide-иконок, так что менять
+// остальной JSX ниже не пришлось.
+function GithubIcon({ size = 16, className }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M12 .5C5.73.5.5 5.73.5 12c0 5.1 3.29 9.43 7.86 10.96.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.88-1.54-3.88-1.54-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a10.98 10.98 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.43-2.7 5.4-5.27 5.69.42.36.78 1.07.78 2.17 0 1.57-.01 2.83-.01 3.22 0 .31.21.67.8.55A11.5 11.5 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z" />
+    </svg>
+  );
+}
 
 // НОВОЕ v1.8.0 (реальный запрос - "мини-карточка к каждому плагину слева
 // с троеточием, а по клику - открыть папку результата и детальнейшая
@@ -121,7 +146,7 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
                         className="flex items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-raised"
                         onClick={() => window.nano.openExternal(r.url)}
                       >
-                        <Github size={12} className="flex-none text-faint" />
+                        <GithubIcon size={12} className="flex-none text-faint" />
                         <span className="mono flex-1 truncate text-[11.5px] text-ink/90">{r.fullName}</span>
                         <span className="flex flex-none items-center gap-0.5 text-[10px] text-faint">
                           <Star size={10} /> {r.stars}
@@ -147,7 +172,7 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
           </button>
           {d && (
             <button className="btn btn-tonal h-7 flex-1 text-[11.5px]" disabled={ghLoading} onClick={searchGithub}>
-              <Github size={12} />
+              <GithubIcon size={12} />
               {ghLoading ? "Ищу…" : "Найти на GitHub"}
             </button>
           )}

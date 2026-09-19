@@ -180,6 +180,16 @@ std::string jar_process_result_to_json(const JarProcessResult& jr, const std::st
     o << ",\"decrypted_strings_count\":" << jr.decrypted_strings_count;
     o << ",\"legitimacy\":" << legitimacy_json(jr.legitimacy);
     o << ",\"platform\":" << js(jr.platform.kind_label());
+    // НОВОЕ v1.8.0 (HANDOFF_URGENT п.6) - см. комментарий у поля в process_jar.hpp.
+    o << ",\"embedded_jars\":[";
+    {
+        size_t i = 0;
+        for (auto& n : jr.embedded_jars) {
+            if (i++) o << ",";
+            o << js(n);
+        }
+    }
+    o << "]";
     o << "}}";
     return o.str();
 }

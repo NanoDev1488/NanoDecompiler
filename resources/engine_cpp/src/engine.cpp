@@ -2181,6 +2181,10 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
         // реконструкции enum-констант в render_class.cpp) видели уже
         // слитый switch, а не исходную hashCode-форму javac.
         collapse_string_switches(stmts);
+        // НОВОЕ v1.8.0 (HANDOFF_URGENT п.14): та же логика "ДО
+        // emit_stmts" - сворачиваем `new T[N]; x[0]=..; x[1]=..;` в
+        // `new T[]{..}` перед выводом.
+        collapse_array_literals(stmts);
         auto body_lines = emit_stmts(stmts, indent);
         result.ok = true;
         result.stmts = stmts;

@@ -1,5 +1,6 @@
 import { memo, useMemo, type ReactNode } from "react";
 import {
+  CHAIN_CALL_AFTER_PLUS_RE,
   COLOR_CONCAT_RE,
   COLOR_METHOD_CALL_RE,
   GENERIC_COLOR_CALL_RE,
@@ -47,6 +48,10 @@ interface Token {
   // или кастомного `.Color("...")` - см. tokenizeLine() ниже.
   colorMethod?: string | null;
   isGenericColorCall?: boolean;
+  // НОВОЕ v1.8.0 (HANDOFF_URGENT п.8): строковый аргумент вызова
+  // вида `Foo.bar(` сразу ПОСЛЕ конкатенации с частью строки, где уже был
+  // цветовой сигнал на этой же строке (см. sawColorSignal в tokenizeLine).
+  isChainedColorCall?: boolean;
 }
 
 function tokenizeLine(line: string): Token[] {
@@ -54,6 +59,11 @@ function tokenizeLine(line: string): Token[] {
   let last = 0;
   TOKEN_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
+  // НОВОЕ v1.8.0: раз на этой строке уже был раскрашен §/&-код
+  // (сырой, именованный метод или дженерик-Color-вызов) - следующий
+  // `+ Вызов("...")` на ТОЙ ЖЕ строке с высокой вероятностью тоже часть
+  // того же цветного сообщения (см. CHAIN_CALL_AFTER_PLUS_RE в mcColors.ts).
+  let sawColorSignal = false;
   while ((m = TOKEN_RE.exec(line)) !== null) {
     if (m.index > last) out.push({ text: line.slice(last, m.index), cls: null });
     const [, block, line2, str, chr, ann, num, word] = m;
@@ -65,6 +75,7 @@ function tokenizeLine(line: string): Token[] {
     else if (word && KEYWORDS.has(word)) cls = "tok-k";
     let colorMethod: string | null = null;
     let isGenericColorCall = false;
+    let isChainedColorCall = false;
     if (str) {
       // НОВОЕ v1.7.5 (по прямой просьбе - "детект вызовов цветовых
       // методов, не только сырых &-кодов"): смотрим на текст ПЕРЕД этой
@@ -76,9 +87,14 @@ function tokenizeLine(line: string): Token[] {
         colorMethod = namedMatch[1];
       } else if (GENERIC_COLOR_CALL_RE.test(before)) {
         isGenericColorCall = true;
+      } else if (sawColorSignal && CHAIN_CALL_AFTER_PLUS_RE.test(before)) {
+        isChainedColorCall = true;
+      }
+      if (colorMethod || isGenericColorCall || isChainedColorCall || MC_CODE_RE.test(str)) {
+        sawColorSignal = true;
       }
     }
-    out.push({ text: m[0], cls, isStr: !!str, colorMethod, isGenericColorCall });
+    out.push({ text: m[0], cls, isStr: !!str, colorMethod, isGenericColorCall, isChainedColorCall });
     last = m.index + m[0].length;
   }
   if (last < line.length) out.push({ text: line.slice(last), cls: null });
@@ -95,6 +111,10 @@ function renderLine(line: string, key: number): ReactNode {
             {renderNamedColorText(t.text, t.colorMethod)}
           </span>
         ) : t.isStr && t.isGenericColorCall ? (
+          <span key={i} className="tok-s">
+            {renderUnknownColorMarked(t.text)}
+          </span>
+        ) : t.isStr && t.isChainedColorCall ? (
           <span key={i} className="tok-s">
             {renderUnknownColorMarked(t.text)}
           </span>

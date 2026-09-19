@@ -131,6 +131,15 @@ int run_decompile_console(const std::string& jar_path, const std::string& out_di
         std::cout << "[*] Признаков вредоносного кода не обнаружено (эвристика, не гарантия - см. README_RU.txt).\n";
     }
 
+    // НОВОЕ v1.8.0 (HANDOFF_URGENT п.6): честно сообщаем о найденных
+    // вложенных jar - см. комментарий у jr.embedded_jars в process_jar.hpp.
+    if (!jr.embedded_jars.empty()) {
+        std::cout << "[*] Внутри jar найдено вложенных .jar-файлов: " << jr.embedded_jars.size()
+                   << " (рекурсивная декомпиляция вложенных jar пока не реализована, "
+                   << "они скопированы как обычные бинарные ресурсы):\n";
+        for (auto& p : jr.embedded_jars) std::cout << "  · " << p << "\n";
+    }
+
     if (jr.legitimacy.has_value()) {
         auto leg_text = nd::format_for_console(*jr.legitimacy);
         if (leg_text.has_value()) std::cout << *leg_text << "\n";

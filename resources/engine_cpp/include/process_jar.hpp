@@ -42,6 +42,18 @@ struct JarProcessResult {
     // Платформа jar'а (см. platform_detect.hpp) - Bukkit/Paper/Velocity/
     // Bungee/мод/неизвестно.
     PlatformInfo platform;
+    // НОВОЕ v1.8.0 (HANDOFF_URGENT п.6, реальный пример
+    // пользователя - NanoCore-bundle.jar бандлит velocity-patched.jar/
+    // BungeeCord-patched.jar/2× paper-*-nanocore.jar под bundled/...):
+    // пути вложенных .jar внутри этого jar'а (см. process_jar.cpp - ищем
+    // ЛЮБую запись *.jar, КРОМЕ уже известного шума под
+    // META-INF/libraries/ - тот уже отдельно объяснён как чужой
+    // maven-кэш загрузчика, а не "настоящий" вложенный артефакт).
+    // Рекурсивная декомпиляция НЕ реализована - это отдельная большая
+    // фича (детект + UI confirm-диалог + рекурсивный process_jar) - пока
+    // только честно СООБЩАЕМ о находке, чтобы пользователь не думал, что
+    // движок просто не заметил вложенные jar'ы.
+    std::vector<std::string> embedded_jars;
     // rejected=true - декомпиляция ПРЕРВАНА до основной обработки, до
     // определения платформы включительно - остальные поля этой структуры
     // в этом случае пустые/неактуальные, смотреть только rejected_reason.

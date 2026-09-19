@@ -268,6 +268,123 @@ void collapse_string_switches(std::vector<StmtPtr>& stmts) {
     collapse_recursive(stmts);
 }
 
+namespace {
+
+// НОВОЕ v1.8.0 (HANDOFF_URGENT п.14 - переоценено на реальных
+// примерах пользователя, WorldGuardBridge.java/VaultBridge.java из
+// NanoForge): байткод-уровневая форма создания массива-литерала
+// `T[] x = new T[N]; x[0] = v0; x[1] = v1; ...; x[N-1] = v_{N-1};`
+// (стандартный паттерн javac для `new T[]{v0, v1, ...}` - особенно
+// заметно в reflection-коде, `Method.invoke(obj, new Object[]{arg})`)
+// раньше доходила до вывода как N+1 отдельных операторов - хотя
+// NewArray (ast_nodes.hpp) УЖЕ поддерживает поле initializer именно для
+// компактной формы `new T[]{...}` (см. emit.cpp) - просто ничего его не
+// заполняло. Безопасная версия: НЕ ищем место использования переменной
+// дальше по коду (искать и переписывать usage-сайт - отдельный, более
+// рискованный рефакторинг с риском промахнуться по scope/затенению) -
+// просто сливаем декларацию + N присваиваний В ОДНУ декларацию с
+// инициализатором, сама переменная и её дальнейшие использования
+// остаются буквально как есть (эквивалентная семантика: массив
+// объявляется УЖЕ заполненным, а не заполняется по шагам).
+bool try_collapse_array_literal(std::vector<StmtPtr>& stmts, size_t i) {
+    if (stmts[i]->kind != StmtKind::LocalDecl) return false;
+    auto* decl = static_cast<LocalDecl*>(stmts[i].get());
+    if (!decl->init || decl->init->kind != ExprKind::NewArray) return false;
+    auto* na = static_cast<NewArray*>(decl->init.get());
+    if (na->initializer.has_value()) return false;  // уже литерал - нечего сворачивать
+    if (na->dims.size() != 1 || !na->dims[0] || na->dims[0]->kind != ExprKind::Const) return false;
+    auto* size_const = static_cast<Const*>(na->dims[0].get());
+    long n = 0;
+    try {
+        size_t pos = 0;
+        n = std::stol(size_const->literal, &pos);
+        if (pos != size_const->literal.size()) return false;  // не чисто число (например "N + 1")
+    } catch (...) {
+        return false;
+    }
+    // n==0 - валидный `new T[0]`, но сворачивать нечего (нет присваиваний).
+    // Верхний потолок - разумная страховка от случайного совпадения на
+    // гигантских массивах, где риск ложного матча по построению выше
+    // (собранных из цикла, а не литералом), да и выигрыш в читаемости
+    // там сомнителен - лес из 64+ присваиваний ничем не лучше литерала
+    // на 64+ элементов.
+    if (n <= 0 || n > 64) return false;
+    size_t un = static_cast<size_t>(n);
+    if (i + un >= stmts.size()) return false;  // не хватает последующих stmts под все n присваиваний
+
+    std::vector<ExprPtr> values;
+    values.reserve(un);
+    for (size_t k = 0; k < un; ++k) {
+        StmtPtr& cand = stmts[i + 1 + k];
+        if (cand->kind != StmtKind::ExprStmt) return false;
+        auto* es = static_cast<ExprStmtNode*>(cand.get());
+        if (!es->expr || es->expr->kind != ExprKind::Assign) return false;
+        auto* asg = static_cast<Assign*>(es->expr.get());
+        if (asg->op != "=") return false;
+        if (!asg->target || asg->target->kind != ExprKind::ArrayAccess) return false;
+        auto* aa = static_cast<ArrayAccess*>(asg->target.get());
+        if (!aa->array || aa->array->kind != ExprKind::Local) return false;
+        if (static_cast<Local*>(aa->array.get())->name != decl->name) return false;
+        if (!aa->index || aa->index->kind != ExprKind::Const) return false;
+        // Индексы ДОЛЖНЫ идти строго по порядку 0..n-1 - никаких
+        // перестановок не допускаем (перестановка формально валидна для
+        // литерала, но повышает риск ложного совпадения на коде, который
+        // на самом деле не литерал, а частичное/условное заполнение).
+        if (static_cast<Const*>(aa->index.get())->literal != std::to_string(k)) return false;
+        values.push_back(asg->value);
+    }
+
+    na->initializer = std::move(values);
+    stmts.erase(stmts.begin() + static_cast<long>(i) + 1, stmts.begin() + static_cast<long>(i) + 1 + n);
+    return true;
+}
+
+void collapse_array_literals_recursive(std::vector<StmtPtr>& stmts) {
+    for (auto& s : stmts) {
+        switch (s->kind) {
+            case StmtKind::IfStmt: {
+                auto* n = static_cast<IfStmt*>(s.get());
+                collapse_array_literals_recursive(n->then_body);
+                if (n->else_body.has_value()) collapse_array_literals_recursive(*n->else_body);
+                break;
+            }
+            case StmtKind::WhileStmt:
+                collapse_array_literals_recursive(static_cast<WhileStmt*>(s.get())->body);
+                break;
+            case StmtKind::DoWhileStmt:
+                collapse_array_literals_recursive(static_cast<DoWhileStmt*>(s.get())->body);
+                break;
+            case StmtKind::ForStmt:
+                collapse_array_literals_recursive(static_cast<ForStmt*>(s.get())->body);
+                break;
+            case StmtKind::BlockStmt:
+                collapse_array_literals_recursive(static_cast<BlockStmt*>(s.get())->stmts);
+                break;
+            case StmtKind::SwitchStmt:
+                for (auto& c : static_cast<SwitchStmt*>(s.get())->cases) collapse_array_literals_recursive(c.body);
+                break;
+            case StmtKind::TryStmt: {
+                auto* t = static_cast<TryStmt*>(s.get());
+                collapse_array_literals_recursive(t->body);
+                for (auto& cc : t->catches) collapse_array_literals_recursive(cc.body);
+                if (t->finally_body.has_value()) collapse_array_literals_recursive(*t->finally_body);
+                break;
+            }
+            default:
+                break;
+        }
+    }
+    for (size_t i = stmts.size(); i-- > 0;) {
+        try_collapse_array_literal(stmts, i);
+    }
+}
+
+}  // namespace
+
+void collapse_array_literals(std::vector<StmtPtr>& stmts) {
+    collapse_array_literals_recursive(stmts);
+}
+
 
 namespace {
 // Аналог Python repr(float): кратчайшая десятичная запись, однозначно
