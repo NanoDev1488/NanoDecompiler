@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include <map>
+#include <regex>
 #include <stdexcept>
 
 namespace nd {
@@ -427,7 +428,23 @@ bool looks_obfuscated(const std::optional<std::string>& name_opt, const std::str
     if (kind == "class") {
         base = last_segment_after(name, '$');
     } else {
-        if (name.find('$') != std::string::npos) return false;
+        // БАГ-ФИКС (HANDOFF_URGENT п.12): раньше ЛЮБОЙ '$' в имени метода
+        // или поля безусловно означал "не обфусцировано" (return false
+        // сразу, минуя всю эвристику ниже). Это правильно для ИЗВЕСТНЫХ
+        // javac-синтетических паттернов - lambda$method$N/access$N для
+        // методов, this$N/val$N для полей - javac сам их так называет,
+        // и в имени зашита полезная информация (например, какому методу
+        // принадлежит лямбда), переименовывать их в generic "method47"
+        // значило бы эту информацию терять. НО обфускатор мог намеренно
+        // вставить '$' в СВОЁ имя специально, чтобы под эту проверку
+        // попасть и обойти переименование - для '$', не совпадающего ни
+        // с одним известным javac-паттерном, теперь всё равно прогоняем
+        // обычную эвристику ниже (letters_only и так уже игнорирует '$'
+        // при подсчёте, никаких дополнительных изменений в самой
+        // эвристике не потребовалось).
+        static const std::regex kJavacSyntheticNameRe(
+            R"(^(access\$\d+|lambda\$[A-Za-z_][A-Za-z0-9_]*\$\d+|this\$\d+|val\$[A-Za-z_][A-Za-z0-9_]*)$)");
+        if (name.find('$') != std::string::npos && std::regex_match(name, kJavacSyntheticNameRe)) return false;
         base = name;
     }
 

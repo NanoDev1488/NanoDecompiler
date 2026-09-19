@@ -126,16 +126,39 @@ export function renderMcColored(text: string): ReactNode[] {
   const out: ReactNode[] = [];
   let last = 0;
   let currentColor: string | null = null;
+  let currentColorCode: string | null = null;
   let currentBold = false;
   let key = 0;
   MC_CODE_RE_G.lastIndex = 0;
   let m: RegExpExecArray | null;
+  // БАГ-ФИКС (HANDOFF_URGENT п.11): раньше title= был ТОЛЬКО на самом
+  // §-коде (крошечный маркер перед текстом) - наведение на сам цветной
+  // текст (то, что реально видно в игре, а не служебный код) не
+  // показывало вообще ничего. Собираем то же описание, что уже есть на
+  // маркере, и вешаем на span с текстом тоже.
   const pushText = (s: string) => {
     if (!s) return;
     const style: { color?: string; fontWeight?: number } = {};
-    if (currentColor) style.color = currentColor;
-    if (currentBold) style.fontWeight = 700;
-    out.push(createElement("span", { key: key++, style: Object.keys(style).length ? style : undefined }, s));
+    const titleParts: string[] = [];
+    if (currentColor) {
+      style.color = currentColor;
+      titleParts.push(`цвет: ${currentColorCode ?? ""} (${currentColor})`);
+    }
+    if (currentBold) {
+      style.fontWeight = 700;
+      titleParts.push("жирный (&l)");
+    }
+    out.push(
+      createElement(
+        "span",
+        {
+          key: key++,
+          style: Object.keys(style).length ? style : undefined,
+          title: titleParts.length ? titleParts.join(", ") : undefined,
+        },
+        s,
+      ),
+    );
   };
   while ((m = MC_CODE_RE_G.exec(text)) !== null) {
     pushText(text.slice(last, m.index));
@@ -152,14 +175,16 @@ export function renderMcColored(text: string): ReactNode[] {
     );
     if (code === "r") {
       currentColor = null;
+      currentColorCode = null;
       currentBold = false;
     } else if (code === "l") {
       currentBold = true;
     } else if (MC_FORMAT_CODES.has(code)) {
       // k/m/n/o (обфускация/зачёркнутый/подчёркнутый/курсив) - цвет не
       // меняют, жирность тоже не трогаем, только сам код уже показан выше.
-    } else {
-      currentColor = MC_COLOR_HEX[code] ?? currentColor;
+    } else if (MC_COLOR_HEX[code]) {
+      currentColor = MC_COLOR_HEX[code];
+      currentColorCode = m[0];
     }
     last = m.index + m[0].length;
   }
