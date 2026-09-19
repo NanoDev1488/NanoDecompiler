@@ -48,6 +48,15 @@ export interface Job {
   pluginAuthor?: string | null;
 }
 
+/** Одна находка малварь-сканера (см. malware_findings_json() в
+ * stats_json.cpp - severity/description/where 1-в-1 с тем, что печатает
+ * движок). */
+export interface MalwareFinding {
+  severity: "high" | "medium" | "low";
+  description: string;
+  where: string;
+}
+
 /** Подмножество JSON, который печатает jar_process_result_to_json() в движке -
  * только то, что реально показываем в карточке (не весь blob 1-в-1). */
 export interface JobDetails {
@@ -61,9 +70,21 @@ export interface JobDetails {
     decompiled_methods: number;
     fallback_methods: number;
     decompiled_pct: number;
-    malware_findings: unknown[];
+    // БАГ-ФИКС v1.8.2: было unknown[] - карточка плагина показывала только
+    // СЧЁТЧИК находок с припиской "см. терминал", хотя описание/severity/
+    // расположение каждой находки уже приезжают в этом же JSON. Типизируем
+    // как MalwareFinding[], чтобы можно было отрендерить список прямо тут.
+    malware_findings: MalwareFinding[];
     import_conflicts: Record<string, string[]>;
     platform: string | null;
+    // БАГ-ФИКС v1.8.2: движок считает эти два поля (см. stats_json.cpp) -
+    // сколько синтетических switchmap-классов (компиляторные helper-классы
+    // для switch по enum) скрыто из вывода и сколько пустых/бессмысленных
+    // catch-блоков вычищено - но раньше они никак не доходили до UI, хотя
+    // это ровно та прозрачность "что движок сделал с твоим кодом", которая
+    // уже есть для fallback_methods/library_classes_skipped.
+    synthetic_switchmap_classes_hidden: number;
+    junk_catches_removed: number;
   };
 }
 

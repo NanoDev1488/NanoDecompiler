@@ -112,20 +112,59 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
               {d.stats.fallback_methods > 0 && (
                 <Row label="Откат на байткод" value={`${fmtNum(d.stats.fallback_methods)} метод(ов) - см. .java с комментарием`} />
               )}
-              {job.status === "done" && <Row label="Время декомпиляции" value={fmtSeconds(job.elapsedMs / 1000)} />}
-              {Object.keys(d.stats.import_conflicts).length > 0 && (
+              {/* БАГ-ФИКС v1.8.2 - см. комментарий у полей в model.ts. */}
+              {d.stats.synthetic_switchmap_classes_hidden > 0 && (
                 <Row
-                  label="Конфликты импортов"
-                  value={`${Object.keys(d.stats.import_conflicts).length} - используются полные имена в коде`}
+                  label="Синтетических switchmap-классов скрыто"
+                  value={`${fmtNum(d.stats.synthetic_switchmap_classes_hidden)} (компиляторные helper-классы для switch по enum)`}
                 />
               )}
-              <div className="flex items-center gap-1.5 rounded-lg border border-line bg-bg px-3 py-2">
+              {d.stats.junk_catches_removed > 0 && (
+                <Row label="Пустых catch-блоков вычищено" value={fmtNum(d.stats.junk_catches_removed)} />
+              )}
+              {job.status === "done" && <Row label="Время декомпиляции" value={fmtSeconds(job.elapsedMs / 1000)} />}
+              {Object.keys(d.stats.import_conflicts).length > 0 && (
+                <div className="flex flex-col gap-1.5 rounded-lg border border-line bg-bg px-3 py-2">
+                  <p className="kicker">
+                    Конфликты импортов ({Object.keys(d.stats.import_conflicts).length}) - используются полные имена в коде
+                  </p>
+                  {/* БАГ-ФИКС v1.8.2 (тот же принцип, что и с malware_findings
+                      выше - движок УЖЕ присылает, КАКИЕ именно классы
+                      конфликтуют и с чем, а не только их количество). */}
+                  <ul className="mono flex flex-col gap-0.5 pl-1 text-[11px] text-dim">
+                    {Object.entries(d.stats.import_conflicts).map(([simple, dotted]) => (
+                      <li key={simple} className="truncate" title={dotted.join(", ")}>
+                        <span className="text-ink/90">{simple}</span>: {dotted.join(", ")}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="flex flex-col gap-1.5 rounded-lg border border-line bg-bg px-3 py-2">
                 {d.stats.malware_findings.length > 0 ? (
                   <>
-                    <TriangleAlert size={13} className="flex-none text-err" />
-                    <span className="text-err">
-                      Найдено {d.stats.malware_findings.length} признак(ов) потенциально вредоносного кода - см. терминал
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <TriangleAlert size={13} className="flex-none text-err" />
+                      <span className="text-err">
+                        Найдено {d.stats.malware_findings.length} признак(ов) потенциально вредоносного кода:
+                      </span>
+                    </div>
+                    {/* БАГ-ФИКС v1.8.2 (HANDOFF_URGENT п.7 - карточка плагина
+                        показывала только счётчик с припиской "см. терминал",
+                        хотя описание/серьёзность/расположение каждой
+                        находки уже приезжают в том же JSON - не нужно было
+                        заставлять пользователя листать терминал за тем, что
+                        уже загружено). Цвет по severity - тем же принципом,
+                        что и в терминале (см. classifyLine в engine.tsx):
+                        high - err, остальное - warn. */}
+                    <ul className="mono flex flex-col gap-1 pl-1 text-[11px]">
+                      {d.stats.malware_findings.map((f, i) => (
+                        <li key={i} className={f.severity === "high" ? "text-err" : "text-warn"}>
+                          <span className="text-faint">[{f.severity}]</span> {f.description}{" "}
+                          <span className="text-faint">({f.where})</span>
+                        </li>
+                      ))}
+                    </ul>
                   </>
                 ) : (
                   <span className="text-dim">Признаков вредоносного кода не обнаружено (эвристика, не гарантия)</span>
