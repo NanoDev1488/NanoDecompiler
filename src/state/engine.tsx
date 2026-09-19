@@ -460,6 +460,17 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     // самого заметного визуального оформления (красный фон строки в
     // Terminal.tsx), которое сейчас есть только у уровня "err".
     if (/вредоносн/i.test(line)) return { level: "err", tag: "malware" };
+    // БАГ-ФИКС (HANDOFF_URGENT п.16 - жалоба пользователя): заголовок блока
+    // находок ("ВНИМАНИЕ: обнаружены признаки... вредоносного кода") ловится
+    // регэкспом выше, но КАЖДАЯ отдельная находка печатается движком ПОД
+    // заголовком отдельной строкой вида "  [!!!] <описание> (<где>)" / "  [ !
+    // ] ..." / "  [ · ] ..." (см. format_findings_for_console() в
+    // malware_scan.cpp) - слово "вредоносн" в этих строках НЕ повторяется,
+    // так что каждая конкретная находка проваливалась в default-ветку и
+    // красилась как обычный info, хотя заголовок над ней уже был err. Ловим
+    // маркер-тег находки отдельно и красим тем же "malware"-стилем, что и
+    // заголовок - просил "warning, не error/info" для этих строк.
+    if (/^\s*\[\s*(!!!|!|·)\s*\]\s/.test(line)) return { level: "warn", tag: "malware" };
     if (stream === "stderr" || /error|ошибка|fail/i.test(line)) return { level: "err", tag: "stderr" };
     if (/warn|предупрежд|внимание/i.test(line)) return { level: "warn", tag: "warn" };
     if (/\bok\b|готово|done|success/i.test(line)) return { level: "ok", tag: "engine" };

@@ -73,7 +73,16 @@ const std::vector<KnownLibEntry>& known_libs() {
         {"org.bukkit", "org.spigotmc", "spigot-api", ""},
         {"org.spigotmc", "org.spigotmc", "spigot-api", ""},
         {"com.destroystokyo.paper", "io.papermc.paper", "paper-api", ""},
-        {"io.papermc", "io.papermc.paper", "paper-api", ""},
+        // БАГ-ФИКС (найдено на paper-*-nanocore.jar пользователя - HANDOFF_URGENT
+        // п.15): префикс был "io.papermc" целиком - это matчило ЛЮБОЙ подпакет
+        // io.papermc.*, включая io.papermc.paperclip (Paperclip - загрузчик,
+        // собственный код которого нужно декомпилировать, а не paper-api вовсе)
+        // и io.papermc.lib (PaperLib - отдельная маленькая утилита, не paper-api).
+        // Из-за этого все 259 классов paperclip-jar'а (включая 6 реальных классов
+        // самого Paperclip) улетали в library_classes_skipped - декомпилировалось
+        // 0 методов из 0, выглядело как "не декомпилируется вообще". Сузил префикс
+        // до "io.papermc.paper" - совпадает только с реальным paper-api пакетом.
+        {"io.papermc.paper", "io.papermc.paper", "paper-api", ""},
         {"net.md_5.bungee", "net.md-5", "bungeecord-chat", ""},
         {"net.kyori.adventure", "net.kyori", "adventure-api", ""},
         // НОВОЕ v1.8.0 (найдено вживую - META-INF/services от этой

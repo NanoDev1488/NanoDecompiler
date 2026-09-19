@@ -1,5 +1,5 @@
 import { ExternalLink, X, FolderOpen, Github, Star, TriangleAlert } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { fmtBytes, fmtNum, fmtSeconds, type Job } from "../lib/model";
 import { useEngine } from "../state/engine";
 
@@ -71,7 +71,12 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
                 label="Классов библиотек пропущено"
                 value={
                   d.stats.library_classes_skipped > 0
-                    ? `${fmtNum(d.stats.library_classes_skipped)} (${d.stats.library_names_hit.join(", ")})`
+                    ? (
+                        <LibraryNamesValue
+                          count={d.stats.library_classes_skipped}
+                          names={d.stats.library_names_hit}
+                        />
+                      )
                     : "0"
                 }
               />
@@ -152,11 +157,41 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-3">
       <span className="text-faint">{label}</span>
       <span className="mono text-right text-ink/90">{value}</span>
     </div>
+  );
+}
+
+// НОВОЕ (HANDOFF_URGENT п.2): при 10+ библиотеках голый join(", ") превращался
+// в нечитаемую простыню на всю ширину модалки. Показываем первые 3 + счётчик
+// остальных, разворачиваем по клику. Модалка пересоздаётся при смене job -
+// лишнего стейта между открытиями не копится, локального useState достаточно.
+function LibraryNamesValue({ count, names }: { count: number; names: string[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const VISIBLE = 3;
+  if (names.length <= VISIBLE) {
+    return <>{`${fmtNum(count)} (${names.join(", ")})`}</>;
+  }
+  const shown = expanded ? names.join(", ") : names.slice(0, VISIBLE).join(", ");
+  return (
+    <span className="inline-flex flex-col items-end gap-0.5">
+      <span>{fmtNum(count)}</span>
+      <span className="text-right">
+        ({shown}
+        {!expanded && ", "}
+        <button
+          type="button"
+          className="mono underline decoration-dotted underline-offset-2 hover:text-ink"
+          onClick={() => setExpanded(v => !v)}
+        >
+          {expanded ? "свернуть" : `ещё ${names.length - VISIBLE}`}
+        </button>
+        )
+      </span>
+    </span>
   );
 }

@@ -296,6 +296,26 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     // теоретически сам плагин может регистрировать там СВОЙ сервис -
     // ложное удаление стоит дороже, чем один лишний файл в выводе.
     static const std::regex meta_proguard_re(R"(^META-INF/proguard/.*)", std::regex::icase);
+    // БАГ-ФИКС (HANDOFF_URGENT п.15 - реальный jar пользователя, paper-*-
+    // nanocore.jar): Paperclip-загрузчики (io.papermc.paperclip.Paperclip)
+    // бандлят ПОЛНЫЙ Maven-репозиторий зависимостей ЦЕЛЕВОГО сервера под
+    // META-INF/libraries/<group>/.../<artifact>.jar (у пользователя - сотни
+    // файлов, десятки МБ) + бинарные bsdiff-патчи под
+    // META-INF/versions/*/*.jar.patch (энтропия 8.0/8.0 - не текст, а
+    // сжатый бинарный дифф). Это не ресурсы декомпилируемого кода, а
+    // собственный кэш/данные ЗАГРУЗЧИКА для восстановления патченного
+    // сервера при первом запуске - копировать их как "ресурсы плагина"
+    // бессмысленно и раздувает вывод на десятки-сотни МБ бесполезных
+    // бинарных дублей. Это и есть вторая часть жалобы "META-INF всё ещё
+    // остаётся" из п.15 (первая часть - неверный platform/library-детект
+    // самих .class, см. фикс в pom_builder.cpp известных библиотек выше).
+    // Учитываем и *.jar, и *.jar.patch под libraries/ - иногда сама
+    // библиотека доставляется не готовым .jar, а бинарным bsdiff-патчем
+    // поверх неё (см. asm-9.6.jar.patch/jopt-simple-*.jar.patch у
+    // пользователя - тот же принцип, что и META-INF/versions/*.jar.patch
+    // ниже, но под другим префиксом пути).
+    static const std::regex meta_paperclip_lib_re(R"(^META-INF/libraries/.*\.jar(\.patch)?$)", std::regex::icase);
+    static const std::regex meta_paperclip_patch_re(R"(^META-INF/versions/.*\.jar\.patch$)", std::regex::icase);
     for (auto& n : all_names) {
         if ((n.size() >= 6 && n.substr(n.size() - 6) == ".class") || (!n.empty() && n.back() == '/')) continue;
         if (n == "META-INF/MANIFEST.MF") continue;
@@ -303,6 +323,8 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
         if (std::regex_match(n, meta_maven_re)) continue;
         if (std::regex_match(n, meta_license_re)) continue;
         if (std::regex_match(n, meta_proguard_re)) continue;
+        if (std::regex_match(n, meta_paperclip_lib_re)) continue;
+        if (std::regex_match(n, meta_paperclip_patch_re)) continue;
         // НОВОЕ v1.8.0 (по вашей просьбе - "делай" по пункту META-INF/services):
         // META-INF/services/<полное.имя.Интерфейса> - файл Java SPI, ИМЯ
         // ФАЙЛА - это полное имя обслуживаемого интерфейса. Фильтруем
@@ -379,7 +401,22 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     // как fallback для Velocity/Bungee (без Bukkit-style plugin.yml) -
     // раньше в этом случае artifactId всегда брался из имени файла jar.
     auto pom_result = build_pom(jar_path, plugin_yml_text.value_or(""), external_dotted, all_names, zr, jr.platform.name);
-    write_text_file((fs::u8path(out_dir) / "pom.xml").u8string(), pom_result.pom_xml);
+    // БАГ-ФИКС (HANDOFF_URGENT п.5 - реальный jar пользователя, NanoCore.jar
+    // без plugin.yml/любого другого манифеста, platform.kind == Unknown):
+    // раньше pom.xml писался БЕЗУСЛОВНО, даже для generic-jar'а, про
+    // который мы вообще не знаем, плагин ли это, мод, самописная утилита
+    // или что-то ещё не для Minecraft - сгенерированный pom.xml при этом
+    // ВРАЛ в собственном комментарии ("Источники: plugin.yml + эвристика по
+    // импортам"), хотя никакого plugin.yml в jar'е не было вовсе. Пишем
+    // pom.xml только если это (а) НАЙДЕННЫЙ оригинал внутри jar
+    // (pom_result.source == "original" - это реальные данные, не догадка)
+    // или (б) платформа опознана хоть как-то (kind != Unknown - тогда хотя
+    // бы artifactId/groupId обоснованы платформенным манифестом). Для
+    // полностью неопознанного jar честнее не выдумывать Maven-структуру
+    // вообще, чем подсунуть pom.xml с ложным обоснованием.
+    if (pom_result.source == "original" || jr.platform.kind != PlatformKind::Unknown) {
+        write_text_file((fs::u8path(out_dir) / "pom.xml").u8string(), pom_result.pom_xml);
+    }
 
     // --- 9. Проверка легитимности (см. legitimacy_check.hpp) - ВСЕГДА все
     // источники, если явно не выключена. См. header legitimacy_check.hpp -
