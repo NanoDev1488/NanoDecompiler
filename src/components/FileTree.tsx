@@ -116,7 +116,37 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect }: Prop
   const { fileTreeWidth, setFileTreeWidth, setProjectSearchOpen } = useEngine();
   const onResizeDown = useResizeDrag("x", fileTreeWidth, setFileTreeWidth, 180, 420);
   const [query, setQuery] = useState("");
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // НОВОЕ v1.8.1 (HANDOFF-бэклог п.7 - "VS-Code-style персистентность
+  // collapse-state дерева файлов, сделана только для sortMode"): ключ -
+  // ПУТЬ узла ("java:some.pkg", ключи ресурсного дерева), а не job/jar id -
+  // так же, как VS Code помнит свёрнутые папки по пути, а не привязывает
+  // это к конкретному открытому файлу. Разные jar'ы часто делят одинаковые
+  // имена пакетов/папок (util, commands, listeners...) - если пользователь
+  // всегда сворачивает "com.google.gson", разумно сворачивать её везде, а
+  // не переспрашивать при каждом новом jar'е.
+  const [collapsed, setCollapsedState] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("nd:fileTreeCollapsed");
+      if (saved) {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr)) return new Set(arr.filter((x): x is string => typeof x === "string"));
+      }
+    } catch {
+      // localStorage недоступен или битый JSON - просто дефолт, не роняем компонент.
+    }
+    return new Set();
+  });
+  const setCollapsed = (updater: Set<string> | ((s: Set<string>) => Set<string>)) => {
+    setCollapsedState(prev => {
+      const next = typeof updater === "function" ? (updater as (s: Set<string>) => Set<string>)(prev) : updater;
+      try {
+        localStorage.setItem("nd:fileTreeCollapsed", JSON.stringify([...next]));
+      } catch {
+        // не критично - просто не запомнится до следующего запуска
+      }
+      return next;
+    });
+  };
   // НОВОЕ v1.7.3 (реальный запрос - настраиваемая сортировка списка файлов):
   // сортировка применяется ТОЛЬКО к порядку ФАЙЛОВ внутри пакета/папки -
   // сами пакеты/папки остаются в алфавитном порядке (предсказуемая
@@ -150,7 +180,14 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect }: Prop
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? files.filter(f => f.name.toLowerCase().includes(q)) : files;
+    // БАГ-ФИКС v1.8.1 (реальный пробел - искать пакет было НЕЛЬЗЯ вообще):
+    // раньше матчилось только f.name (имя файла) - поиск "listener" находил
+    // файл ТОЛЬКО если он сам назывался PlayerListener.java, но НЕ находил
+    // Handler.java, лежащий в пакете com.example.listener. В декомпиляторе,
+    // где пакетная структура - основной способ ориентироваться в сотнях
+    // файлов, это едва ли не более естественный запрос, чем поиск по имени
+    // файла. Матчим f.name ИЛИ f.pkg.
+    return q ? files.filter(f => f.name.toLowerCase().includes(q) || f.pkg.toLowerCase().includes(q)) : files;
   }, [files, query]);
 
   const javaGroups = useMemo(() => {
@@ -225,7 +262,13 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect }: Prop
     >
       <FileCode2 size={13} className="flex-none opacity-60" />
       <span className="flex-1 truncate">{f.name}</span>
-      {f.note && <TriangleAlert size={11} className="flex-none text-warn" />}
+      {/* БАГ-ФИКС v1.8.1 (в духе п.11 - "подсказки при наведении для ВСЕХ
+          индикаторов", тот же пробел нашёлся и тут): f.note - готовый
+          человекочитаемый текст (например "частичный вывод - см.
+          байткод"), но раньше просто ЛЕЖАЛ в данных и никак не
+          показывался - нужно было открывать файл, чтобы узнать, ЧТО
+          именно движок предупреждает. */}
+      {f.note && <TriangleAlert size={11} className="flex-none text-warn" title={f.note} />}
     </button>
   );
 
@@ -321,7 +364,7 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect }: Prop
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Фильтр по имени…"
+            placeholder="Фильтр по имени или пакету…"
             className="field mono h-[30px] pl-7 text-[11.5px]"
             spellCheck={false}
           />

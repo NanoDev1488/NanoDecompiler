@@ -132,8 +132,16 @@ const std::vector<KnownLibEntry>& known_libs() {
         {"com.sk89q.worldedit", "com.sk89q.worldedit", "worldedit-core", ""},
         {"com.sk89q.worldguard", "com.sk89q.worldguard", "worldguard-core", ""},
         {"org.bstats", "org.bstats", "bstats-bukkit", "статистика/телеметрия (bStats)"},
+        // БАГ-ФИКС v1.8.1 (та же логика, что и paper-api выше - см. фикс
+        // п.15): тут была ЕЩЁ и запись {"com.zaxxer", ...} (без ".hikari") -
+        // раз более специфичная com.zaxxer.hikari уже выше и detect_lib()
+        // возвращает ПЕРВОЕ совпадение, вторая запись была одновременно
+        // (а) мёртвым кодом для реальных HikariCP-классов - до неё
+        // очередь просто не доходила и (б) риском того же типа, что и
+        // io.papermc/paperclip - если у zaxxer.com когда-нибудь появится
+        // ДРУГая библиотека под com.zaxxer.*, она молча получила бы ярлык
+        // "HikariCP". Убрал широкую версию - специфичной достаточно.
         {"redis.clients.jedis", "redis.clients", "jedis", ""},
-        {"com.zaxxer", "com.zaxxer", "HikariCP", ""},
         {"org.bouncycastle", "org.bouncycastle", "bcprov-jdk18on", ""},
         {"okhttp3", "com.squareup.okhttp3", "okhttp", ""},
         {"okio", "com.squareup.okio", "okio", ""},
