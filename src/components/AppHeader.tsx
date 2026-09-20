@@ -102,13 +102,17 @@ export function AppHeader() {
         </button>
       )}
 
-      <button
-        className="btn btn-ghost hidden flex-none md:inline-flex"
-        onClick={() => setPaletteOpen(true)}
-        title="Палитра команд"
-      >
+      {/* БАГ-ФИКС v1.8.3 (HANDOFF_URGENT п.7 - "слишком много кнопок
+          тулбара"): была ЕДИНСТВЕННОЙ кнопкой в хедере, которая пропадала
+          ЦЕЛИКОМ на узких экранах (`hidden md:inline-flex`) - мышью
+          вызвать палитру команд было НЕЛЬЗЯ вообще, только Ctrl+K
+          (и то если человек о нём знает). Остальные кнопки того же ряда
+          (см. "Обновления" ниже) скрывают только ТЕКСТОВУЮ подпись,
+          сама кнопка+иконка/kbd-хинт остаётся кликабельной всегда -
+          привели к тому же паттерну вместо полного исчезновения. */}
+      <button className="btn btn-ghost flex-none" onClick={() => setPaletteOpen(true)} title="Палитра команд">
         <span className="kbd">Ctrl K</span>
-        <span className="text-faint">команды</span>
+        <span className="hidden text-faint md:inline">команды</span>
       </button>
 
       <button

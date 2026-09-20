@@ -64,7 +64,12 @@ export function Workspace() {
       <div className="flex min-h-0 flex-1 flex-col">
         {envIssue && <EnvBanner />}
         <div className="flex min-h-0 flex-1">
-          <FileTree files={selectedJob.files} openId={file?.id} onSelect={fid => selectFile(selectedJob.id, fid)} />
+          <FileTree
+            files={selectedJob.files}
+            openId={file?.id}
+            onSelect={fid => selectFile(selectedJob.id, fid)}
+            totalSourceLines={selectedJob.details?.stats.total_source_lines}
+          />
           <CodeView file={file} jobId={selectedJob.id} outDir={selectedJob.outDir} />
         </div>
       </div>

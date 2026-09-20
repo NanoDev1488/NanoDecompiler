@@ -518,6 +518,24 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
         std::string new_internal = renamer.friendly_class(internal);
         std::string dest = (fs::u8path(src_dir) / (new_internal + ".java")).u8string();
         write_text_file(dest, text);
+        // НОВОЕ v1.8.4 - см. комментарий у ProjectStats::file_notes в
+        // verify.hpp. Общая подстрока "не удалось безопасно" покрывает
+        // ОБА места, где движок встраивает предупреждение прямо в текст
+        // (fallback тела метода в engine.cpp и fallback static-
+        // инициализатора интерфейса в render_class.cpp) - одной проверкой,
+        // без дублирования списка маркеров в двух местах.
+        if (text.find("не удалось безопасно") != std::string::npos) {
+            stats.file_notes["src/main/java/" + new_internal + ".java"] =
+                "Частичный вывод - декомпилятор не смог безопасно восстановить часть кода, см. комментарии в файле";
+        }
+        // НОВОЕ v1.8.4 - см. ProjectStats::total_source_lines в verify.hpp.
+        // Специально БЕЗ проверки на пустую строку - фронтенд
+        // считает loc как content.split("\n").length, а split("\n") на ""
+        // даёт [""] (длина 1, не 0) - повторяем ту же арифметику 1-в-1,
+        // чтобы после ручного открытия всех файлов сумма f.loc сходилась
+        // с этим числом (иначе два счётчика тихо разъехались бы на пару
+        // строк и это выглядело бы как ещё один "врёт" баг).
+        stats.total_source_lines += 1 + std::count(text.begin(), text.end(), '\n');
         auto issues = check_brackets(text, new_internal + ".java");
         stats.bracket_issues.insert(stats.bracket_issues.end(), issues.begin(), issues.end());
 

@@ -1,6 +1,6 @@
 import { ExternalLink, X, FolderOpen, Star, TriangleAlert } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { fmtBytes, fmtNum, fmtSeconds, type Job } from "../lib/model";
+import { fmtBytes, fmtNum, fmtSeconds, joinOutDir, type Job } from "../lib/model";
 import { useEngine } from "../state/engine";
 
 // БАГ-ФИКС v1.8.0 «срочный CI-фикс» (реальный сбой сборки на macOS/Linux/
@@ -37,7 +37,7 @@ function GithubIcon({ size = 16, className }: { size?: number; className?: strin
 // строки) - details будет null, показываем честное "недоступно" вместо
 // пустых нулей.
 export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => void }) {
-  const { openOutput, toast } = useEngine();
+  const { openOutput, toast, addJarPaths } = useEngine();
   const d = job.details;
   // НОВОЕ v1.7.6: поиск похожих репозиториев на GitHub по имени плагина
   // и автору из plugin.yml (см. jarSummary.ts/main.ts::github:searchSimilar).
@@ -122,7 +122,14 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
               {d.stats.junk_catches_removed > 0 && (
                 <Row label="Пустых catch-блоков вычищено" value={fmtNum(d.stats.junk_catches_removed)} />
               )}
-              {job.status === "done" && <Row label="Время декомпиляции" value={fmtSeconds(job.elapsedMs / 1000)} />}
+              {/* БАГ-ФИКС v1.8.4 (реальная жалоба - "время декомпиляции
+                  врёт, всегда меньше секунды"): fmtSeconds(ms) САМА делит
+                  на 1000 внутри (см. model.ts) - тут ЕЩЁ РАЗ делили ДО
+                  вызова, двойное деление на 1000 схлопывало любое реальное
+                  время (несколько тысяч мс) в тысячные доли секунды,
+                  округлявшиеся до "0.00 s". Sidebar.tsx рядом вызывал
+                  fmtSeconds(job.elapsedMs) без лишнего деления - и был прав. */}
+              {job.status === "done" && <Row label="Время декомпиляции" value={fmtSeconds(job.elapsedMs)} />}
               {Object.keys(d.stats.import_conflicts).length > 0 && (
                 <div className="flex flex-col gap-1.5 rounded-lg border border-line bg-bg px-3 py-2">
                   <p className="kicker">
@@ -137,6 +144,41 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
                         <span className="text-ink/90">{simple}</span>: {dotted.join(", ")}
                       </li>
                     ))}
+                  </ul>
+                </div>
+              )}
+              {/* НОВОЕ v1.8.3 (HANDOFF_URGENT п.6 - "декомпиляция вложенных
+                  jar"): полная РЕКУРСИЯ внутри движка не реализована (это
+                  меняло бы C++ и требовало отдельной большой регрессии), но
+                  движок УЖЕ извлекает найденные вложенные jar как обычный
+                  ресурс на диск (см. process_jar.cpp) - так что вместо
+                  рекурсии просто предлагаем поставить УЖЕ извлечённый файл
+                  новым job'ом в ту же очередь, через тот же проверенный
+                  addJarPaths(), которым пользуется обычное "Открыть .jar". */}
+              {d.stats.embedded_jars.length > 0 && (
+                <div className="flex flex-col gap-1.5 rounded-lg border border-line bg-bg px-3 py-2">
+                  <p className="kicker">Вложенные jar внутри этого архива ({d.stats.embedded_jars.length})</p>
+                  <ul className="mono flex flex-col gap-1 text-[11px]">
+                    {d.stats.embedded_jars.map(relPath => {
+                      const sep = job.outDir.includes("\\") && !job.outDir.includes("/") ? "\\" : "/";
+                      const absPath = joinOutDir(job.outDir, relPath.split("/").join(sep));
+                      return (
+                        <li key={relPath} className="flex items-center justify-between gap-2">
+                          <span className="truncate text-dim" title={relPath}>
+                            {relPath}
+                          </span>
+                          <button
+                            className="btn btn-tonal h-6 flex-none px-2 text-[10.5px]"
+                            onClick={() => {
+                              addJarPaths([absPath]);
+                              toast(`Добавлено в очередь: ${relPath.split("/").pop()}`, "ok");
+                            }}
+                          >
+                            Декомпилировать тоже
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               )}

@@ -47,5 +47,5 @@ namespace nd {
 // классов в PluginDetailsModal.tsx больше не голый join(", ") на всю
 // ширину модалки при 10+ библиотеках - первые 3 + разворачиваемый счётчик
 // остальных.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.8.2";
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.8.3";
 }

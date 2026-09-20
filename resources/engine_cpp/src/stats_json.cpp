@@ -146,7 +146,17 @@ std::string stats_body_json(const ProjectStats& stats) {
     }
     o << "},";
     o << "\"synthetic_switchmap_classes_hidden\":" << stats.synthetic_switchmap_classes_hidden << ",";
-    o << "\"junk_catches_removed\":" << stats.junk_catches_removed;
+    o << "\"junk_catches_removed\":" << stats.junk_catches_removed << ",";
+    o << "\"total_source_lines\":" << stats.total_source_lines << ",";
+    o << "\"file_notes\":{";
+    {
+        size_t i = 0;
+        for (auto& [path, note] : stats.file_notes) {
+            if (i++) o << ",";
+            o << js(path) << ":" << js(note);
+        }
+    }
+    o << "}";
     o << "}";
     return o.str();
 }

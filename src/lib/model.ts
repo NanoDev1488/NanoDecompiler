@@ -10,6 +10,11 @@ export interface SourceFile {
   loc: number;
   /** предупреждение движка по этому файлу (обфускация, частичный вывод) */
   note?: string;
+  // БАГ-ФИКС v1.8.4: раньше бинарные файлы вообще не попадали в список
+  // (см. collectSourceFiles в state/engine.tsx) - теперь попадают, и это
+  // поле позволяет FileTree показать им отдельную иконку, не дожидаясь
+  // неудачной попытки readTextFile по клику.
+  isBinary?: boolean;
   /** undefined, пока содержимое не подгружено через window.nano.readTextFile */
   code?: string;
   /** БАГ-ФИКС: раньше при отказе readTextFile file.code просто оставался
@@ -85,6 +90,15 @@ export interface JobDetails {
     // уже есть для fallback_methods/library_classes_skipped.
     synthetic_switchmap_classes_hidden: number;
     junk_catches_removed: number;
+    // НОВОЕ v1.8.3 (HANDOFF_URGENT п.6) - см. process_jar.hpp::embedded_jars.
+    // Пути ОТНОСИТЕЛЬНО outDir (движок уже извлёк их как обычный ресурс -
+    // см. комментарий у addJarPaths в state/engine.tsx).
+    embedded_jars: string[];
+    // НОВОЕ v1.8.4 - см. verify.hpp::ProjectStats::total_source_lines.
+    total_source_lines: number;
+    // НОВОЕ v1.8.4 - см. verify.hpp::ProjectStats::file_notes. relPath ->
+    // текст предупреждения (используется для SourceFile.note в engine.tsx).
+    file_notes: Record<string, string>;
   };
 }
 

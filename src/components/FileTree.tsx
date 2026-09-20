@@ -5,6 +5,7 @@ import {
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
+  File,
   FileCode2,
   Folder,
   FolderOpen,
@@ -20,6 +21,14 @@ interface Props {
   files: SourceFile[];
   openId: string | undefined;
   onSelect(fileId: string): void;
+  // НОВОЕ v1.8.4 (реальная жалоба - "общее число строк растёт только по
+  // мере открытия файлов, не сразу после декомпиляции"): движок уже
+  // считает суммарную длину ВСЕХ сгенерированных .java при записи (см.
+  // ProjectStats::total_source_lines в verify.hpp) - если это число уже
+  // доступно, используем его напрямую вместо суммы f.loc по лениво
+  // подгруженным файлам. Undefined (job ещё бежит / старый job без этого
+  // поля в кэше) - падаем обратно на прежний лениво накапливаемый счёт.
+  totalSourceLines?: number;
 }
 
 // НОВОЕ v1.7.3 (HANDOFF-бэклог п.22): реальные вложенные папки ресурсов
@@ -146,7 +155,7 @@ function collectAllResKeys(nodes: ResTreeNode[]): string[] {
   return out;
 }
 
-export const FileTree = memo(function FileTree({ files, openId, onSelect }: Props) {
+export const FileTree = memo(function FileTree({ files, openId, onSelect, totalSourceLines }: Props) {
   const { fileTreeWidth, setFileTreeWidth, setProjectSearchOpen } = useEngine();
   const onResizeDown = useResizeDrag("x", fileTreeWidth, setFileTreeWidth, 180, 420);
   const [query, setQuery] = useState("");
@@ -247,7 +256,9 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect }: Prop
     });
 
   const filtering = query.trim().length > 0;
-  const totalLoc = useMemo(() => files.reduce((sum, f) => sum + f.loc, 0), [files]);
+  // БАГ-ФИКС v1.8.4 - см. комментарий у totalSourceLines в Props выше.
+  const lazyTotalLoc = useMemo(() => files.reduce((sum, f) => sum + f.loc, 0), [files]);
+  const totalLoc = totalSourceLines ?? lazyTotalLoc;
 
   // НОВОЕ v1.7.2 (HANDOFF-бэклог п.23), расширено в v1.7.3 на все уровни
   // вложенности дерева ресурсов, а в v1.8.2 - и на java (теперь тоже
@@ -266,7 +277,14 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect }: Prop
       style={{ paddingLeft: 22 + depth * 14 }}
       className="tree-row mono flex w-full items-center gap-1.5 rounded-md py-[5px] pr-2 text-left text-[12px]"
     >
-      <FileCode2 size={13} className="flex-none opacity-60" />
+      {/* БАГ-ФИКС v1.8.4 (та же сессия, что и включение бинарников в дерево
+          - см. collectSourceFiles): отдельная иконка для бинарных файлов,
+          чтобы было видно ДО клика, что это не текст/код. */}
+      {f.isBinary ? (
+        <File size={13} className="flex-none opacity-40" />
+      ) : (
+        <FileCode2 size={13} className="flex-none opacity-60" />
+      )}
       <span className="flex-1 truncate">{f.name}</span>
       {/* БАГ-ФИКС v1.8.1 (в духе п.11 - "подсказки при наведении для ВСЕХ
           индикаторов", тот же пробел нашёлся и тут): f.note - готовый

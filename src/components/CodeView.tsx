@@ -162,12 +162,27 @@ export const CodeView = memo(function CodeView({
           {file.loadError !== undefined ? (
             <div className="mono flex flex-col items-start gap-2 px-4 text-[11.5px]">
               <p className="text-err">// не удалось загрузить файл: {file.loadError}</p>
-              <button
-                className="btn btn-tonal h-7 text-[11px]"
-                onClick={() => jobId && selectFile(jobId, file.id)}
-              >
-                Повторить
-              </button>
+              {/* БАГ-ФИКС v1.8.3 (HANDOFF_URGENT п.7 - "hex-viewer бинарников"):
+                  полноценный hex-viewer - отдельная большая фича (новый IPC для
+                  чтения сырых байт + новый UI-компонент), не стал делать
+                  вслепую. Но бэкенд УЖЕ детектит бинарные файлы честной
+                  эвристикой (нулевой байт в первых 8000 байтах, см.
+                  fs:readTextFile в main.ts) - раньше при этой ОДНОЙ конкретной
+                  ошибке всё равно показывалась кнопка "Повторить", хотя для
+                  бинарника результат гарантированно тот же самый при каждой
+                  попытке. OpenInMenu (открыть в системном приложении / показать
+                  в папке) уже существует и работает для ЛЮБОГО файла - просто
+                  был виден только в хедере сверху, не рядом с самой ошибкой. */}
+              {/(?:похоже на )?бинарн/i.test(file.loadError) ? (
+                <p className="text-dim">
+                  Просмотр бинарных файлов внутри вьюера пока не поддерживается - воспользуйтесь кнопкой «Открыть
+                  в…» справа сверху (системное приложение или папка с файлом).
+                </p>
+              ) : (
+                <button className="btn btn-tonal h-7 text-[11px]" onClick={() => jobId && selectFile(jobId, file.id)}>
+                  Повторить
+                </button>
+              )}
             </div>
           ) : displayCode === undefined ? (
             <p className="mono px-4 text-[11.5px] text-faint">// загрузка…</p>

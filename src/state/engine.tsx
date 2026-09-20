@@ -37,6 +37,19 @@ const MAX_LOG_LINES = 800;
    в дереве файлов вовсе). Теперь читаемые текстовые форматы, которые
    реально встречаются в выводе движка, показываются тоже. */
 const VIEWABLE_EXT = /\.(java|ya?ml|xml|properties|json|md|txt|gitignore|gitattributes)$/i;
+// БАГ-ФИКС v1.8.4 (реальная жалоба - "почему бинарные ресурсы не
+// показываются в дереве файлов?"): VIEWABLE_EXT был не просто списком
+// "что подсвечивать особо" - он был WHITELIST'ом того, что вообще
+// ПОПАДАЕТ в дерево. Любой файл с расширением вне списка (.png, .jar -
+// включая только что добавленную кнопку "декомпилировать тоже" для
+// вложенных jar, .dat, .ttf, .ogg, любой бинарный ресурс плагина) молча
+// не добавлялся в SourceFile[] вообще - не "не открывается", а
+// физически отсутствовал в дереве, будто его нет в выводе. Раз бэкенд
+// (fs:readTextFile в main.ts) уже честно детектит бинарные файлы и
+// CodeView.tsx теперь показывает по этому поводу понятное сообщение
+// (см. фикс выше), безопасно показывать ЛЮБОЙ файл из вывода - попытка
+// прочитать его как текст произойдёт лениво, только по клику, и для
+// бинарника корректно упадёт в уже обработанный loadError-путь.
 
 async function collectSourceFiles(outDir: string, relDir = ""): Promise<SourceFile[]> {
   const res = await window.nano.listDir(outDir, relDir);
@@ -46,7 +59,7 @@ async function collectSourceFiles(outDir: string, relDir = ""): Promise<SourceFi
     const rel = relDir ? `${relDir}/${item.name}` : item.name;
     if (item.isDir) {
       out.push(...(await collectSourceFiles(outDir, rel)));
-    } else if (VIEWABLE_EXT.test(item.name)) {
+    } else {
       // БАГ-ФИКС (реальный, найден на настоящем EssentialsX - "группы
       // файлов называются именами самих файлов"): старый regex
       // `/\/[^/]+$/` требует СЛЭШ перед последним сегментом - для файла
@@ -60,7 +73,14 @@ async function collectSourceFiles(outDir: string, relDir = ""): Promise<SourceFi
       const stripped = rel.replace(/^src\/main\/(java|resources)\//, "");
       const lastSlash = stripped.lastIndexOf("/");
       const pkg = (lastSlash === -1 ? "" : stripped.slice(0, lastSlash)).replace(/\//g, ".");
-      out.push({ id: rid("f"), pkg: pkg || "(корень)", name: item.name, relPath: rel, loc: 0 });
+      out.push({
+        id: rid("f"),
+        pkg: pkg || "(корень)",
+        name: item.name,
+        relPath: rel,
+        loc: 0,
+        isBinary: !VIEWABLE_EXT.test(item.name),
+      });
     }
   }
   return out;
@@ -98,6 +118,14 @@ interface EngineApi {
   queuedCount: number;
 
   addFiles(list: FileList | File[]): void;
+  // НОВОЕ v1.8.3 (HANDOFF_URGENT п.6 - "декомпиляция вложенных jar"):
+  // раньше addJarPaths была внутренней деталью реализации addFiles/
+  // openFileDialog, наружу не отдавалась. Вложенные jar уже лежат на диске
+  // как обычный извлечённый ресурс (см. process_jar.cpp) - полноценная
+  // рекурсия внутри движка не нужна, достаточно поставить УЖЕ известный
+  // абсолютный путь новым job'ом через тот же самый проверенный пайплайн
+  // (дедупликация/outDir-коллизии/jarSummary - всё как для обычного jar).
+  addJarPaths(paths: string[]): void;
   openFileDialog(): void;
   startQueue(): void;
   stopRunning(): void;
@@ -555,6 +583,18 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       if (ok && job) {
         try {
           files = await collectSourceFiles(job.outDir);
+          // БАГ-ФИКС v1.8.4 (реальная жалоба - "тултип не вижу где" - сама
+          // ⚠-иконка на файле с предупреждением никогда не появлялась,
+          // потому что SourceFile.note нигде не заполнялся). job.details
+          // (patchJob чуть раньше, см. ниже по потоку лога) к этому моменту
+          // уже должен быть на job'е - движок печатает "##ND_RESULT:...##"
+          // ДО завершения процесса, до этого коллбэка. file_notes - карта
+          // relPath -> текст, собранная движком по тому же принципу, что и
+          // total_source_lines (см. process_jar.cpp/verify.hpp).
+          const notes = job.details?.stats.file_notes;
+          if (notes && Object.keys(notes).length) {
+            files = files.map(f => (notes[f.relPath] ? { ...f, note: notes[f.relPath] } : f));
+          }
         } catch {
           files = [];
         }
@@ -1123,7 +1163,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const api: EngineApi = {
     jobs, log, runningJob, runningElapsed, selectedJobId, selectedJob, openFileByJob,
     terminalOpen, logFilter, settings, settingsLoaded, settingsOpen, updateModalOpen, paletteOpen, projectSearchOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, installingTool, installProgress, iconThumbnails, updateInfo, toasts, queuedCount, sidebarWidth, fileTreeWidth, terminalHeight,
-    addFiles, openFileDialog, startQueue, stopRunning, stopAll, cancelJob, removeJob, clearQueue,
+    addFiles, addJarPaths, openFileDialog, startQueue, stopRunning, stopAll, cancelJob, removeJob, clearQueue,
     selectJob, selectFile, setLogFilter, toggleTerminal, clearLog, copyLog, copyText,
     openOutput, setSettingsOpen, setUpdateModalOpen, setSidebarWidth, setFileTreeWidth, setTerminalHeight, saveSettings, completeSetup, setPaletteOpen, setProjectSearchOpen,
     resolveEnvIssue, checkForUpdates, applyEngineUpdate, openClientDownload, checkEnv, installTool, toast, dismissToast,
