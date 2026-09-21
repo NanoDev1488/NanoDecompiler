@@ -22,6 +22,21 @@ using OrderedImportMap = std::vector<std::pair<std::string, std::string>>;
 using ImportConflicts = std::vector<std::pair<std::string, std::vector<std::string>>>;
 ImportConflicts check_import_collisions(const OrderedImportMap& imports);
 
+// НОВОЕ v1.8.4 (телеметрия по запросу пользователя - "сбор ошибок +
+// ближайшие 10 строк, полностью с байткодом"): один откат метода на
+// байткод, с контекстом ДО/ПОСЛЕ - для отправки в отчёт об ошибке.
+// Извлекается текстовым сканом уже сгенерированного .java (сам маркер +
+// дизассемблированные строки уже там как комментарии, см.
+// fallback_bytecode_listing() в engine.cpp) - НЕ требует протаскивать
+// новые данные через весь конвейер decompile_method_body/render_class.
+struct FallbackContext {
+    std::string file;                    // relPath - "src/main/java/.../Foo.java"
+    std::string method_hint;             // сигнатура метода, если удалось распознать из строки перед маркером
+    std::vector<std::string> java_before;  // до 10 строк ДО маркера
+    std::vector<std::string> bytecode;     // сам маркер + дизассемблированные строки
+    std::vector<std::string> java_after;   // до 10 строк ПОСЛЕ конца байткод-блока
+};
+
 struct ProjectStats {
     int total_methods = 0;
     int decompiled_methods = 0;
@@ -72,6 +87,8 @@ struct ProjectStats {
     // ОТНОСИТЕЛЬНО outDir (тот же формат, что SourceFile.relPath), значение -
     // короткий текст для тултипа.
     std::map<std::string, std::string> file_notes;
+    // НОВОЕ v1.8.4 - см. FallbackContext выше.
+    std::vector<FallbackContext> fallback_contexts;
     // malware_findings/decrypted_strings_owner/decrypted_strings_count/
     // legitimacy - НЕ читаются нигде внутри verify.py самого (summary_text
     // их не использует) - опущены здесь намеренно (не относятся к

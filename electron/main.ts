@@ -56,8 +56,17 @@ type Settings = {
   // пока false. По просьбе пользователя - лицензия на английском
   // (LICENSE_EULA.txt в корне проекта), автор NanoDev, t.me/NanoDev_mc.
   setupCompleted: boolean;
-  // НОВОЕ v1.7.6: язык интерфейса.
+  // НОВОЕ v1.8.4: язык интерфейса.
   language: "ru" | "en";
+  // НОВОЕ v1.8.4 (телеметрия - "сбор ошибок + отправка на сервер"): адрес
+  // мини-бэкенда (см. telemetry-server/) и переключатель. По умолчанию
+  // ВЫКЛЮЧЕНО - отчёт содержит фрагменты декомпилированного кода ЧУЖОГО
+  // плагина (не только метаданные о самом приложении), отправлять это
+  // молча без явного согласия пользователя нечестно. URL можно оставить
+  // предзаполненным - включение отдельным тумблером ничего не отправляет
+  // само по себе, отправка - только по нажатию кнопки на конкретном job'е.
+  telemetryEnabled: boolean;
+  telemetryUrl: string;
 };
 const DEFAULT_SETTINGS: Settings = {
   legitimacyCheck: true,
@@ -65,6 +74,8 @@ const DEFAULT_SETTINGS: Settings = {
   appIcon: "terminal",
   setupCompleted: false,
   language: "ru",
+  telemetryEnabled: false,
+  telemetryUrl: "http://195.179.231.14:15015/report",
 };
 
 function settingsPath(): string {
@@ -85,6 +96,8 @@ function loadSettings(): Settings {
       appIcon: parsed.appIcon === "terminal" || parsed.appIcon === "layers" ? parsed.appIcon : DEFAULT_SETTINGS.appIcon,
       setupCompleted: typeof parsed.setupCompleted === "boolean" ? parsed.setupCompleted : DEFAULT_SETTINGS.setupCompleted,
       language: parsed.language === "ru" || parsed.language === "en" ? parsed.language : DEFAULT_SETTINGS.language,
+      telemetryEnabled: typeof parsed.telemetryEnabled === "boolean" ? parsed.telemetryEnabled : DEFAULT_SETTINGS.telemetryEnabled,
+      telemetryUrl: typeof parsed.telemetryUrl === "string" && parsed.telemetryUrl ? parsed.telemetryUrl : DEFAULT_SETTINGS.telemetryUrl,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -728,6 +741,34 @@ ipcMain.handle("env:check", async () => {
 });
 
 ipcMain.handle("gui:version", async () => app.getVersion());
+
+// НОВОЕ v1.8.4 (телеметрия по запросу пользователя): report собирается
+// целиком в рендерере (там уже есть job.details со stats/fallback_contexts
+// и версии из gui:version/engine:version) - здесь только POST на
+// настроенный адрес. В main-процессе, а не в рендерере, потому что
+// рендерер - песочница без прямого сетевого fetch к произвольным хостам
+// (CSP) и потому что telemetryUrl читаем из тех же настроек на диске, а не
+// дублируем его копию во фронтенд-стейте.
+ipcMain.handle("telemetry:sendReport", async (_e, report: unknown) => {
+  const settings = loadSettings();
+  if (!settings.telemetryEnabled) return { ok: false, error: "телеметрия выключена в настройках" };
+  if (!settings.telemetryUrl) return { ok: false, error: "не задан адрес сервера телеметрии" };
+  try {
+    const res = await fetch(settings.telemetryUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(report),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) {
+      const bodyText = await res.text().catch(() => "");
+      return { ok: false, error: `сервер ответил ${res.status}${bodyText ? ": " + bodyText.slice(0, 300) : ""}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
 
 // Реальное управление окном для кастомного Titlebar.tsx - см. frame:false
 // выше (без родной рамки ОС нужно самим сворачивать/разворачивать/

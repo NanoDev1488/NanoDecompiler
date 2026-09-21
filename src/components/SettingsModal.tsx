@@ -380,6 +380,40 @@ export function SettingsModal() {
                 }
               />
             </div>
+
+            {/* НОВОЕ v1.8.4 (телеметрия по запросу пользователя): ВЫКЛЮЧЕНО
+                по умолчанию (см. DEFAULT_SETTINGS в main.ts) - отчёт
+                содержит фрагменты декомпилированного кода ЧУЖОГО плагина,
+                не только метаданные о самом приложении, поэтому отправка
+                требует явного включения ЗДЕСЬ И ОТДЕЛЬНОГО нажатия кнопки
+                "Отправить отчёт" на конкретном job'е - два независимых
+                подтверждения, не один общий тумблер. */}
+            <p className="kicker pt-4 pb-2">Отчёты об ошибках</p>
+            <div className="rounded-xl border border-line bg-bg px-3">
+              <Row
+                label="Отправка отчётов разработчику"
+                hint="фрагменты декомпилированного кода уходят на указанный сервер - только по кнопке на конкретном плагине, никогда автоматически"
+                control={
+                  <Toggle
+                    label="Отправка отчётов разработчику"
+                    checked={draft.telemetryEnabled}
+                    onChange={v => setDraft(d => ({ ...d, telemetryEnabled: v }))}
+                  />
+                }
+              />
+              <div className="h-px bg-line" />
+              <div className="py-2.5">
+                <p className="mb-1.5 text-[12.5px] text-ink/90">Адрес сервера</p>
+                <input
+                  className="field mono text-[12px]"
+                  value={draft.telemetryUrl}
+                  onChange={e => setDraft(d => ({ ...d, telemetryUrl: e.target.value }))}
+                  placeholder="http://<ip>:<port>/report"
+                  spellCheck={false}
+                  disabled={!draft.telemetryEnabled}
+                />
+              </div>
+            </div>
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">

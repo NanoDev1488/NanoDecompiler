@@ -99,6 +99,14 @@ export interface JobDetails {
     // НОВОЕ v1.8.4 - см. verify.hpp::ProjectStats::file_notes. relPath ->
     // текст предупреждения (используется для SourceFile.note в engine.tsx).
     file_notes: Record<string, string>;
+    // НОВОЕ v1.8.4 (телеметрия) - см. verify.hpp::FallbackContext.
+    fallback_contexts: {
+      file: string;
+      method_hint: string;
+      java_before: string[];
+      bytecode: string[];
+      java_after: string[];
+    }[];
   };
 }
 

@@ -25,6 +25,7 @@ import {
   type Toast,
   type ToastKind,
 } from "../lib/model";
+import { buildTelemetryReport } from "../lib/telemetry";
 
 const MAX_LOG_LINES = 800;
 
@@ -157,6 +158,8 @@ interface EngineApi {
   checkEnv(): void;
   installTool(which: "java" | "maven"): void;
   toast(msg: string, kind?: ToastKind): void;
+  // НОВОЕ v1.8.4 - см. sendErrorReport в реализации ниже.
+  sendErrorReport(jobId: string, comment: string): Promise<void>;
   dismissToast(id: number): void;
 }
 
@@ -255,6 +258,29 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       window.setTimeout(() => dismissToast(id), 3600);
     },
     [dismissToast],
+  );
+
+  // НОВОЕ v1.8.4 (телеметрия по запросу пользователя): собирает отчёт
+  // (buildTelemetryReport - версии + stats/fallback_contexts из уже
+  // загруженного job.details) и шлёт через IPC -> main-процесс -> fetch на
+  // telemetryUrl из настроек. Ничего не отправляется само по себе - только
+  // по явному вызову (кнопка в PluginDetailsModal), даже если
+  // telemetryEnabled включён в настройках - это отдельная защита ОТ
+  // случайной массовой отправки чужого кода, а не просто формальность.
+  const sendErrorReport = useCallback(
+    async (jobId: string, comment: string) => {
+      const job = jobsRef.current.find(j => j.id === jobId);
+      if (!job) return;
+      try {
+        const report = await buildTelemetryReport(job, comment);
+        const res = await window.nano.sendTelemetryReport(report);
+        if (res.ok) toast("Отчёт отправлен", "ok");
+        else toast(`Не удалось отправить отчёт: ${res.error ?? "неизвестная ошибка"}`, "err");
+      } catch (e) {
+        toast(`Не удалось отправить отчёт: ${String(e)}`, "err");
+      }
+    },
+    [toast],
   );
 
   const checkEnv = useCallback(() => {
@@ -1167,6 +1193,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     selectJob, selectFile, setLogFilter, toggleTerminal, clearLog, copyLog, copyText,
     openOutput, setSettingsOpen, setUpdateModalOpen, setSidebarWidth, setFileTreeWidth, setTerminalHeight, saveSettings, completeSetup, setPaletteOpen, setProjectSearchOpen,
     resolveEnvIssue, checkForUpdates, applyEngineUpdate, openClientDownload, checkEnv, installTool, toast, dismissToast,
+    sendErrorReport,
   };
 
   return (

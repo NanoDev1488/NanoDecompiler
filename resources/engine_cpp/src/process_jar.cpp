@@ -75,6 +75,67 @@ std::string dotted_to_path_prefix(const std::string& dotted) {
 
 bool looks_obfuscated_wrapper(const std::string& name, const std::string& kind) { return looks_obfuscated(name, kind); }
 
+// НОВОЕ v1.8.4 (телеметрия - "сбор ошибок + 10 строк контекста, полностью
+// с байткодом"): сканирует уже сгенерированный текст класса и вытаскивает
+// каждый откат метода на байткод вместе с окружением. Работает ЧИСТО
+// текстовым сканом уже готового text - специально НЕ трогает
+// decompile_method_body/render_class.cpp (см. HANDOFF-принцип "не менять
+// движковую логику декомпиляции без отдельной регрессионной сессии") -
+// маркер и дизассемблированные строки и так уже там, просто вырезаем.
+const std::string kFallbackMarkerSub = "не удалось безопасно декомпилировать тело метода, показан байткод";
+
+std::vector<FallbackContext> extract_fallback_contexts(const std::string& text, const std::string& rel_path) {
+    std::vector<FallbackContext> out;
+    std::vector<std::string> lines;
+    {
+        std::istringstream iss(text);
+        std::string line;
+        while (std::getline(iss, line)) lines.push_back(line);
+    }
+    constexpr size_t kCtx = 10;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        if (lines[i].find(kFallbackMarkerSub) == std::string::npos) continue;
+        // pad - ведущие пробелы маркерной строки; строки байткода печатаются
+        // с ТЕМ ЖЕ отступом + "// " (см. fallback_bytecode_listing()).
+        size_t pad_len = lines[i].find_first_not_of(' ');
+        if (pad_len == std::string::npos) pad_len = 0;
+        std::string comment_prefix = lines[i].substr(0, pad_len) + "// ";
+
+        FallbackContext ctx;
+        ctx.file = rel_path;
+        size_t before_start = i >= kCtx ? i - kCtx : 0;
+        for (size_t k = before_start; k < i; ++k) ctx.java_before.push_back(lines[k]);
+        // Лучшая попытка угадать сигнатуру метода - ближайшая непустая
+        // строка ДО маркера, похожая на объявление метода (есть "(" и "{"
+        // на конце после trim). Не критично, если не найдётся - тогда
+        // просто пусто, это ТОЛЬКО подсказка для человека, читающего отчёт.
+        for (auto it = ctx.java_before.rbegin(); it != ctx.java_before.rend(); ++it) {
+            std::string t = *it;
+            size_t a = t.find_first_not_of(' ');
+            size_t b = t.find_last_not_of(' ');
+            if (a == std::string::npos) continue;
+            std::string trimmed = t.substr(a, b - a + 1);
+            if (trimmed.find('(') != std::string::npos && !trimmed.empty() && trimmed.back() == '{') {
+                ctx.method_hint = trimmed;
+                break;
+            }
+        }
+
+        ctx.bytecode.push_back(lines[i]);
+        size_t j = i + 1;
+        while (j < lines.size() && starts_with(lines[j], comment_prefix)) {
+            ctx.bytecode.push_back(lines[j]);
+            ++j;
+        }
+        size_t after_end = std::min(lines.size(), j + kCtx);
+        for (size_t k = j; k < after_end; ++k) ctx.java_after.push_back(lines[k]);
+
+        out.push_back(std::move(ctx));
+        i = j - 1;  // не пересканировать уже забранный байткод-блок построчно
+    }
+    return out;
+}
+
 }  // namespace
 
 JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::string& out_dir, bool skip_legitimacy, bool print_progress) {
@@ -518,15 +579,32 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
         std::string new_internal = renamer.friendly_class(internal);
         std::string dest = (fs::u8path(src_dir) / (new_internal + ".java")).u8string();
         write_text_file(dest, text);
-        // НОВОЕ v1.8.4 - см. комментарий у ProjectStats::file_notes в
-        // verify.hpp. Общая подстрока "не удалось безопасно" покрывает
-        // ОБА места, где движок встраивает предупреждение прямо в текст
-        // (fallback тела метода в engine.cpp и fallback static-
-        // инициализатора интерфейса в render_class.cpp) - одной проверкой,
-        // без дублирования списка маркеров в двух местах.
-        if (text.find("не удалось безопасно") != std::string::npos) {
+        // БАГ-ФИКС v1.8.4 (реальная жалоба - "не везде где неполная
+        // декомпиляция ставит значок"): раньше проверялась ТОЛЬКО подстрока
+        // "не удалось безопасно" - она покрывает fallback тела метода
+        // (engine.cpp) и fallback static-инициализатора интерфейса
+        // (render_class.cpp), но пропускает ТРЕТИЙ случай - предупреждение
+        // "ВНИМАНИЕ: конструктор этого enum принимает аргументы..."
+        // (render_class.cpp) - тоже частичный вывод, и даже более важный:
+        // явно написано "НЕ СКОМПИЛИРУЕТСЯ как есть". "ВНИМАНИЕ:" одной
+        // подстрокой все три случая не покрывает (fallback тела метода не
+        // содержит этого слова вообще) - нужны ОБА варианта через ИЛИ.
+        bool has_fallback_marker = text.find("не удалось безопасно") != std::string::npos;
+        bool has_enum_ctor_warning = text.find("ВНИМАНИЕ: конструктор этого enum") != std::string::npos;
+        if (has_fallback_marker || has_enum_ctor_warning) {
             stats.file_notes["src/main/java/" + new_internal + ".java"] =
-                "Частичный вывод - декомпилятор не смог безопасно восстановить часть кода, см. комментарии в файле";
+                has_fallback_marker
+                    ? "Частичный вывод - декомпилятор не смог безопасно восстановить часть кода, см. комментарии в файле"
+                    : "Частичный вывод - конструктор enum с аргументами восстановлен не полностью, файл НЕ скомпилируется как есть, см. комментарии в файле";
+        }
+        // НОВОЕ v1.8.4 - см. extract_fallback_contexts() выше. Отдельно от
+        // file_notes: тут нужен именно байткод-блок (маркер + дизассемблированные
+        // строки), которого у enum-конструкторного предупреждения нет - его
+        // extract_fallback_contexts() просто не найдёт (ищет конкретный
+        // маркер метода), это ожидаемо и ничего не ломает.
+        if (has_fallback_marker) {
+            auto ctxs = extract_fallback_contexts(text, "src/main/java/" + new_internal + ".java");
+            stats.fallback_contexts.insert(stats.fallback_contexts.end(), ctxs.begin(), ctxs.end());
         }
         // НОВОЕ v1.8.4 - см. ProjectStats::total_source_lines в verify.hpp.
         // Специально БЕЗ проверки на пустую строку - фронтенд

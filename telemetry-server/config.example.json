@@ -1,0 +1,6 @@
+{
+  "botToken": "123456789:AAExampleBotTokenGoesHere",
+  "chatId": "123456789",
+  "port": 8787,
+  "reportSecret": ""
+}

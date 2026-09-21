@@ -28,6 +28,9 @@ export type AppSettings = {
   // полный перевод всех экранов приложения - отдельная большая задача,
   // это ПЕРВЫЙ ШАГ (инфраструктура + один экран), не полное покрытие.
   language: "ru" | "en";
+  // НОВОЕ v1.8.4 - см. комментарий у Settings.telemetryEnabled в main.ts.
+  telemetryEnabled: boolean;
+  telemetryUrl: string;
 };
 
 contextBridge.exposeInMainWorld("nano", {
@@ -102,6 +105,10 @@ contextBridge.exposeInMainWorld("nano", {
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke("settings:get"),
   setSettings: (partial: Partial<AppSettings>): Promise<AppSettings & { ok: boolean; error?: string }> =>
     ipcRenderer.invoke("settings:set", partial),
+  // НОВОЕ v1.8.4 (телеметрия): report собирается в рендерере (см.
+  // buildTelemetryReport в state/engine.tsx), тут только транспорт.
+  sendTelemetryReport: (report: unknown): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("telemetry:sendReport", report),
   // HANDOFF_52: мини-IDE - см. main.ts::fs:listDir/fs:readTextFile.
   listDir: (root: string, relDir: string): Promise<{ ok: boolean; items?: { name: string; isDir: boolean }[]; error?: string }> =>
     ipcRenderer.invoke("fs:listDir", root, relDir),

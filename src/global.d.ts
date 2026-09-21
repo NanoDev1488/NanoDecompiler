@@ -1,6 +1,13 @@
 export {};
 
 declare global {
+  // НОВОЕ v1.8.4 - см. vite.config.mts (define) + src/lib/telemetry.ts.
+  // Подставляется Vite на этапе сборки, ЗДЕСЬ - только объявление типа для
+  // TS. БАГ-ФИКС: изначально объявил СНАРУЖИ declare global {} - файл
+  // становится модулем из-за export {} выше, top-level declare const вне
+  // declare global виден только внутри ЭТОГО модуля, а не глобально.
+  const BUILD_COMMIT: string;
+
   interface Window {
     nano: {
       selectJar: () => Promise<string[]>;
@@ -75,10 +82,41 @@ declare global {
       onDownloadProgress: (
         cb: (e: { downloaded: number; total: number | null; kind: "client" | "engine" }) => void
       ) => () => void;
-      getSettings: () => Promise<{ legitimacyCheck: boolean; autoUpdateCheck: boolean; appIcon: "terminal" | "layers"; setupCompleted: boolean }>;
+      // БАГ-ФИКС v1.8.4 (эта строка уже была не синхронна с preload.ts до
+      // моих правок - не хватало language, добавленного в v1.7.6; заодно
+      // добавляю telemetryEnabled/telemetryUrl из этой сессии).
+      getSettings: () => Promise<{
+        legitimacyCheck: boolean;
+        autoUpdateCheck: boolean;
+        appIcon: "terminal" | "layers";
+        setupCompleted: boolean;
+        language: "ru" | "en";
+        telemetryEnabled: boolean;
+        telemetryUrl: string;
+      }>;
       setSettings: (
-        partial: Partial<{ legitimacyCheck: boolean; autoUpdateCheck: boolean; appIcon: "terminal" | "layers"; setupCompleted: boolean }>
-      ) => Promise<{ legitimacyCheck: boolean; autoUpdateCheck: boolean; appIcon: "terminal" | "layers"; setupCompleted: boolean; ok: boolean; error?: string }>;
+        partial: Partial<{
+          legitimacyCheck: boolean;
+          autoUpdateCheck: boolean;
+          appIcon: "terminal" | "layers";
+          setupCompleted: boolean;
+          language: "ru" | "en";
+          telemetryEnabled: boolean;
+          telemetryUrl: string;
+        }>
+      ) => Promise<{
+        legitimacyCheck: boolean;
+        autoUpdateCheck: boolean;
+        appIcon: "terminal" | "layers";
+        setupCompleted: boolean;
+        language: "ru" | "en";
+        telemetryEnabled: boolean;
+        telemetryUrl: string;
+        ok: boolean;
+        error?: string;
+      }>;
+      // НОВОЕ v1.8.4 - см. preload.ts::sendTelemetryReport.
+      sendTelemetryReport: (report: unknown) => Promise<{ ok: boolean; error?: string }>;
       getAppIconThumbnails: () => Promise<{ terminal: string | null; layers: string | null }>;
       listDir: (root: string, relDir: string) => Promise<{ ok: boolean; items?: { name: string; isDir: boolean }[]; error?: string }>;
       readTextFile: (root: string, relPath: string) => Promise<{ ok: boolean; content?: string; size?: number; error?: string }>;

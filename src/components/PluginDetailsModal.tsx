@@ -37,11 +37,13 @@ function GithubIcon({ size = 16, className }: { size?: number; className?: strin
 // строки) - details будет null, показываем честное "недоступно" вместо
 // пустых нулей.
 export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => void }) {
-  const { openOutput, toast, addJarPaths } = useEngine();
+  const { openOutput, toast, addJarPaths, sendErrorReport } = useEngine();
   const d = job.details;
   // НОВОЕ v1.7.6: поиск похожих репозиториев на GitHub по имени плагина
   // и автору из plugin.yml (см. jarSummary.ts/main.ts::github:searchSimilar).
   const [ghLoading, setGhLoading] = useState(false);
+  // НОВОЕ v1.8.4 - см. кнопку "Отправить отчёт" ниже.
+  const [sendingReport, setSendingReport] = useState(false);
   const [ghResults, setGhResults] = useState<
     { name: string; fullName: string; url: string; description: string | null; stars: number }[] | null
   >(null);
@@ -110,7 +112,36 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
                 value={`${fmtNum(d.stats.decompiled_methods)} / ${fmtNum(d.stats.total_methods)} (${d.stats.decompiled_pct.toFixed(1)}%)`}
               />
               {d.stats.fallback_methods > 0 && (
-                <Row label="Откат на байткод" value={`${fmtNum(d.stats.fallback_methods)} метод(ов) - см. .java с комментарием`} />
+                <>
+                  <Row label="Откат на байткод" value={`${fmtNum(d.stats.fallback_methods)} метод(ов) - см. .java с комментарием`} />
+                  {/* НОВОЕ v1.8.4 (телеметрия по запросу пользователя):
+                      кнопка ТОЛЬКО когда реально есть что отправлять
+                      (d.stats.fallback_contexts). Отправка молчит, пока
+                      telemetryEnabled выключен в настройках - main.ts сам
+                      проверит и вернёт понятную ошибку тостом, тут не
+                      дублируем эту проверку. */}
+                  {d.stats.fallback_contexts.length > 0 && (
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-line bg-bg px-3 py-2">
+                      <span className="text-[11px] text-dim">
+                        Отправить контекст {d.stats.fallback_contexts.length} отката(ов) разработчику
+                      </span>
+                      <button
+                        className="btn btn-tonal h-7 flex-none text-[11px]"
+                        disabled={sendingReport}
+                        onClick={async () => {
+                          setSendingReport(true);
+                          try {
+                            await sendErrorReport(job.id, "");
+                          } finally {
+                            setSendingReport(false);
+                          }
+                        }}
+                      >
+                        {sendingReport ? "Отправка…" : "Отправить отчёт"}
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
               {/* БАГ-ФИКС v1.8.2 - см. комментарий у полей в model.ts. */}
               {d.stats.synthetic_switchmap_classes_hidden > 0 && (
@@ -160,8 +191,19 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
                   <p className="kicker">Вложенные jar внутри этого архива ({d.stats.embedded_jars.length})</p>
                   <ul className="mono flex flex-col gap-1 text-[11px]">
                     {d.stats.embedded_jars.map(relPath => {
+                      // БАГ-ФИКС v1.8.4 (реальная жалоба - "путь в джарнике
+                      // один, а для запуска декомпилера пишет другой"):
+                      // embedded_jars хранит СЫРОЙ путь записи внутри
+                      // исходного jar (напр. "bundled/servers/.../x.jar"),
+                      // но на диск движок копирует ЛЮБОЙ обычный ресурс под
+                      // src/main/resources/ (см. res_dir в process_jar.cpp) -
+                      // забыл добавить этот префикс, из-за чего кнопка
+                      // пыталась запустить декомпилятор на несуществующем
+                      // пути (outDir/bundled/... вместо
+                      // outDir/src/main/resources/bundled/...).
                       const sep = job.outDir.includes("\\") && !job.outDir.includes("/") ? "\\" : "/";
-                      const absPath = joinOutDir(job.outDir, relPath.split("/").join(sep));
+                      const onDiskRelPath = "src/main/resources/" + relPath;
+                      const absPath = joinOutDir(job.outDir, onDiskRelPath.split("/").join(sep));
                       return (
                         <li key={relPath} className="flex items-center justify-between gap-2">
                           <span className="truncate text-dim" title={relPath}>

@@ -157,6 +157,17 @@ std::string stats_body_json(const ProjectStats& stats) {
         }
     }
     o << "}";
+    o << ",\"fallback_contexts\":[";
+    {
+        size_t i = 0;
+        for (auto& c : stats.fallback_contexts) {
+            if (i++) o << ",";
+            o << "{\"file\":" << js(c.file) << ",\"method_hint\":" << js(c.method_hint) << ",\"java_before\":"
+              << strarr(c.java_before) << ",\"bytecode\":" << strarr(c.bytecode) << ",\"java_after\":" << strarr(c.java_after)
+              << "}";
+        }
+    }
+    o << "]";
     o << "}";
     return o.str();
 }
