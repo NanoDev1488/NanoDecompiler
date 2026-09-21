@@ -136,6 +136,67 @@ std::vector<FallbackContext> extract_fallback_contexts(const std::string& text, 
     return out;
 }
 
+// НОВОЕ v1.9.5 (прямая просьба пользователя - "чтобы абсолютно все $ кроме
+// которые в ""/'' убирались, из-за них плагин не компилируется обратно"):
+// раньше $ убирался только ВЫБОРОЧНО - при сплите внутренних классов
+// (friendly_class) и в looks_obfuscated() для имён методов/полей. Этот
+// финальный текстовый проход - гарантия того, что СНАРУЖИ строковых/char-
+// литералов $ не останется НИГДЕ в готовом .java, независимо от того,
+// откуда он взялся и покрыт ли этот случай уже существующей логикой.
+// Простой посимвольный автомат состояний - код / строка / char-литерал,
+// с корректной обработкой '\' экранирования внутри обоих видов литералов
+// (иначе `"\\$"` или `"a\"$"` сломали бы границы строки). Комментарии
+// (// и /* */) НАМЕРЕННО не выделены отдельным состоянием - $ чистится и
+// в них тоже (на компиляцию не влияет, а пользователь не делал для
+// комментариев исключения - только для строк/char-литералов).
+std::string strip_dollar_outside_literals(const std::string& text) {
+    std::string out;
+    out.reserve(text.size());
+    enum class St { Code, Str, Chr, Esc };
+    St state = St::Code;
+    St return_state = St::Code;  // куда вернуться после экранированного символа
+    for (char c : text) {
+        switch (state) {
+            case St::Code:
+                if (c == '"') {
+                    state = St::Str;
+                    out += c;
+                } else if (c == '\'') {
+                    state = St::Chr;
+                    out += c;
+                } else if (c == '$') {
+                    out += '_';
+                } else {
+                    out += c;
+                }
+                break;
+            case St::Str:
+                out += c;
+                if (c == '\\') {
+                    state = St::Esc;
+                    return_state = St::Str;
+                } else if (c == '"') {
+                    state = St::Code;
+                }
+                break;
+            case St::Chr:
+                out += c;
+                if (c == '\\') {
+                    state = St::Esc;
+                    return_state = St::Chr;
+                } else if (c == '\'') {
+                    state = St::Code;
+                }
+                break;
+            case St::Esc:
+                out += c;
+                state = return_state;
+                break;
+        }
+    }
+    return out;
+}
+
 }  // namespace
 
 JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::string& out_dir, bool skip_legitimacy, bool print_progress) {
@@ -572,6 +633,14 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
             auto pr = render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, switchmap_tables);
             text = pr.first;
             cls_imports = pr.second;
+            // НОВОЕ v1.9.5 (прямая просьба пользователя - "чтобы абсолютно
+            // все $ кроме которые в строках/char-литералах убирались, из-за
+            // них плагин не компилируется обратно"): применяем СРАЗУ после
+            // рендера, ДО write_text_file/подсчёта строк/детекта fallback -
+            // все нижестоящие потребители text (total_source_lines,
+            // file_notes, fallback_contexts) видят уже очищенный текст, а
+            // не рассинхронизированную версию.
+            text = strip_dollar_outside_literals(text);
         } catch (const std::exception& e) {
             text = "// ОШИБКА рендеринга класса " + internal + ": " + e.what() + "\n";
         }

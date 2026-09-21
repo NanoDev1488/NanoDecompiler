@@ -4,7 +4,9 @@ import {
   COLOR_CONCAT_RE,
   COLOR_METHOD_CALL_RE,
   GENERIC_COLOR_CALL_RE,
+  lastColorHexInString,
   MC_CODE_RE,
+  MC_COLOR_NAME_HEX,
   renderMcColored,
   renderNamedColorText,
   renderUnknownColorMarked,
@@ -52,6 +54,12 @@ interface Token {
   // вида `Foo.bar(` сразу ПОСЛЕ конкатенации с частью строки, где уже был
   // цветовой сигнал на этой же строке (см. sawColorSignal в tokenizeLine).
   isChainedColorCall?: boolean;
+  // НОВОЕ v1.9.5 (доработка п.8 - "унаследованный цвет вместо нейтрального
+  // серого для method1()-подобных цепочек"): hex цвета, действующего на
+  // момент этого токена (от ChatColor.CONST/сырых §-кодов РАНЬШЕ на этой
+  // же строке) - используется ТОЛЬКО для isGenericColorCall/
+  // isChainedColorCall (там, где сам формат неизвестен, но контекст ясен).
+  inheritedColor?: string | null;
 }
 
 function tokenizeLine(line: string): Token[] {
@@ -64,6 +72,12 @@ function tokenizeLine(line: string): Token[] {
   // `+ Вызов("...")` на ТОЙ ЖЕ строке с высокой вероятностью тоже часть
   // того же цветного сообщения (см. CHAIN_CALL_AFTER_PLUS_RE в mcColors.ts).
   let sawColorSignal = false;
+  // НОВОЕ v1.9.5 - см. inheritedColor в Token выше. Обновляется в ТРЁХ
+  // местах: (1) именованный цветовой метод/enum-константа (ChatColor.RED),
+  // (2) сырой §/&-код ВНУТРИ строкового литерала, (3) НЕ обновляется для
+  // isGenericColorCall/isChainedColorCall - там цвет неизвестен, только
+  // читаем текущий, не перезаписываем.
+  let currentColorHex: string | null = null;
   while ((m = TOKEN_RE.exec(line)) !== null) {
     if (m.index > last) out.push({ text: line.slice(last, m.index), cls: null });
     const [, block, line2, str, chr, ann, num, word] = m;
@@ -76,6 +90,19 @@ function tokenizeLine(line: string): Token[] {
     let colorMethod: string | null = null;
     let isGenericColorCall = false;
     let isChainedColorCall = false;
+    let inheritedColor: string | null = null;
+    // НОВОЕ v1.9.5: `ChatColor.RED`/`NamedTextColor.RED` как ГОЛАЯ
+    // enum-константа (не вызов метода, не конкатенация со строкой сразу
+    // после) - update currentColorHex, чтобы дальнейшие method1()-подобные
+    // цепочки уже знали актуальный цвет, даже если constant используется
+    // отдельно (например, присвоен переменной чуть раньше по коду).
+    if (word && word === word.toUpperCase() && MC_COLOR_NAME_HEX[word.toLowerCase()]) {
+      const before = line.slice(0, m.index);
+      if (/\.\s*$/.test(before) && /\b(?:ChatColor|NamedTextColor|TextColor)\.\s*$/.test(before)) {
+        currentColorHex = MC_COLOR_NAME_HEX[word.toLowerCase()];
+        sawColorSignal = true;
+      }
+    }
     if (str) {
       // НОВОЕ v1.7.5 (по прямой просьбе - "детект вызовов цветовых
       // методов, не только сырых &-кодов"): смотрим на текст ПЕРЕД этой
@@ -85,16 +112,24 @@ function tokenizeLine(line: string): Token[] {
       const namedMatch = COLOR_METHOD_CALL_RE.exec(before) ?? COLOR_CONCAT_RE.exec(before);
       if (namedMatch) {
         colorMethod = namedMatch[1];
+        currentColorHex = MC_COLOR_NAME_HEX[colorMethod.toLowerCase()] ?? currentColorHex;
       } else if (GENERIC_COLOR_CALL_RE.test(before)) {
         isGenericColorCall = true;
       } else if (sawColorSignal && CHAIN_CALL_AFTER_PLUS_RE.test(before)) {
         isChainedColorCall = true;
       }
+      if (isGenericColorCall || isChainedColorCall) {
+        inheritedColor = currentColorHex;
+      } else {
+        // Обычная строка (в т.ч. с сырыми §/&-кодами) - обновляем текущий
+        // цвет по её СОБСТВЕННОМУ содержимому для последующих токенов.
+        currentColorHex = lastColorHexInString(str, currentColorHex);
+      }
       if (colorMethod || isGenericColorCall || isChainedColorCall || MC_CODE_RE.test(str)) {
         sawColorSignal = true;
       }
     }
-    out.push({ text: m[0], cls, isStr: !!str, colorMethod, isGenericColorCall, isChainedColorCall });
+    out.push({ text: m[0], cls, isStr: !!str, colorMethod, isGenericColorCall, isChainedColorCall, inheritedColor });
     last = m.index + m[0].length;
   }
   if (last < line.length) out.push({ text: line.slice(last), cls: null });
@@ -112,11 +147,11 @@ function renderLine(line: string, key: number): ReactNode {
           </span>
         ) : t.isStr && t.isGenericColorCall ? (
           <span key={i} className="tok-s">
-            {renderUnknownColorMarked(t.text)}
+            {renderUnknownColorMarked(t.text, t.inheritedColor)}
           </span>
         ) : t.isStr && t.isChainedColorCall ? (
           <span key={i} className="tok-s">
-            {renderUnknownColorMarked(t.text)}
+            {renderUnknownColorMarked(t.text, t.inheritedColor)}
           </span>
         ) : t.isStr && MC_CODE_RE.test(t.text) ? (
           <span key={i} className="tok-s">

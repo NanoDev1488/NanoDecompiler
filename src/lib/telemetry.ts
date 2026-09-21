@@ -29,19 +29,29 @@ export interface TelemetryReport {
   }[];
 }
 
-export async function buildTelemetryReport(job: Job, userComment: string): Promise<TelemetryReport> {
+// НОВОЕ v1.9.5: версии приложения/движка нужны и job-отчёту, и
+// произвольному багрепорту (см. buildFreeformBugReport ниже) - вынесено,
+// чтобы не дублировать.
+async function getAppVersions(): Promise<{ app_version: string; engine_version: string }> {
   const [guiVersion, engineVersionRes] = await Promise.all([
     window.nano.getGuiVersion().catch(() => "unknown"),
     window.nano.getEngineVersion().catch(() => ({ ok: false as const })),
   ]);
-  const stats = job.details?.stats;
   return {
     app_version: guiVersion,
+    engine_version: engineVersionRes.ok && "version" in engineVersionRes ? (engineVersionRes.version ?? "unknown") : "unknown",
+  };
+}
+
+export async function buildTelemetryReport(job: Job, userComment: string): Promise<TelemetryReport> {
+  const versions = await getAppVersions();
+  const stats = job.details?.stats;
+  return {
+    ...versions,
     // НОВОЕ: коммит подставляется Vite на этапе сборки (см. define в
     // vite.config.mts - `git rev-parse --short HEAD` в момент билда) -
     // при локальном `npm start` вне git-чекаута честно "unknown".
     app_commit: BUILD_COMMIT,
-    engine_version: engineVersionRes.ok && "version" in engineVersionRes ? (engineVersionRes.version ?? "unknown") : "unknown",
     os: navigator.userAgent,
     target_plugin_name: job.pluginName ?? "(unknown plugin)",
     target_platform: stats?.platform ?? "unknown",
@@ -53,6 +63,33 @@ export async function buildTelemetryReport(job: Job, userComment: string): Promi
     decompiled_pct: stats?.decompiled_pct ?? 0,
     user_comment: userComment,
     fallback_contexts: stats?.fallback_contexts ?? [],
+  };
+}
+
+// НОВОЕ v1.9.5 (прямая просьба пользователя - "отдельная кнопка для
+// багрепорта, не от декомпиляции, а просто лично от пользователя"): та же
+// форма отчёта, что и у fallback-отчёта (единый формат на стороне
+// сервера/Telegram), но НЕ привязана ни к какому job'у - все
+// декомпиляционные поля честно нулевые/заглушки, а не выдуманные.
+// jar_file_name специально НЕ "(unknown file)" - используется как имя
+// файла-вложения на сервере (см. server.js), "(общий отчёт)" читается
+// понятнее в имени файла, чем "unknown file".
+export async function buildFreeformBugReport(userComment: string): Promise<TelemetryReport> {
+  const versions = await getAppVersions();
+  return {
+    ...versions,
+    app_commit: BUILD_COMMIT,
+    os: navigator.userAgent,
+    target_plugin_name: "(общий отчёт, не привязан к плагину)",
+    target_platform: "n/a",
+    jar_file_name: "(общий отчёт)",
+    classes_total: 0,
+    total_methods: 0,
+    decompiled_methods: 0,
+    fallback_methods: 0,
+    decompiled_pct: 0,
+    user_comment: userComment,
+    fallback_contexts: [],
   };
 }
 

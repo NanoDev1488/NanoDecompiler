@@ -95,6 +95,25 @@ export const GENERIC_COLOR_CALL_RE = /\.\w*(colou?r|paint)\w*\s*\(\s*$/i;
 // на основе того, встречался ли цветовой сигнал РАНЕЕ на этой же строке.
 export const CHAIN_CALL_AFTER_PLUS_RE = /\+\s*[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\(\s*$/;
 
+// НОВОЕ v1.9.5 (доработка п.8 по прямой просьбе - "неизвестный формат
+// method1() должен красится унаследованным цветом, а не нейтральным
+// серым"): возвращает hex ПОСЛЕДНЕГО цветового §/&-кода внутри строки (не
+// форматирующего - k/l/m/n/o/r цвет не меняют, только r его СБРАСЫВАЕТ) -
+// или null, если кодов не было вовсе. currentHex - цвет, унаследованный
+// СНАРУЖИ (от предыдущей части конкатенации) - нужен, чтобы неоконченная
+// строка типа "текст без кодов" не сбрасывала уже установленный цвет.
+export function lastColorHexInString(text: string, currentHex: string | null): string | null {
+  let hex = currentHex;
+  MC_CODE_RE_G.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = MC_CODE_RE_G.exec(text)) !== null) {
+    const code = m[1].toLowerCase();
+    if (code === "r") hex = null;
+    else if (!MC_FORMAT_CODES.has(code) && MC_COLOR_HEX[code]) hex = MC_COLOR_HEX[code];
+  }
+  return hex;
+}
+
 export const MC_CODE_RE = /[&§]([0-9a-fA-Fk-oK-OrR])/;
 const MC_CODE_RE_G = /[&§]([0-9a-fA-Fk-oK-OrR])/g;
 
@@ -120,9 +139,31 @@ export function renderNamedColorText(text: string, colorName: string): ReactNode
  * формат кодов внутри неизвестен движку (может быть что угодно), поэтому
  * НЕ угадываем итоговый цвет - честно подчёркиваем волнистой линией
  * "это будет обработано как цвет в игре", реальный оттенок пользователь
- * увидит только запустив код. */
-export function renderUnknownColorMarked(text: string): ReactNode {
-  return createElement("span", { className: "mc-code-unknown", title: "Похоже на вызов цветовой функции - формат кодов свой, конкретный цвет неизвестен" }, text);
+ * увидит только запустив код.
+ *
+ * НОВОЕ v1.9.5 (доработка по прямой просьбе - "унаследованный цвет вместо
+ * нейтрального серого"): если ИЗВЕСТЕН цвет, действовавший на этом месте
+ * строки РАНЬШЕ (см. inheritedColor в javaHighlight.tsx - пришёл от
+ * ChatColor.RED/сырого §-кода до этого вызова), красим текст ИМ - это НЕ
+ * гарантия, что метод сохраняет цвет (он мог бы его сбросить или заменить
+ * другим), но на практике такие кастомные method1()-подобные обёртки
+ * почти всегда просто МЕНЯЮТ ШРИФТ/РЕГИСТР, не трогая цвет - унаследованный
+ * цвет куда полезнее нейтрального серого. Волнистое подчёркивание +
+ * title остаются - это по-прежнему явно помеченная догадка, не факт. */
+export function renderUnknownColorMarked(text: string, inheritedHex?: string | null): ReactNode {
+  const style: { color?: string } = {};
+  if (inheritedHex) style.color = inheritedHex;
+  return createElement(
+    "span",
+    {
+      className: "mc-code-unknown",
+      style: inheritedHex ? style : undefined,
+      title: inheritedHex
+        ? `Похоже на вызов цветовой функции - формат кодов свой, но цвет ДО этого места был ${inheritedHex} - вероятно, сохраняется`
+        : "Похоже на вызов цветовой функции - формат кодов свой, конкретный цвет неизвестен",
+    },
+    text,
+  );
 }
 
 /**

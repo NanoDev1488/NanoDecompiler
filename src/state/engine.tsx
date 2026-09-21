@@ -25,7 +25,7 @@ import {
   type Toast,
   type ToastKind,
 } from "../lib/model";
-import { buildTelemetryReport } from "../lib/telemetry";
+import { buildFreeformBugReport, buildTelemetryReport } from "../lib/telemetry";
 
 const MAX_LOG_LINES = 800;
 
@@ -103,6 +103,8 @@ interface EngineApi {
   updateModalOpen: boolean;
   paletteOpen: boolean;
   projectSearchOpen: boolean;
+  // НОВОЕ v1.9.5 - см. BugReportModal.tsx.
+  bugReportOpen: boolean;
   envIssue: boolean;
   engineVersion: string | null;
   guiVersion: string | null;
@@ -151,6 +153,8 @@ interface EngineApi {
   completeSetup(): void;
   setPaletteOpen(open: boolean): void;
   setProjectSearchOpen(open: boolean): void;
+  // НОВОЕ v1.9.5 - см. BugReportModal.tsx.
+  setBugReportOpen(open: boolean): void;
   resolveEnvIssue(): void;
   checkForUpdates(silent?: boolean): void;
   applyEngineUpdate(): void;
@@ -160,6 +164,8 @@ interface EngineApi {
   toast(msg: string, kind?: ToastKind): void;
   // НОВОЕ v1.8.4 - см. sendErrorReport в реализации ниже.
   sendErrorReport(jobId: string, comment: string): Promise<void>;
+  // НОВОЕ v1.9.5 - см. sendBugReport в реализации ниже.
+  sendBugReport(comment: string): Promise<{ ok: boolean; error?: string }>;
   dismissToast(id: number): void;
 }
 
@@ -204,6 +210,8 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   // НОВОЕ v1.8.0: поиск по проекту (Ctrl+Shift+F) - см. ProjectSearchModal.tsx.
   const [projectSearchOpen, setProjectSearchOpen] = useState(false);
+  // НОВОЕ v1.9.5 - см. BugReportModal.tsx.
+  const [bugReportOpen, setBugReportOpen] = useState(false);
   const [envIssue, setEnvIssue] = useState(false);
   // БАГ-ФИКС: engineVersion раньше была захардкожена заглушкой "2.4.1" в
   // каждом компоненте отдельно (SettingsModal/AppHeader/Titlebar/
@@ -282,6 +290,26 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     },
     [toast],
   );
+
+  // НОВОЕ v1.9.5 (прямая просьба пользователя - "отдельная кнопка багрепорта
+  // лично от пользователя, не от декомпиляции"): та же транспортная труба
+  // (IPC -> main -> fetch на telemetryUrl), но report собирается через
+  // buildFreeformBugReport - без привязки к job'у. Возвращает результат
+  // (не просто void) - модалка должна знать, закрыться ли автоматически
+  // после успешной отправки или показать ошибку и остаться открытой.
+  const sendBugReport = useCallback(async (comment: string): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const report = await buildFreeformBugReport(comment);
+      const res = await window.nano.sendTelemetryReport(report);
+      if (res.ok) toast("Отчёт отправлен", "ok");
+      else toast(`Не удалось отправить отчёт: ${res.error ?? "неизвестная ошибка"}`, "err");
+      return res;
+    } catch (e) {
+      const error = String(e);
+      toast(`Не удалось отправить отчёт: ${error}`, "err");
+      return { ok: false, error };
+    }
+  }, [toast]);
 
   const checkEnv = useCallback(() => {
     // БАГ-ФИКС: раньше не сбрасывал javaEnv/mavenEnv перед перепроверкой -
@@ -643,6 +671,19 @@ export function EngineProvider({ children }: { children: ReactNode }) {
         if (ok) {
           toast(`Готово: ${job.fileName} — ${fmtSeconds(elapsed)}`, "ok");
           if (settings.openFolderOnDone) window.nano.openPath(job.outDir).catch(() => {});
+          // НОВОЕ v1.9.5 (прямая просьба пользователя - "если телеметрия
+          // включена, ОБЯЗАТЕЛЬНО отправлять всё, все байткоды ошибок, что
+          // не декомпилировалось"): раньше отправка была ТОЛЬКО по ручному
+          // клику на кнопке в карточке плагина - теперь, если
+          // telemetryEnabled включён в настройках, отправка идёт САМА,
+          // сразу по завершении job'а с хотя бы одним fallback-контекстом,
+          // без дополнительного подтверждения. Сама настройка
+          // (выключена по умолчанию) - и есть то самое согласие, кнопка
+          // остаётся для ручной повторной отправки/отправки старых job'ов.
+          const fallbackCount = job.details?.stats.fallback_contexts.length ?? 0;
+          if (settings.telemetryEnabled && fallbackCount > 0) {
+            void sendErrorReport(jobId, "автоматическая отправка (telemetryEnabled)");
+          }
         } else {
           toast(`Ошибка: ${job.fileName}${error ? ` — ${error}` : ""}`, "err");
         }
@@ -654,7 +695,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
         if (next) runRef.current(next.id);
       }, 400);
     },
-    [settings.openFolderOnDone, toast],
+    [settings.openFolderOnDone, settings.telemetryEnabled, sendErrorReport, toast],
   );
 
   const run = useCallback(
@@ -1188,12 +1229,12 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
   const api: EngineApi = {
     jobs, log, runningJob, runningElapsed, selectedJobId, selectedJob, openFileByJob,
-    terminalOpen, logFilter, settings, settingsLoaded, settingsOpen, updateModalOpen, paletteOpen, projectSearchOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, installingTool, installProgress, iconThumbnails, updateInfo, toasts, queuedCount, sidebarWidth, fileTreeWidth, terminalHeight,
+    terminalOpen, logFilter, settings, settingsLoaded, settingsOpen, updateModalOpen, paletteOpen, projectSearchOpen, bugReportOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, installingTool, installProgress, iconThumbnails, updateInfo, toasts, queuedCount, sidebarWidth, fileTreeWidth, terminalHeight,
     addFiles, addJarPaths, openFileDialog, startQueue, stopRunning, stopAll, cancelJob, removeJob, clearQueue,
     selectJob, selectFile, setLogFilter, toggleTerminal, clearLog, copyLog, copyText,
-    openOutput, setSettingsOpen, setUpdateModalOpen, setSidebarWidth, setFileTreeWidth, setTerminalHeight, saveSettings, completeSetup, setPaletteOpen, setProjectSearchOpen,
+    openOutput, setSettingsOpen, setUpdateModalOpen, setSidebarWidth, setFileTreeWidth, setTerminalHeight, saveSettings, completeSetup, setPaletteOpen, setProjectSearchOpen, setBugReportOpen,
     resolveEnvIssue, checkForUpdates, applyEngineUpdate, openClientDownload, checkEnv, installTool, toast, dismissToast,
-    sendErrorReport,
+    sendErrorReport, sendBugReport,
   };
 
   return (

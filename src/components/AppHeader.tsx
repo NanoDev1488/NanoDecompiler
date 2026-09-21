@@ -1,4 +1,4 @@
-import { Bell, FolderOpen, Play, Settings2, Square } from "lucide-react";
+import { Bell, FolderOpen, MessageSquare, Play, Settings2, Square } from "lucide-react";
 import { useEngine } from "../state/engine";
 import { cn } from "../utils/cn";
 
@@ -15,6 +15,7 @@ export function AppHeader() {
     stopAll,
     openFileDialog,
     setSettingsOpen,
+    setBugReportOpen,
     setUpdateModalOpen,
     setPaletteOpen,
   } = useEngine();
@@ -124,6 +125,17 @@ export function AppHeader() {
         <Bell size={14} />
         <span className="hidden lg:inline">Обновления</span>
         {hasUpdate && <span className="absolute top-1 right-1.5 size-[7px] rounded-full bg-acid" />}
+      </button>
+
+      {/* НОВОЕ v1.9.5 (прямая просьба пользователя - "отдельная кнопка для
+          багрепорта, не от декомпиляции, лично от пользователя"). */}
+      <button
+        className="icon-btn flex-none"
+        onClick={() => setBugReportOpen(true)}
+        aria-label="Сообщить о проблеме"
+        title="Сообщить о проблеме"
+      >
+        <MessageSquare size={16} />
       </button>
 
       <button
