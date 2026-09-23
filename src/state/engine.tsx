@@ -73,7 +73,17 @@ async function collectSourceFiles(outDir: string, relDir = ""): Promise<SourceFi
       // слэш обязательно есть в строке.
       const stripped = rel.replace(/^src\/main\/(java|resources)\//, "");
       const lastSlash = stripped.lastIndexOf("/");
-      const pkg = (lastSlash === -1 ? "" : stripped.slice(0, lastSlash)).replace(/\//g, ".");
+      // БАГ-ФИКС v1.9.6 (реальная жалоба - "если в названии папок есть
+      // точки, они тоже делятся на пакеты"): раньше тут ".replace(/\//g,
+      // '.')" превращал ПУТЬ ("lang/v1.2/ru") в "lang.v1.2.ru" - а дальше
+      // FileTree/CodeView СНОВА делили это по точке ("."), так что
+      // ЛИТЕРАЛЬНАЯ точка в имени папки "v1.2" сама превращалась в ещё
+      // один уровень вложенности ("v1" -> "2"), хотя это одна папка.
+      // Оставляем pkg настоящим путём со слэшами - разбивка ниже по стеку
+      // (buildPkgTree в FileTree.tsx, крошки в CodeView.tsx) уже визуально
+      // рисует "/" между сегментами в любом случае, так что для отображения
+      // ничего не меняется - только сама разбивка теперь корректна.
+      const pkg = lastSlash === -1 ? "" : stripped.slice(0, lastSlash);
       out.push({
         id: rid("f"),
         pkg: pkg || "(корень)",
@@ -108,8 +118,8 @@ interface EngineApi {
   envIssue: boolean;
   engineVersion: string | null;
   guiVersion: string | null;
-  javaEnv: { ok: boolean; text?: string } | null;
-  mavenEnv: { ok: boolean; text?: string } | null;
+  javaEnv: { ok: boolean; text?: string; inPath?: boolean } | null;
+  mavenEnv: { ok: boolean; text?: string; inPath?: boolean } | null;
   installingTool: "java" | "maven" | null;
   installProgress: { type: "progress"; label: string; pct: number | null; downloaded_mb: number; total_mb: number | null } | null;
   iconThumbnails: { terminal: string | null; layers: string | null };
@@ -224,8 +234,8 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   // единой реальной проверки java/mvn (см. env:check в main.ts). javaEnv/
   // mavenEnv - настоящий результат "java -version"/"mvn -version" через
   // дочерний процесс.
-  const [javaEnv, setJavaEnv] = useState<{ ok: boolean; text?: string } | null>(null);
-  const [mavenEnv, setMavenEnv] = useState<{ ok: boolean; text?: string } | null>(null);
+  const [javaEnv, setJavaEnv] = useState<{ ok: boolean; text?: string; inPath?: boolean } | null>(null);
+  const [mavenEnv, setMavenEnv] = useState<{ ok: boolean; text?: string; inPath?: boolean } | null>(null);
   const [iconThumbnails, setIconThumbnails] = useState<{ terminal: string | null; layers: string | null }>({
     terminal: null,
     layers: null,
@@ -1140,14 +1150,20 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     (next: Settings) => {
       setSettings(next);
       setSettingsOpen(false);
-      // БАГ-ФИКС: toast "Настройки сохранены" раньше показывался
-      // БЕЗУСЛОВНО и НЕМЕДЛЕННО, даже не дожидаясь результата асинхронного
-      // window.nano.setSettings() - при реальном отказе записи на диск
-      // (fs.writeFileSync упал - диск полон, нет прав) пользователь видел
-      // ложное "сохранено", хотя на деле настройка тихо не сохранялась и
-      // откатилась бы при следующем запуске.
+      // БАГ-ФИКС v1.9.6 (КРИТИЧНЫЙ - реальная жалоба "телеметрия не
+      // отправляется, багрепорт пишет выключено, хотя я включал"): тут
+      // был захардкожен список ТОЛЬКО из 3 полей (legitimacyCheck/
+      // autoUpdateCheck/appIcon) - language (с v1.7.6), а потом
+      // telemetryEnabled/telemetryUrl (с v1.8.4) физически НИКОГДА не
+      // попадали на диск. setSettings(next) выше обновляет ТОЛЬКО
+      // локальный state рендерера - в UI выглядело, что сработало, но
+      // main-процесс (который реально шлёт отчёты через telemetry:
+      // sendReport) на каждый вызов заново читает settings.json С ДИСКА -
+      // там telemetryEnabled так и оставался false. Теперь отправляем
+      // ВЕСЬ next целиком - раз это уже полный Settings-объект, вручную
+      // перечислять поля незачем и рискованно (см. этот самый баг).
       window.nano
-        .setSettings({ legitimacyCheck: next.legitimacyCheck, autoUpdateCheck: next.autoUpdateCheck, appIcon: next.appIcon })
+        .setSettings(next)
         .then(r => {
           if (r.ok) toast("Настройки сохранены", "ok");
           else toast(`Не удалось сохранить настройки: ${r.error ?? "неизвестная ошибка"}`, "err");

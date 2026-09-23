@@ -98,7 +98,8 @@ export const CodeView = memo(function CodeView({
     );
   }
 
-  const crumbs = [...file.pkg.split(".").filter(Boolean), file.name];
+  // БАГ-ФИКС v1.9.6 - см. комментарий у pkg в state/engine.tsx.
+  const crumbs = [...file.pkg.split("/").filter(Boolean), file.name];
   const CodeComponent = codeComponentFor(file.name);
 
   return (
@@ -177,6 +178,18 @@ export const CodeView = memo(function CodeView({
                 <p className="text-dim">
                   Просмотр бинарных файлов внутри вьюера пока не поддерживается - воспользуйтесь кнопкой «Открыть
                   в…» справа сверху (системное приложение или папка с файлом).
+                </p>
+              ) : /слишком больш/i.test(file.loadError) ? (
+                // БАГ-ФИКС 1.9.6 (HANDOFF п.13): "слишком большой файл" -
+                // ОТДЕЛЬНАЯ ветка от бинарной (лимит MAX_TEXT_FILE_BYTES в
+                // fs:readTextFile, main.ts), результат так же детерминирован
+                // при повторе - "Повторить" тут вводит в заблуждение так же,
+                // как раньше для бинарников. Особенно часто встречается для
+                // .jar (они обычно больше лимита, но при этом не всегда
+                // проходят через binary-эвристику первой).
+                <p className="text-dim">
+                  Файл слишком большой для просмотра в редакторе - воспользуйтесь кнопкой «Открыть в…» справа сверху
+                  (системное приложение или папка с файлом).
                 </p>
               ) : (
                 <button className="btn btn-tonal h-7 text-[11px]" onClick={() => jobId && selectFile(jobId, file.id)}>

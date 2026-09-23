@@ -59,7 +59,9 @@ function buildPkgTree(files: SourceFile[], keyPrefix: string): ResTreeNode[] {
     // "(корень)" - специальная метка без точек (см. state/engine.tsx) - один
     // сегмент, отображаем как "(корень: ...)" для узнаваемости (то же
     // имя, что использовалось до v1.7.3 для этой плоской группы).
-    const segments = f.pkg === "(корень)" ? ["(корень)"] : f.pkg.split(".").filter(Boolean);
+    // БАГ-ФИКС v1.9.6 - см. комментарий у pkg в state/engine.tsx: pkg теперь
+    // настоящий путь со слэшами, не раскодированные точки.
+    const segments = f.pkg === "(корень)" ? ["(корень)"] : f.pkg.split("/").filter(Boolean);
     let siblings = rootChildren;
     let path = keyPrefix;
     let node: ResTreeNode | undefined;

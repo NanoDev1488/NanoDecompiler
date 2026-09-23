@@ -37,13 +37,15 @@ function GithubIcon({ size = 16, className }: { size?: number; className?: strin
 // строки) - details будет null, показываем честное "недоступно" вместо
 // пустых нулей.
 export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => void }) {
-  const { openOutput, toast, addJarPaths, sendErrorReport } = useEngine();
+  const { openOutput, toast, addJarPaths } = useEngine();
   const d = job.details;
   // НОВОЕ v1.7.6: поиск похожих репозиториев на GitHub по имени плагина
   // и автору из plugin.yml (см. jarSummary.ts/main.ts::github:searchSimilar).
   const [ghLoading, setGhLoading] = useState(false);
-  // НОВОЕ v1.8.4 - см. кнопку "Отправить отчёт" ниже.
-  const [sendingReport, setSendingReport] = useState(false);
+  // НОВОЕ v1.8.4 - было: локальный стейт для кнопки "Отправить отчёт".
+  // Кнопка убрана в блоке 1.9.6 (см. HANDOFF, п.15) - с v1.9.5 отправка
+  // fallback_contexts уходит АВТОМАТИЧЕСКИ при telemetryEnabled, ручная
+  // кнопка стала избыточной и путала пользователя.
   const [ghResults, setGhResults] = useState<
     { name: string; fullName: string; url: string; description: string | null; stars: number }[] | null
   >(null);
@@ -112,36 +114,7 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
                 value={`${fmtNum(d.stats.decompiled_methods)} / ${fmtNum(d.stats.total_methods)} (${d.stats.decompiled_pct.toFixed(1)}%)`}
               />
               {d.stats.fallback_methods > 0 && (
-                <>
-                  <Row label="Откат на байткод" value={`${fmtNum(d.stats.fallback_methods)} метод(ов) - см. .java с комментарием`} />
-                  {/* НОВОЕ v1.8.4 (телеметрия по запросу пользователя):
-                      кнопка ТОЛЬКО когда реально есть что отправлять
-                      (d.stats.fallback_contexts). Отправка молчит, пока
-                      telemetryEnabled выключен в настройках - main.ts сам
-                      проверит и вернёт понятную ошибку тостом, тут не
-                      дублируем эту проверку. */}
-                  {d.stats.fallback_contexts.length > 0 && (
-                    <div className="flex items-center justify-between gap-2 rounded-lg border border-line bg-bg px-3 py-2">
-                      <span className="text-[11px] text-dim">
-                        Отправить контекст {d.stats.fallback_contexts.length} отката(ов) разработчику
-                      </span>
-                      <button
-                        className="btn btn-tonal h-7 flex-none text-[11px]"
-                        disabled={sendingReport}
-                        onClick={async () => {
-                          setSendingReport(true);
-                          try {
-                            await sendErrorReport(job.id, "");
-                          } finally {
-                            setSendingReport(false);
-                          }
-                        }}
-                      >
-                        {sendingReport ? "Отправка…" : "Отправить отчёт"}
-                      </button>
-                    </div>
-                  )}
-                </>
+                <Row label="Откат на байткод" value={`${fmtNum(d.stats.fallback_methods)} метод(ов) - см. .java с комментарием`} />
               )}
               {/* БАГ-ФИКС v1.8.2 - см. комментарий у полей в model.ts. */}
               {d.stats.synthetic_switchmap_classes_hidden > 0 && (
@@ -201,9 +174,23 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
                       // пыталась запустить декомпилятор на несуществующем
                       // пути (outDir/bundled/... вместо
                       // outDir/src/main/resources/bundled/...).
-                      const sep = job.outDir.includes("\\") && !job.outDir.includes("/") ? "\\" : "/";
-                      const onDiskRelPath = "src/main/resources/" + relPath;
-                      const absPath = joinOutDir(job.outDir, onDiskRelPath.split("/").join(sep));
+                      // БАГ-ФИКС v1.9.6 (реальная жалоба - "путь всё ещё
+                      // неправильный, хотя обсолютно точно проверил, что
+                      // он верный"): предыдущий фикс (v1.8.4) вручную
+                      // определял разделитель и делал relPath.split("/").
+                      // join(sep) - если zip-запись внутри jar содержит
+                      // обратные слэши (бывает у jar, собранных кривыми
+                      // Windows-тулзами), split("/") их вообще не находил,
+                      // и в итоге получался путь со СМЕШАННЫМИ
+                      // разделителями. Теперь строим путь ПОСЕГМЕНТНО через
+                      // ту же самую joinOutDir(), которой уже пользуется
+                      // весь остальной код (addJarPaths и т.д.) - один
+                      // проверенный способ соединения путей везде, вместо
+                      // отдельной самодельной логики только для этой кнопки.
+                      const absPath = ["src", "main", "resources", ...relPath.split(/[/\\]+/).filter(Boolean)].reduce(
+                        (acc, seg) => joinOutDir(acc, seg),
+                        job.outDir,
+                      );
                       return (
                         <li key={relPath} className="flex items-center justify-between gap-2">
                           <span className="truncate text-dim" title={relPath}>

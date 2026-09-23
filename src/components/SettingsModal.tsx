@@ -3,8 +3,9 @@ import { useState, type ReactNode } from "react";
 import { useEngine } from "../state/engine";
 import { Toggle, Kbd } from "./ui";
 import { cn } from "../utils/cn";
+import { t } from "../lib/i18n";
 
-function Row({ label, hint, control }: { label: string; hint?: string; control: ReactNode }) {
+function Row({ label, hint, control }: { label: string; hint?: ReactNode; control: ReactNode }) {
   return (
     <div className="flex items-center gap-4 py-2.5">
       <div className="min-w-0 flex-1">
@@ -113,7 +114,7 @@ export function SettingsModal() {
             )}
             onClick={() => setTab("general")}
           >
-            Основные
+            {t(draft.language, "settings.tab.general")}
           </button>
           <button
             className={cn(
@@ -122,17 +123,47 @@ export function SettingsModal() {
             )}
             onClick={() => setTab("about")}
           >
-            О сервисе
+            {t(draft.language, "settings.tab.about")}
           </button>
         </div>
 
         {tab === "general" ? (
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+            {/* НОВОЕ 1.9.6 (HANDOFF п.7) - переключатель языка физически
+                отсутствовал в разметке, хотя тип Settings.language и
+                словарь i18n.ts существовали с v1.7.6. Переводит пока
+                ТОЛЬКО эту панель настроек (лейблы, для которых уже есть
+                ключи в DICT) - остальной интерфейс остаётся русским, это
+                известное и осознанное ограничение (см. комментарий в
+                i18n.ts), не половинчатый баг. */}
+            <p className="kicker pt-1 pb-2">{t(draft.language, "settings.section.language")}</p>
+            <div className="mb-4 rounded-xl border border-line bg-bg px-3">
+              <Row
+                label="RU / EN"
+                hint="сейчас переводит только эту панель настроек - остальной интерфейс остаётся русским"
+                control={
+                  <div className="flex items-center gap-1 rounded-lg border border-line p-0.5">
+                    {(["ru", "en"] as const).map(lang => (
+                      <button
+                        key={lang}
+                        className={cn(
+                          "rounded-md px-2.5 py-1 text-[11.5px] transition-colors",
+                          draft.language === lang ? "bg-acid/10 text-acid" : "text-faint hover:text-ink",
+                        )}
+                        onClick={() => setDraft(d => ({ ...d, language: lang }))}
+                      >
+                        {t(draft.language, lang === "ru" ? "settings.language.ru" : "settings.language.en")}
+                      </button>
+                    ))}
+                  </div>
+                }
+              />
+            </div>
             {/* окружение */}
-            <p className="kicker pt-1 pb-2">Окружение</p>
+            <p className="kicker pt-1 pb-2">{t(draft.language, "settings.section.environment")}</p>
             <div className="rounded-xl border border-line bg-bg px-3">
               <Row
-                label="Движок"
+                label={t(draft.language, "settings.engine.label")}
                 hint="resources/engine/NanoDecompilerCLI · дочерний процесс, вывод идёт в терминал"
                 control={
                   <button
@@ -154,7 +185,7 @@ export function SettingsModal() {
               />
               <div className="h-px bg-line" />
               <Row
-                label="Java"
+                label={t(draft.language, "settings.java.label")}
                 hint={
                   // НОВОЕ v1.7.3 (реальный запрос - установка Java/Maven
                   // прямо из настроек): пока идёт установка ИМЕННО Java,
@@ -168,7 +199,14 @@ export function SettingsModal() {
                       ? "проверяю…"
                       : envIssue
                         ? "не найдена в PATH — не блокирует декомпиляцию, нужна только для ручной сборки (mvn compile) сгенерированного проекта"
-                        : (javaEnv.text ?? "найдена")
+                        : (
+                          <>
+                            {javaEnv.text ?? "найдена"}
+                            {javaEnv.inPath === false && (
+                              <span className="text-warn/70"> (не в PATH — найдена по внутреннему пути, в терминале может не работать)</span>
+                            )}
+                          </>
+                        )
                 }
                 control={
                   installingTool === "java" ? (
@@ -183,14 +221,14 @@ export function SettingsModal() {
                         disabled={installingTool !== null}
                         onClick={() => installTool("java")}
                       >
-                        Установить
+                        {t(draft.language, "settings.install")}
                       </button>
                       <button
                         className="btn btn-tonal h-7 text-[11.5px]"
                         disabled={installingTool !== null}
                         onClick={resolveEnvIssue}
                       >
-                        Проверить снова
+                        {t(draft.language, "settings.recheck")}
                       </button>
                     </div>
                   ) : (
@@ -203,7 +241,7 @@ export function SettingsModal() {
               />
               <div className="h-px bg-line" />
               <Row
-                label="Maven"
+                label={t(draft.language, "settings.maven.label")}
                 hint={
                   installingTool === "maven"
                     ? (installProgress?.label ?? "устанавливаю…") +
@@ -211,7 +249,14 @@ export function SettingsModal() {
                     : mavenEnv === null
                       ? "проверяю…"
                       : mavenEnv.ok
-                        ? (mavenEnv.text ?? "найден") + " · нужен только для ручной сборки (mvn compile), не для декомпиляции"
+                        ? (
+                          <>
+                            {(mavenEnv.text ?? "найден") + " · нужен только для ручной сборки (mvn compile), не для декомпиляции"}
+                            {mavenEnv.inPath === false && (
+                              <span className="text-warn/70"> (не в PATH — найден по внутреннему пути, в терминале может не работать)</span>
+                            )}
+                          </>
+                        )
                         : "не найден — не блокирует декомпиляцию, нужен только для ручной сборки"
                 }
                 control={
@@ -226,7 +271,7 @@ export function SettingsModal() {
                       disabled={installingTool !== null}
                       onClick={() => installTool("maven")}
                     >
-                      Установить
+                      {t(draft.language, "settings.install")}
                     </button>
                   ) : (
                     <span className={cn("chip", !mavenEnv?.ok ? "opacity-40" : "border-acid/35 text-acid")}>
@@ -392,7 +437,7 @@ export function SettingsModal() {
             <div className="rounded-xl border border-line bg-bg px-3">
               <Row
                 label="Отправка отчётов разработчику"
-                hint="фрагменты декомпилированного кода уходят на указанный сервер АВТОМАТИЧЕСКИ при каждой находке отката на байткод - само включение здесь и есть согласие"
+                hint="фрагменты декомпилированного кода уходят на сервер разработчика АВТОМАТИЧЕСКИ при каждой находке отката на байткод - само включение здесь и есть согласие"
                 control={
                   <Toggle
                     label="Отправка отчётов разработчику"
@@ -401,18 +446,6 @@ export function SettingsModal() {
                   />
                 }
               />
-              <div className="h-px bg-line" />
-              <div className="py-2.5">
-                <p className="mb-1.5 text-[12.5px] text-ink/90">Адрес сервера</p>
-                <input
-                  className="field mono text-[12px]"
-                  value={draft.telemetryUrl}
-                  onChange={e => setDraft(d => ({ ...d, telemetryUrl: e.target.value }))}
-                  placeholder="http://<ip>:<port>/report"
-                  spellCheck={false}
-                  disabled={!draft.telemetryEnabled}
-                />
-              </div>
             </div>
           </div>
         ) : (
@@ -424,9 +457,9 @@ export function SettingsModal() {
             <div className="flex flex-none items-center gap-1 border-b border-line px-4 pt-2 pb-1">
               {(
                 [
-                  ["overview", "Обзор"],
-                  ["features", "Возможности"],
-                  ["team", "Команда"],
+                  ["overview", t(draft.language, "settings.about.overview")],
+                  ["features", t(draft.language, "settings.about.features")],
+                  ["team", t(draft.language, "settings.about.team")],
                 ] as const
               ).map(([id, label]) => (
                 <button
@@ -496,10 +529,10 @@ export function SettingsModal() {
           </span>
           <div className="flex-1" />
           <button className="btn btn-ghost" onClick={() => setSettingsOpen(false)}>
-            Отмена
+            {t(draft.language, "settings.cancel")}
           </button>
           <button className="btn btn-acid" onClick={() => saveSettings(draft)}>
-            Сохранить
+            {t(draft.language, "settings.save")}
           </button>
         </div>
       </div>

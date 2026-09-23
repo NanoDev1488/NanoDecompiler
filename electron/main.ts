@@ -732,6 +732,18 @@ ipcMain.handle("env:check", async () => {
   // полному пути к бинарнику (спавн по абсолютному пути не зависит от
   // PATH вообще, так что shell:true здесь не нужен для .exe, но нужен
   // для .cmd на Windows - оставляем ту же логику через checkVersionCmd).
+  // БАГ-ФИКС v1.9.6 (реальная жалоба - "после скачивания Maven не
+  // добавляется в PATH, а приложение всё равно пишет, что установлен"):
+  // технически ПРАВДА - приложение реально ЗАПУСКАЕТ `mvn --version` по
+  // абсолютному пути (portableToolsDir), не просто проверяет наличие
+  // файла, так что "работает" - действительно работает. Но результат
+  // выглядел ОДИНАКОВО что для системного PATH, что для найденного по
+  // fallback-пути - пользователь читает это как "значит, и в терминале
+  // тоже заработает", а это НЕ так (PATH мы намеренно не трогаем - редактура
+  // системного PATH инвазивна и платформозависима). Помечаем ЯВНО, откуда
+  // нашли, чтобы UI мог показать честную разницу.
+  const javaInPath = java.ok;
+  const mavenInPath = maven.ok;
   if (!java.ok) {
     const found = findFallbackBinary(["java.exe", "java"], javaSearchRoots());
     if (found) java = await checkVersionCmd(found, ["--version"]);
@@ -740,7 +752,10 @@ ipcMain.handle("env:check", async () => {
     const found = findFallbackBinary(["mvn.cmd", "mvn"], mavenSearchRoots());
     if (found) maven = await checkVersionCmd(found, ["--version"]);
   }
-  return { java, maven };
+  return {
+    java: { ...java, inPath: javaInPath },
+    maven: { ...maven, inPath: mavenInPath },
+  };
 });
 
 ipcMain.handle("gui:version", async () => app.getVersion());

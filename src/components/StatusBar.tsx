@@ -28,14 +28,34 @@ export function StatusBar() {
             java: не найдена
           </button>
         ) : (
-          <span className="flex items-center gap-1" title={javaEnv.text}>
+          <span
+            className="flex items-center gap-1"
+            title={javaEnv.inPath === false ? `${javaEnv.text ?? ""} - найдена по внутреннему пути, НЕ в системном PATH` : javaEnv.text}
+          >
             <Check size={11} className="text-acid" />
             {javaEnv.text ?? "java"}
+            {/* БАГ-ФИКС v1.9.6 (реальная жалоба - "Maven не добавляется в
+                PATH, но приложение всё равно пишет, что установлен"):
+                приложение реально ЗАПУСКАЕТ бинарник по найденному пути
+                (не просто проверяет наличие файла) - для СВОИХ целей это
+                честная правда, но раньше выглядело идентично системной
+                установке, хотя `mvn`/`java` в обычном терминале пользователя
+                работать не будут. Отдельная явная пометка вместо тихого
+                "работает точно так же". */}
+            {javaEnv.inPath === false && <span className="text-warn/70">(не в PATH)</span>}
           </span>
         )}
-        <span className={cn("flex items-center gap-1", !mavenEnv?.ok && "opacity-40")} title={mavenEnv?.text}>
+        <span
+          className={cn("flex items-center gap-1", !mavenEnv?.ok && "opacity-40")}
+          title={
+            mavenEnv?.ok && mavenEnv.inPath === false
+              ? `${mavenEnv.text ?? ""} - найден по внутреннему пути, НЕ в системном PATH`
+              : mavenEnv?.text
+          }
+        >
           <Check size={11} className={mavenEnv?.ok ? "text-acid" : "text-faint"} />
           {mavenEnv?.ok ? (mavenEnv.text ?? "maven") : "maven: не найден"}
+          {mavenEnv?.ok && mavenEnv.inPath === false && <span className="text-warn/70">(не в PATH)</span>}
         </span>
         <span className="hidden text-line-strong xl:inline">|</span>
         <span className="hidden max-w-[220px] truncate xl:inline">{settings.outputDir}</span>
