@@ -123,6 +123,9 @@ contextBridge.exposeInMainWorld("nano", {
     ipcRenderer.invoke("fs:listDir", root, relDir),
   readTextFile: (root: string, relPath: string): Promise<{ ok: boolean; content?: string; size?: number; error?: string }> =>
     ipcRenderer.invoke("fs:readTextFile", root, relPath),
+  // НОВОЕ v1.9.9 (read-write вьюер кода, HANDOFF п.6)
+  writeTextFile: (root: string, relPath: string, content: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("fs:writeTextFile", root, relPath, content),
   // НОВОЕ v1.8.0: поиск по содержимому всех файлов результата (не по
   // имени - см. FileTree.tsx, тот фильтр остаётся отдельно).
   searchInProject: (

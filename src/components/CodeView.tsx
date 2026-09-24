@@ -1,4 +1,4 @@
-import { Copy, Search, WrapText } from "lucide-react";
+import { Copy, Pencil, Save, Search, WrapText, X as XIcon } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useEngine } from "../state/engine";
 import { JavaCode } from "../lib/javaHighlight";
@@ -49,8 +49,19 @@ export const CodeView = memo(function CodeView({
   jobId?: string;
   outDir?: string;
 }) {
-  const { copyText, selectFile } = useEngine();
+  const { copyText, selectFile, updateFileCode, toast } = useEngine();
   const [wrap, setWrap] = useState(false);
+  // НОВОЕ v1.9.9 (read-write вьюер кода, HANDOFF п.6): ЧЕСТНАЯ ОГОВОРКА ПО
+  // ОБЪЁМУ - это простой <textarea> с моноширинным шрифтом, НЕ полноценный
+  // редактор с живой подсветкой синтаксиса во время печати (для этого
+  // понадобился бы CodeMirror/Monaco - отдельная зависимость, которой в
+  // проекте сейчас нет, и её подключение - самостоятельная большая
+  // задача). В режиме редактирования подсветка временно отключается,
+  // возвращается после сохранения/отмены - это сознательный компромисс,
+  // не половинчатый баг.
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
   // НОВОЕ v1.7.6: ref именно на контейнер С КОДОМ (не на весь CodeView) -
   // FindBar ищет ТОЛЬКО внутри него, см. БАГ-ФИКС в FindBar.tsx.
   const codeContainerRef = useRef<HTMLDivElement>(null);
@@ -65,6 +76,13 @@ export const CodeView = memo(function CodeView({
   useEffect(() => {
     if (!file) return;
     setWrap(/\.(txt|md)$/i.test(file.name));
+    // НОВОЕ v1.9.9: переключение на другой файл всегда сбрасывает
+    // незавершённое редактирование ТЕКУЩЕГО - несохранённый черновик
+    // молча теряется, но это стандартное ожидаемое поведение (как в
+    // большинстве редакторов без вкладок с "несохранёнными изменениями"
+    // индикатором - усложнять до полноценного dirty-tracking с
+    // предупреждением при закрытии вкладки не стал, отдельная фича).
+    setEditing(false);
   }, [file?.id]);
   // НОВОЕ v1.8.0 (реальный запрос - "хороший поиск в файле"): Ctrl+F
   // локально в этом компоненте (не глобальный шорткат в engine.tsx) -
@@ -102,6 +120,36 @@ export const CodeView = memo(function CodeView({
   const crumbs = [...file.pkg.split("/").filter(Boolean), file.name];
   const CodeComponent = codeComponentFor(file.name);
 
+  // НОВОЕ v1.9.9: редактируем СЫРОЙ file.code, а не displayCode - для
+  // .json файлов displayCode пропущен через prettyPrintIfJson (только
+  // для отображения, см. комментарий у функции выше) - сохранение
+  // отформатированной версии молча переформатировало бы исходный файл
+  // на диске, даже если пользователь ничего не менял, кроме одного слова.
+  const canEdit = !!outDir && !!jobId && file.code !== undefined && file.loadError === undefined;
+  const startEdit = () => {
+    setDraft(file.code ?? "");
+    setEditing(true);
+  };
+  const cancelEdit = () => setEditing(false);
+  const saveEdit = async () => {
+    if (!outDir || !jobId) return;
+    setSaving(true);
+    try {
+      const res = await window.nano.writeTextFile(outDir, file.relPath, draft);
+      if (res.ok) {
+        updateFileCode(jobId, file.id, draft);
+        setEditing(false);
+        toast(`Сохранено: ${file.name}`, "ok");
+      } else {
+        toast(`Не удалось сохранить: ${res.error ?? "неизвестная ошибка"}`, "err");
+      }
+    } catch (e) {
+      toast(`Не удалось сохранить: ${String(e)}`, "err");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <section className="relative flex min-w-0 flex-1 flex-col bg-bg">
       {findOpen && <FindBar containerRef={codeContainerRef} onClose={() => setFindOpen(false)} />}
@@ -123,7 +171,9 @@ export const CodeView = memo(function CodeView({
 
         <div className="flex-1" />
 
-        <span className="mono hidden text-[10.5px] text-faint md:inline">{file.loc} строк · read-only</span>
+        <span className="mono hidden text-[10.5px] text-faint md:inline">
+          {file.loc} строк{canEdit ? "" : " · read-only"}
+        </span>
         {outDir && (
           <OpenInMenu filePath={joinOutDir(outDir, file.relPath)} projectDir={outDir} />
         )}
@@ -132,9 +182,11 @@ export const CodeView = memo(function CodeView({
             Ctrl+Shift+F) без единой видимой кнопки - пользователь просто
             не мог узнать, что фича существует. Видимая кнопка + подсказка
             с сочетанием клавиш в title. */}
-        <button className="icon-btn h-7 w-7" title="Найти в файле (Ctrl+F)" onClick={() => setFindOpen(true)}>
-          <Search size={14} />
-        </button>
+        {!editing && (
+          <button className="icon-btn h-7 w-7" title="Найти в файле (Ctrl+F)" onClick={() => setFindOpen(true)}>
+            <Search size={14} />
+          </button>
+        )}
         <button
           className="icon-btn h-7 w-7"
           title={wrap ? "Отключить перенос строк" : "Переносить строки"}
@@ -151,6 +203,29 @@ export const CodeView = memo(function CodeView({
         >
           <Copy size={14} />
         </button>
+        {/* НОВОЕ v1.9.9 (read-write вьюер кода, HANDOFF п.6): простой
+            textarea-режим, без живой подсветки во время печати - см.
+            оговорку выше у объявления editing/draft. */}
+        {canEdit &&
+          (editing ? (
+            <>
+              <button className="icon-btn h-7 w-7" title="Отменить" disabled={saving} onClick={cancelEdit}>
+                <XIcon size={14} />
+              </button>
+              <button
+                className="btn btn-acid h-7 gap-1 px-2 text-[11px]"
+                disabled={saving}
+                onClick={() => void saveEdit()}
+              >
+                <Save size={13} />
+                {saving ? "Сохранение…" : "Сохранить"}
+              </button>
+            </>
+          ) : (
+            <button className="icon-btn h-7 w-7" title="Редактировать файл" onClick={startEdit}>
+              <Pencil size={14} />
+            </button>
+          ))}
       </div>
 
       <div ref={codeContainerRef} className="min-h-0 flex-1 overflow-auto py-3">
@@ -159,7 +234,16 @@ export const CodeView = memo(function CodeView({
             {file.note}
           </div>
         )}
-        <div className={wrap ? undefined : "min-w-max"}>
+        {editing ? (
+          <textarea
+            className="mono h-full min-h-[60vh] w-full resize-none border-0 bg-transparent px-4 text-[12.5px] leading-[1.75] text-ink/90 outline-none"
+            value={draft}
+            spellCheck={false}
+            onChange={e => setDraft(e.target.value)}
+            autoFocus
+          />
+        ) : (
+          <div className={wrap ? undefined : "min-w-max"}>
           {file.loadError !== undefined ? (
             <div className="mono flex flex-col items-start gap-2 px-4 text-[11.5px]">
               <p className="text-err">// не удалось загрузить файл: {file.loadError}</p>
@@ -202,7 +286,8 @@ export const CodeView = memo(function CodeView({
           ) : (
             <CodeComponent code={displayCode} wrap={wrap} />
           )}
-        </div>
+          </div>
+        )}
       </div>
     </section>
   );

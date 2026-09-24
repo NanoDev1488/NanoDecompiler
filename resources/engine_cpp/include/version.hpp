@@ -77,5 +77,9 @@ namespace nd {
 // НОВОЕ v1.9.8: окно логов разработчика (Ctrl+Alt+L, затем O, затем G -
 // буквальный chord "Ctrl+L+O+G" конфликтовал с уже занятыми Ctrl+L/Ctrl+O,
 // см. engine.tsx) - второе BrowserWindow, источник записей - toast().
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.8";
+// НОВОЕ v1.9.9: read-write вьюер кода (HANDOFF п.6) - кнопка "Редактировать"
+// в CodeView.tsx, textarea-режим (БЕЗ живой подсветки при печати - для неё
+// нужен CodeMirror/Monaco, отдельная зависимость), fs:writeTextFile в
+// main.ts (симметрично fs:readTextFile, тот же resolveWithinRoot).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.9";
 }

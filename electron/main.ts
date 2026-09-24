@@ -1139,6 +1139,26 @@ ipcMain.handle("fs:readTextFile", async (_e, root: string, relPath: string) => {
   }
 });
 
+// НОВОЕ v1.9.9 (HANDOFF п.6 - read-write вьюер кода): симметрично
+// fs:readTextFile выше - тот же resolveWithinRoot (защита от выхода за
+// пределы out_dir проекта), та же схема (root, relPath). Пишем
+// СИНХРОННО (writeFileSync) - файлы вьюера маленькие (тот же
+// MAX_TEXT_FILE_BYTES лимит на чтение уже отсекает крупные), блокировка
+// event loop на миллисекунды не критична, а гарантия "либо записалось
+// целиком, либо явная ошибка до возврата" важнее.
+ipcMain.handle("fs:writeTextFile", async (_e, root: string, relPath: string, content: string) => {
+  const filePath = resolveWithinRoot(root, relPath);
+  if (!filePath) return { ok: false, error: "путь вне корневой директории проекта" };
+  try {
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) return { ok: false, error: "не файл" };
+    fs.writeFileSync(filePath, content, "utf-8");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
 let installingProc: ChildProcessWithoutNullStreams | null = null;
 
 ipcMain.handle("tools:install", async (_event, only?: "jdk" | "java" | "maven") => {

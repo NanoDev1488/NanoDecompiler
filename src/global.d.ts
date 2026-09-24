@@ -125,6 +125,8 @@ declare global {
       getAppIconThumbnails: () => Promise<{ terminal: string | null; layers: string | null }>;
       listDir: (root: string, relDir: string) => Promise<{ ok: boolean; items?: { name: string; isDir: boolean }[]; error?: string }>;
       readTextFile: (root: string, relPath: string) => Promise<{ ok: boolean; content?: string; size?: number; error?: string }>;
+      // НОВОЕ v1.9.9 (read-write вьюер кода, HANDOFF п.6)
+      writeTextFile: (root: string, relPath: string, content: string) => Promise<{ ok: boolean; error?: string }>;
       // НОВОЕ v1.8.0: см. БАГ-ФИКС checkEnv() выше про важность держать это
       // объявление синхронным с реальным preload.ts.
       searchInProject: (

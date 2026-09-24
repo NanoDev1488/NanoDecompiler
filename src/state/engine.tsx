@@ -148,6 +148,7 @@ interface EngineApi {
   clearQueue(): void;
   selectJob(id: string): void;
   selectFile(jobId: string, fileId: string): void;
+  updateFileCode(jobId: string, fileId: string, code: string): void;
   setLogFilter(f: LogFilter): void;
   toggleTerminal(): void;
   clearLog(): void;
@@ -1127,6 +1128,19 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
   const clearLog = useCallback(() => setLog([]), []);
 
+  // НОВОЕ v1.9.9 (read-write вьюер кода, HANDOFF п.6): после успешной
+  // записи на диск (fs:writeTextFile) обновляем закэшированный file.code
+  // ЛОКАЛЬНО, а не повторным чтением через selectFile() - selectFile
+  // молча пропускает перечитывание, если file.code уже не undefined (см.
+  // комментарий выше), к тому же у нас и так уже есть новый текст в руках
+  // (то, что только что записали) - лишний round-trip на диск не нужен.
+  const updateFileCode = useCallback((jobId: string, fileId: string, code: string) => {
+    const loc = code.split("\n").length;
+    setJobs(prev =>
+      prev.map(j => (j.id !== jobId ? j : { ...j, files: j.files?.map(f => (f.id === fileId ? { ...f, code, loc } : f)) })),
+    );
+  }, []);
+
   const copyText = useCallback(
     (text: string, what: string) => {
       navigator.clipboard
@@ -1298,7 +1312,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     jobs, log, runningJob, runningElapsed, selectedJobId, selectedJob, openFileByJob,
     terminalOpen, logFilter, settings, settingsLoaded, settingsOpen, updateModalOpen, paletteOpen, projectSearchOpen, bugReportOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, installingTool, installProgress, iconThumbnails, updateInfo, toasts, queuedCount, sidebarWidth, fileTreeWidth, terminalHeight,
     addFiles, addJarPaths, openFileDialog, startQueue, stopRunning, stopAll, cancelJob, removeJob, clearQueue,
-    selectJob, selectFile, setLogFilter, toggleTerminal, clearLog, copyLog, copyText,
+    selectJob, selectFile, updateFileCode, setLogFilter, toggleTerminal, clearLog, copyLog, copyText,
     openOutput, setSettingsOpen, setUpdateModalOpen, setSidebarWidth, setFileTreeWidth, setTerminalHeight, saveSettings, completeSetup, setPaletteOpen, setProjectSearchOpen, setBugReportOpen,
     resolveEnvIssue, checkForUpdates, applyEngineUpdate, openClientDownload, checkEnv, installTool, toast, dismissToast,
     sendErrorReport, sendBugReport,
