@@ -1,6 +1,23 @@
 // legitimacy_check.hpp - порт resources/engine/legitimacy_check.py (v2.0,
 // HANDOFF_32). Проверка легитимности плагина по внешним источникам
-// (GitHub/Modrinth/SpigotMC/RuSpigot) + разбор полей из plugin.yml.
+// (GitHub/Modrinth/SpigetApi/Hangar) + разбор полей из plugin.yml.
+//
+// БАГ-ФИКС/ПРАВКА БЕЗОПАСНОСТИ 1.9.6: 4-й источник ("RuSpigot",
+// spigotmc.ru) ЗАМЕНЁН на Hangar (hangar.papermc.io, официальный
+// плагин-репозиторий PaperMC, https://hangar.papermc.io/api-docs).
+// Причина: при проверке источников в этой сессии нашлось прямое
+// предупреждение сообщества (Habr) - искать плагины СТРОГО на
+// spigotmc.org, а НЕ на .ru и подобных "копиях" (в т.ч. rubukkit.org),
+// т.к. это известный вектор бэкдоров. Инструмент легитимности не должен
+// сам держать в списке доверенных источников домен, который сообщество
+// прямо называет небезопасным - живого подтверждения, что spigotmc.ru
+// сейчас вообще работает и что это официальный русский мираж, а не
+// фишинговая копия, тоже не нашлось. `check_ruspigot()`/
+// `ruspigot_parse_result_links()` НЕ удалены (безвредный мёртвый код,
+// вдруг понадобятся для другого html_search-источника) - просто
+// исключён ИМЕННО spigotmc.ru из конфига по умолчанию, а поле
+// результата `ruspigot` переименовано в `hangar` (frontend НЕ хранит
+// это имя поля жёстко - проверено, безопасно для переименования).
 //
 // ВАЖНАЯ ОГОВОРКА ПРО ЭТУ ЧАСТЬ ПОРТА: сетевые функции (`http_get` и всё,
 // что на нём построено - check_github/check_modrinth/check_spigot/
@@ -11,7 +28,10 @@
 // боевым использованием эту часть стоит явно проверить на реальной машине
 // с сетью. ЧИСТАЯ (без сети) логика - `fields_from_plugin_yml`, разбор
 // JSON-ответов, regex RuSpigot, `format_for_console` - протестирована
-// офлайн против оригинала (см. HANDOFF_32).
+// офлайн против оригинала (см. HANDOFF_32). Новый парсинг Hangar (1.9.6)
+// компилируется чисто (`g++ -c` реально прогнан в этой сессии), но, как и
+// остальные сетевые куски, вживую против настоящего hangar.papermc.io НЕ
+// проверялся - структура ответа подтверждена только через веб-поиск.
 #pragma once
 
 #include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
@@ -48,7 +68,7 @@ struct LegitimacySourceResult {
 // HANDOFF_53: мини-язык конфигурации источников - см.
 // LEGITIMACY_SITES_MINI_LANGUAGE_SPEC.md за полным описанием формата и
 // тем, почему он отличается от черновика пользователя (HANDOFF_39/23).
-enum class SiteKind { GithubApi, ModrinthApi, SpigetApi, HtmlSearch };
+enum class SiteKind { GithubApi, ModrinthApi, SpigetApi, HtmlSearch, HangarApi };
 
 struct SiteConfig {
     std::string label;       // для сообщений пользователю ("GitHub", "Modrinth", ...)
@@ -108,7 +128,7 @@ struct LegitimacyCheckResult {
     LegitimacySourceResult github;
     LegitimacySourceResult modrinth;
     LegitimacySourceResult spigot;
-    LegitimacySourceResult ruspigot;
+    LegitimacySourceResult hangar;
     // HANDOFF_53: nullopt, если jar_path не передан в run_legitimacy_check
     // (сравнение хэшей не запрашивалось) - см. jar_path параметр ниже.
     std::optional<HashComparisonResult> hash_comparison;

@@ -1,4 +1,5 @@
-import { Bell, FolderOpen, MessageSquare, Play, Settings2, Square } from "lucide-react";
+import { Bell, ChevronDown, FolderOpen, MessageSquare, Play, Settings2, Square } from "lucide-react";
+import { useState } from "react";
 import { useEngine } from "../state/engine";
 import { cn } from "../utils/cn";
 
@@ -116,27 +117,18 @@ export function AppHeader() {
         <span className="hidden text-faint md:inline">команды</span>
       </button>
 
-      <button
-        className={cn("btn btn-ghost relative flex-none", hasUpdate && "border-acid/40 text-acid")}
-        onClick={() => setUpdateModalOpen(true)}
-        aria-label="Обновления"
-        title="Обновления"
-      >
-        <Bell size={14} />
-        <span className="hidden lg:inline">Обновления</span>
-        {hasUpdate && <span className="absolute top-1 right-1.5 size-[7px] rounded-full bg-acid" />}
-      </button>
-
-      {/* НОВОЕ v1.9.5 (прямая просьба пользователя - "отдельная кнопка для
-          багрепорта, не от декомпиляции, лично от пользователя"). */}
-      <button
-        className="icon-btn flex-none"
-        onClick={() => setBugReportOpen(true)}
-        aria-label="Сообщить о проблеме"
-        title="Сообщить о проблеме"
-      >
-        <MessageSquare size={16} />
-      </button>
+      {/* НОВОЕ 1.9.6 (HANDOFF п.10, "группировка кнопок тулбара в
+          подпапки: лидер + выпадающий список"). ВАЖНО - выбор группы и
+          лидера сделан БЕЗ подтверждения пользователем (визуально
+          рискованно без скриншотов, как и предупреждал прошлый хэндофф) -
+          решение: "Обновления" (Bell) - лидер, т.к. у неё уже есть
+          собственное активное состояние (красная точка при наличии
+          обновления - самая "заметная" кнопка группы), "Сообщить о
+          проблеме" ушла под стрелку. "Настройки" НЕ сгруппирована -
+          используется слишком часто, чтобы прятать за клик. Паттерн
+          dropdown скопирован с OpenInMenu.tsx (open-state + оверлей +
+          absolute-меню), лидер повторяется первым пунктом списка. */}
+      <ToolbarMenu hasUpdate={hasUpdate} setUpdateModalOpen={setUpdateModalOpen} setBugReportOpen={setBugReportOpen} />
 
       <button
         className="icon-btn flex-none"
@@ -146,6 +138,61 @@ export function AppHeader() {
       >
         <Settings2 size={16} />
       </button>
+    </div>
+  );
+}
+
+function ToolbarMenu({
+  hasUpdate,
+  setUpdateModalOpen,
+  setBugReportOpen,
+}: {
+  hasUpdate: boolean;
+  setUpdateModalOpen: (v: boolean) => void;
+  setBugReportOpen: (v: boolean) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative flex-none">
+      <button
+        className={cn("btn btn-ghost relative flex-none", hasUpdate && "border-acid/40 text-acid")}
+        onClick={() => setOpen(v => !v)}
+        aria-label="Обновления и обратная связь"
+        title="Обновления и обратная связь"
+      >
+        <Bell size={14} />
+        <span className="hidden lg:inline">Обновления</span>
+        <ChevronDown size={11} />
+        {hasUpdate && <span className="absolute top-1 right-1.5 size-[7px] rounded-full bg-acid" />}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="animate-rise absolute top-9 right-0 z-30 w-52 overflow-hidden rounded-lg border border-line bg-surface py-1 shadow-xl shadow-black/40">
+            <button
+              className="flex w-full items-center justify-between px-3 py-1.5 text-left text-[12px] text-ink/90 hover:bg-raised"
+              onClick={() => {
+                setOpen(false);
+                setUpdateModalOpen(true);
+              }}
+            >
+              <span className="flex items-center gap-2">
+                <Bell size={13} /> Обновления
+              </span>
+              {hasUpdate && <span className="size-[7px] rounded-full bg-acid" />}
+            </button>
+            <button
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-ink/90 hover:bg-raised"
+              onClick={() => {
+                setOpen(false);
+                setBugReportOpen(true);
+              }}
+            >
+              <MessageSquare size={13} /> Сообщить о проблеме
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

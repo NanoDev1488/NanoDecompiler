@@ -67,7 +67,9 @@ export function OpenInMenu({ filePath, projectDir }: { filePath?: string; projec
               if (pendingEditor === id) {
                 return (
                   <div key={id} className="border-t border-b border-line py-1 first:border-t-0">
-                    <p className="mono px-3 py-1 text-[10.5px] text-faint">{label} - что открыть?</p>
+                    <p className="mono px-3 py-1 text-[10.5px] text-faint">
+                      {id === "vscode" && available?.vscode_codium ? `${label} [VSCodium]` : label} - что открыть?
+                    </p>
                     {filePath && (
                       <button
                         className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-ink/90 hover:bg-raised"
@@ -93,7 +95,12 @@ export function OpenInMenu({ filePath, projectDir }: { filePath?: string; projec
                   className="flex w-full items-center justify-between px-3 py-1.5 text-left text-[12px] text-ink/90 hover:bg-raised disabled:cursor-not-allowed disabled:text-faint disabled:opacity-50 disabled:hover:bg-transparent"
                   onClick={() => isAvailable && setPendingEditor(id)}
                 >
-                  {label}
+                  {/* НОВОЕ 1.9.6: на Linux, если `code` не нашёлся, а
+                      VSCodium (`codium`) - нашёлся, apps:detect отдаёт
+                      отдельный флаг vscode_codium - дорисовываем подпись,
+                      чтобы не вводить в заблуждение (по клику реально
+                      откроется codium, не code). */}
+                  {id === "vscode" && available?.vscode_codium ? `${label} [VSCodium]` : label}
                   {available === null && <span className="mono text-[10px] text-faint">…</span>}
                 </button>
               );

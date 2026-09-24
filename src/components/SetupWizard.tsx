@@ -156,9 +156,22 @@ export function SetupWizard() {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center bg-bg">
-      <div className="animate-rise flex w-[480px] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl shadow-black/50">
-        <div className="flex flex-col items-center gap-5 px-8 py-9 text-center">
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-black/70 p-4 backdrop-blur-[2px]">
+      <div className="animate-rise flex w-[400px] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl shadow-black/50">
+        {/* БАГ-ФИКС 1.9.6 (HANDOFF п.8, "сделать окно маленьким ~160×160,
+            не на весь экран"): раньше фон был СПЛОШНЫМ (`bg-bg`, тот же
+            цвет, что и основное приложение) на весь `fixed inset-0` -
+            визуально выглядело так, будто окно занимает весь экран, хотя
+            сама карточка и так была 480px. Буквально 160×160px нечитаемо
+            для текста EULA - взял тот же визуальный язык, что и у
+            остальных модалок приложения (SettingsModal и т.д.):
+            полупрозрачный тёмный фон + blur вместо сплошной заливки, плюс
+            карточка сузилась 480 -> 400px и внутренние отступы/шрифты
+            чуть компактнее. Если пользователь ждал буквально маленькое
+            окно ~160×160 - такой размер физически не вмещает читаемый
+            текст лицензии, поэтому выбран компромисс "компактный диалог,
+            не на весь экран", а не точное число из сообщения. */}
+        <div className="flex flex-col items-center gap-4 px-6 py-7 text-center">
           {step === "welcome" && (
             <>
               <WelcomeArt />
@@ -180,7 +193,7 @@ export function SetupWizard() {
             <>
               <ShieldArt />
               <p className="text-[14.5px] font-semibold text-ink">Лицензионное соглашение</p>
-              <div className="mono h-[220px] w-full overflow-y-auto rounded-lg border border-line bg-bg p-3 text-left text-[10.5px] leading-relaxed whitespace-pre-wrap text-dim">
+              <div className="mono h-[170px] w-full overflow-y-auto rounded-lg border border-line bg-bg p-3 text-left text-[10.5px] leading-relaxed whitespace-pre-wrap text-dim">
                 {EULA_TEXT}
               </div>
               <label className="flex w-full cursor-pointer items-center gap-2 text-left text-[12px] text-ink/90">

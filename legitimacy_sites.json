@@ -21,10 +21,10 @@
     "release_query": null
   },
   {
-    "label": "RuSpigot",
-    "kind": "html_search",
-    "site": "spigotmc.ru",
-    "query": "https://spigotmc.ru/resources/?q={plugin_name}",
+    "label": "Hangar",
+    "kind": "hangar_api",
+    "site": "hangar.papermc.io",
+    "query": "https://hangar.papermc.io/api/v1/projects?q={plugin_name}&limit=5&offset=0",
     "release_query": null
   }
 ]

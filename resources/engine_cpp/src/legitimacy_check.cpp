@@ -234,6 +234,7 @@ std::optional<SiteKind> parse_site_kind(const std::string& s) {
     if (s == "modrinth_api") return SiteKind::ModrinthApi;
     if (s == "spiget_api") return SiteKind::SpigetApi;
     if (s == "html_search") return SiteKind::HtmlSearch;
+    if (s == "hangar_api") return SiteKind::HangarApi;
     return std::nullopt;
 }
 
@@ -265,7 +266,15 @@ std::vector<SiteConfig> default_legitimacy_sites_config() {
          std::optional<std::string>("https://api.modrinth.com/v2/project/{slug}/version")},
         {"SpigotMC", SiteKind::SpigetApi, "spigotmc.org", "https://api.spiget.org/v2/search/resources/{plugin_name}?field=name&size=5",
          std::nullopt},
-        {"RuSpigot", SiteKind::HtmlSearch, "spigotmc.ru", "https://spigotmc.ru/resources/?q={plugin_name}", std::nullopt},
+        // БАГ-ФИКС/БЕЗОПАСНОСТЬ 1.9.6: "RuSpigot" (spigotmc.ru) убран из
+        // источников по умолчанию - см. подробное обоснование в hpp. Hangar
+        // (hangar.papermc.io) - официальный репозиторий плагинов PaperMC,
+        // с честным публичным API (https://hangar.papermc.io/api-docs), без
+        // авторизации для чтения. Хэш-сравнение НЕ реализовано (как и для
+        // SpigotMC/Spiget) - в подтверждённой структуре ответа Hangar не
+        // нашлось поля с хэшем файла версии, только сам файл для скачивания.
+        {"Hangar", SiteKind::HangarApi, "hangar.papermc.io", "https://hangar.papermc.io/api/v1/projects?q={plugin_name}&limit=5&offset=0",
+         std::nullopt},
     };
 }
 
@@ -439,6 +448,42 @@ LegitimacySourceResult check_site(const SiteConfig& cfg, const std::string& plug
             // HANDOFF_53: хэш НЕ сравнивается для этого источника - см. спеку.
             out.candidates.push_back(std::move(c));
             k += 1;
+        }
+        out.found = !out.candidates.empty();
+        return out;
+    }
+
+    if (cfg.kind == SiteKind::HangarApi) {
+        // НОВОЕ 1.9.6: ответ Hangar - {"result": [{"name":.., "namespace":
+        // {"owner":.., "slug":..}, "stats": {"stars":..}, ...}]} - структура
+        // подтверждена веб-поиском (hangar.papermc.io/api-docs, реальные
+        // примеры использования), НЕ протестирована вживую (нет сети в
+        // песочнице этой сессии - см. общую оговорку в legitimacy_check.hpp).
+        auto data = http_get_json(url, timeout_sec);
+        if (!data.has_value() || !data->is_object() || data->get("result") == nullptr) return out;
+        out.checked = true;
+        const JsonValue* result_arr = data->get("result");
+        if (result_arr && result_arr->is_array()) {
+            size_t k = 0;
+            for (auto& item : *result_arr->arr_v) {
+                if (k >= 5) break;
+                const JsonValue* name = item.get("name");
+                const JsonValue* ns = item.get("namespace");
+                const JsonValue* owner = ns ? ns->get("owner") : nullptr;
+                const JsonValue* slug = ns ? ns->get("slug") : nullptr;
+                if (!name || !name->is_string() || !owner || !owner->is_string() || !slug || !slug->is_string()) continue;
+                LegitimacyCandidate c;
+                c.full_name = name->str_v;
+                c.url = "https://hangar.papermc.io/" + owner->str_v + "/" + slug->str_v;
+                const JsonValue* stats = item.get("stats");
+                const JsonValue* stars = stats ? stats->get("stars") : nullptr;
+                c.stars = (stars && stars->kind == JsonValue::Kind::Number) ? static_cast<int64_t>(stars->num_v) : 0;
+                // HANDOFF_53/1.9.6: хэш НЕ сравнивается для этого источника
+                // (нет подтверждённого поля хэша в ответе Hangar) - та же
+                // оговорка, что и у SpigotMC/Spiget выше.
+                out.candidates.push_back(std::move(c));
+                k += 1;
+            }
         }
         out.found = !out.candidates.empty();
         return out;
@@ -664,7 +709,9 @@ LegitimacyCheckResult run_legitimacy_check(const std::string& plugin_name, const
                 result.spigot = r;
                 break;
             case SiteKind::HtmlSearch:
-                result.ruspigot = r;
+                break;  // НЕ используется по умолчанию с 1.9.6 (см. hpp) - если пользователь сам добавит html_search в конфиг, отдельного поля для него нет (та же оговорка про "фиксированные 4 поля", что и раньше)
+            case SiteKind::HangarApi:
+                result.hangar = r;
                 break;
         }
     }
@@ -678,7 +725,7 @@ LegitimacyCheckResult run_legitimacy_check(const std::string& plugin_name, const
             const char* label;
             const LegitimacySourceResult* r;
         };
-        Src srcs[] = {{"GitHub", &result.github}, {"Modrinth", &result.modrinth}, {"SpigotMC", &result.spigot}, {"RuSpigot", &result.ruspigot}};
+        Src srcs[] = {{"GitHub", &result.github}, {"Modrinth", &result.modrinth}, {"SpigotMC", &result.spigot}, {"Hangar", &result.hangar}};
         for (auto& s : srcs) {
             for (auto& c : s.r->candidates) {
                 if (!c.sha256_hex.has_value()) continue;
@@ -712,7 +759,7 @@ std::optional<std::string> format_for_console(const LegitimacyCheckResult& resul
         {"github", "GitHub", &result.github},
         {"modrinth", "Modrinth", &result.modrinth},
         {"spigot", "SpigotMC", &result.spigot},
-        {"ruspigot", "RuSpigot", &result.ruspigot},
+        {"hangar", "Hangar", &result.hangar},
     };
     for (auto& s : sources) {
         if (!s.r->checked) {

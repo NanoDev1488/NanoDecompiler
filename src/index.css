@@ -363,6 +363,47 @@ body {
   cursor: help;
 }
 
+/* НОВОЕ 1.9.6 (HANDOFF п.4-5/9 - "сворачивание цветовых цепочек и
+   логгер-вызовов в чип, как VS Code сворачивает inline decorations"):
+   СВЁРНУТОЕ состояние - маленький серый прямоугольник с уже
+   отформатированным (не сырым) текстом внутри, кликабельный - клик
+   разворачивает обратно в исходный код. РЕШЕНИЕ по развилке из хэндоффа
+   (вариант а/б): взят вариант (б) - честная рамка с ПРИМЕНЁННЫМ цветом
+   (переиспользует ту же логику раскраски, что и обычный построчный
+   рендер), но БЕЗ исполнения чужой .replace()-логики форматирования
+   (FancyFont.stylize() и т.п.) - это НЕ обобщается на произвольные
+   плагины без их исходников, см. подробное обоснование в HANDOFF. */
+.chain-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--color-raised);
+  border: 1px solid var(--color-line);
+  cursor: pointer;
+}
+.chain-chip:hover {
+  border-color: var(--color-line-strong);
+}
+.chain-chip-tag {
+  font-size: 0.78em;
+  color: var(--color-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.chain-chip-tag.tag-warn {
+  color: var(--color-warn);
+}
+.chain-chip-expanded {
+  display: inline;
+  cursor: pointer;
+  border-bottom: 1px dotted var(--color-line-strong);
+}
+.chain-chip-expanded:hover {
+  border-bottom-color: var(--color-acid);
+}
+
 /* НОВОЕ v1.7.6: подсветка результатов поиска в файле (CSS Custom Highlight
    API, см. FindBar.tsx) - активное совпадение отличается ярче/рамкой. */
 ::highlight(nd-find) {

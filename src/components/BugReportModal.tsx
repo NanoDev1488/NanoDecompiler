@@ -73,8 +73,8 @@ export function BugReportModal({ onClose }: { onClose: () => void }) {
             }}
             disabled={!settings.telemetryEnabled}
             placeholder="Опишите проблему или мысль…"
-            rows={6}
-            className="field mono resize-none text-[12.5px]"
+            rows={14}
+            className="field mono min-h-[220px] resize-y text-[12.5px]"
             spellCheck
           />
           <div className="flex items-center justify-end gap-2">

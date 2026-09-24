@@ -302,6 +302,55 @@ void curl_download(const std::string& url, const std::string& dest_path, const s
     if (progress_cb) progress_cb(label, ec ? 0 : sz, ec ? std::nullopt : std::optional<uint64_t>(sz));
 }
 
+#if !defined(_WIN32) && !defined(__APPLE__)
+// НОВОЕ 1.9.6 (реальный запрос - "на Linux попробовать установку Java/Maven
+// через apt/sudo apt"): системный apt-путь пробуется ПЕРВЫМ на Linux, ДО
+// curl_download-пути ниже - он не зависит от доступности зеркал
+// Adoptium/Apache (repo Ubuntu/Debian почти всегда доступен и быстрее),
+// и именно это, по всей видимости, стояло за повторяющейся жалобой
+// "Maven не ставится" (mirror-fallback самого portable-скачивания уже
+// чинился в v1.8.0 - добавлял ещё зеркала, но не убирал зависимость от
+// внешней сети Apache целиком; apt - независимый путь).
+//
+// ЧЕСТНАЯ ОГОВОРКА: НЕ протестировано вживую с реальной установкой -
+// песочница этой сессии тоже без исходящей сети для apt (подтверждено:
+// apt-get install -y default-jdk-headless здесь падает с 403 Forbidden
+// от прокси), НО пакетные имена (`default-jdk-headless`, `maven`) и
+// команда `apt-get install -y <pkg>` реально проверены через
+// `apt-get install --dry-run` в этой же песочнице - оба резолвятся в
+// корректное дерево зависимостей на настоящем Ubuntu 24.04 (см. HANDOFF).
+// graceful degradation, как и весь остальной toolinstaller: любая
+// неудача (нет apt-get, нет pkexec, пользователь отменил графический
+// запрос прав, нет сети) тихо роняет исполнение на существующий
+// portable curl-путь ниже, а не считается фатальной ошибкой.
+bool command_available_posix(const std::string& cmd) {
+    return std::system(("command -v " + cmd + " >/dev/null 2>&1").c_str()) == 0;
+}
+
+// pkexec - штатный способ спросить права у пользователя GUI-приложению
+// на современных Linux desktop (GNOME/KDE - идёт в комплекте с
+// PolicyKit), показывает системный диалог, НЕ требует tty. НЕ используем
+// голый `sudo` - без tty он либо тихо провалится (`sudo -n`), либо (без
+// -n) зависнет, ожидая пароль на несуществующем терминале, что для
+// GUI-приложения неотличимо от зависания.
+bool try_apt_install(const std::vector<std::string>& packages, const std::string& label, const ProgressCallback& progress_cb) {
+    if (!command_available_posix("apt-get")) return false;  // не Debian/Ubuntu-семейство - тихо на portable-путь
+    if (!command_available_posix("pkexec")) return false;   // нет штатного способа спросить права без терминала
+    if (progress_cb) progress_cb(label + " (apt)", 0, std::nullopt);
+    std::string pkg_list;
+    for (auto& p : packages) pkg_list += " " + shell_quote(p);
+    // DEBIAN_FRONTEND=noninteractive - на случай debconf-диалогов у
+    // каких-то транзитивных зависимостей (GUI-приложение не может
+    // ответить на текстовый prompt внутри невидимого подпроцесса).
+    std::string cmd = "pkexec env DEBIAN_FRONTEND=noninteractive apt-get install -y" + pkg_list + " >/dev/null 2>&1";
+    int raw_rc = std::system(cmd.c_str());
+    int rc = WIFEXITED(raw_rc) ? WEXITSTATUS(raw_rc) : -1;
+    if (rc != 0) return false;
+    if (progress_cb) progress_cb(label + " (apt)", 100, std::optional<uint64_t>(100));
+    return true;
+}
+#endif
+
 // --- zip-извлечение (переиспользует zip_reader.hpp) ---
 std::optional<std::string> extract_zip(const std::string& zip_path, const std::string& dest_dir) {
     ZipReader zr(zip_path);
@@ -484,6 +533,19 @@ constexpr const char* kMavenFallbackVersion = "3.9.9";
 }  // namespace
 
 std::string install_jdk(ProgressCallback progress_cb) {
+#if !defined(_WIN32) && !defined(__APPLE__)
+    if (try_apt_install({"default-jdk-headless"}, "JDK", progress_cb)) {
+        // apt кладёт java в системный /usr/bin, НЕ в get_tools_dir() -
+        // ищем именно через resolve_tool_path (смотрит PATH текущего
+        // процесса), а не find_local_java() (тот смотрит ТОЛЬКО папку
+        // portable-установок самого приложения).
+        auto java_path = resolve_tool_path({"java"}, "java");
+        if (java_path.has_value()) return *java_path;
+        // apt отчитался об успехе, но java не нашлась в PATH (нетипичный
+        // случай, другой профиль путей дистрибутива) - не бросаем ошибку,
+        // просто идём на portable-путь ниже, как и было раньше.
+    }
+#endif
     std::string tools_dir = get_tools_dir();
     std::string url = "https://api.adoptium.net/v3/binary/latest/" + std::to_string(kAdoptiumFeatureVersion) + "/ga/" + adoptium_os() + "/" +
                        adoptium_arch() + "/jdk/hotspot/normal/eclipse";
@@ -513,6 +575,17 @@ std::string install_jdk(ProgressCallback progress_cb) {
 }
 
 std::string install_maven(ProgressCallback progress_cb) {
+#if !defined(_WIN32) && !defined(__APPLE__)
+    // См. комментарий в install_jdk() выше - тот же apt-путь, тот же
+    // resolve_tool_path (НЕ find_local_maven - apt ставит в /usr/bin).
+    // Это конкретно нацелено на повторяющуюся жалобу "Maven не
+    // ставится" - apt полностью обходит сеть Apache mirrors, на
+    // которую жалоба указывала изначально.
+    if (try_apt_install({"maven"}, "Maven", progress_cb)) {
+        auto maven_path = resolve_tool_path({"mvn"}, "maven");
+        if (maven_path.has_value()) return *maven_path;
+    }
+#endif
     std::string tools_dir = get_tools_dir();
     std::string version = kMavenFallbackVersion;
     // БАГ-ФИКС v1.8.0 (реальный репорт - "Maven не качается вообще, не

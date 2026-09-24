@@ -99,7 +99,7 @@ std::string legitimacy_json(const std::optional<LegitimacyCheckResult>& leg) {
     out += ",\"github\":" + legitimacy_source_json(leg->github);
     out += ",\"modrinth\":" + legitimacy_source_json(leg->modrinth);
     out += ",\"spigot\":" + legitimacy_source_json(leg->spigot);
-    out += ",\"ruspigot\":" + legitimacy_source_json(leg->ruspigot);
+    out += ",\"hangar\":" + legitimacy_source_json(leg->hangar);
     out += ",\"hash_comparison\":" + hash_comparison_json(leg->hash_comparison);
     out += "}";
     return out;

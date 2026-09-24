@@ -418,22 +418,45 @@ ipcMain.handle("apps:detect", async () => {
     // нужно (и не через что) детектить через where/which отдельно.
     result[id] = editor.alwaysOnWin ? true : await isCommandAvailable(editor.command);
   }
+  // НОВОЕ 1.9.6 (реальный запрос - "на Linux проверь VSCodium, если есть,
+  // можно тыкнуть на слово VS Code и откроется в VSCodium"): на Linux
+  // многие ставят именно VSCodium (сборка VS Code без телеметрии
+  // Microsoft) - его CLI-команда НЕ `code`, а `codium`, поэтому пункт
+  // "VS Code" оставался серым/недоступным для таких пользователей, даже
+  // если у них полноценный редактор той же линейки уже стоит. Если `code`
+  // не нашёлся, а `codium` нашёлся - считаем пункт "VS Code" доступным,
+  // отдельным флагом `vscode_codium` сообщаем renderer'у, что реально
+  // запустится codium (OpenInMenu.tsx дорисовывает "[VSCodium]" к
+  // подписи) - см. тот же выбор команды в apps:openWith ниже.
+  if (!result.vscode && process.platform !== "win32") {
+    result.vscode = await isCommandAvailable("codium");
+    result.vscode_codium = result.vscode;
+  }
   return result;
 });
 
 ipcMain.handle("apps:openWith", async (_e, editorId: EditorId, target: string) => {
   const editor = EDITOR_REGISTRY[editorId];
   if (!editor) return { ok: false, error: "Неизвестный редактор" };
+  // См. комментарий в apps:detect - на Linux `code` может отсутствовать,
+  // а `codium` (VSCodium) - быть. Проверяем `code` первым (более
+  // распространённый случай), падаем на `codium` только если `code`
+  // реально недоступен - НЕ трогаем поведение Windows/macOS, где `code`
+  // почти всегда есть при установленном VS Code.
+  let command = editor.command;
+  if (editorId === "vscode" && process.platform !== "win32" && !(await isCommandAvailable("code"))) {
+    if (await isCommandAvailable("codium")) command = "codium";
+  }
   return new Promise(resolve => {
-    const proc = spawn(editor.command, [expandHome(target)], { shell: true, windowsHide: true });
+    const proc = spawn(command, [expandHome(target)], { shell: true, windowsHide: true });
     let errored = false;
     proc.on("error", () => {
       errored = true;
-      resolve({ ok: false, error: `${editor.label} не найден в PATH (команда \`${editor.command}\`)` });
+      resolve({ ok: false, error: `${editor.label} не найден в PATH (команда \`${command}\`)` });
     });
     proc.on("close", code => {
       if (errored) return;
-      resolve(code === 0 ? { ok: true } : { ok: false, error: `${editor.command} завершился с кодом ${code}` });
+      resolve(code === 0 ? { ok: true } : { ok: false, error: `${command} завершился с кодом ${code}` });
     });
   });
 });
