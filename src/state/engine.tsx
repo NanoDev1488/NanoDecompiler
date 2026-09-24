@@ -274,6 +274,12 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       const id = ++logIdRef.current;
       setToasts(prev => [...prev.slice(-3), { id, kind, msg }]);
       window.setTimeout(() => dismissToast(id), 3600);
+      // НОВОЕ v1.9.8 (окно логов разработчика, HANDOFF п.16): каждый
+      // toast заодно уходит в персистентный лог-буфер main-процесса
+      // (виден и после того, как сам toast исчезнет через 3.6с) -
+      // fire-and-forget, не блокирует и не может провалиться видимо
+      // для пользователя.
+      window.nano.pushAppLog(kind, msg);
     },
     [dismissToast],
   );
@@ -1206,8 +1212,50 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
   // глобальные горячие клавиши
   useEffect(() => {
+    // НОВОЕ v1.9.8 (окно логов разработчика, HANDOFF п.16 - буквально
+    // "Ctrl+L+O+G"): Ctrl+L УЖЕ занят ("очистить лог", см. ниже), Ctrl+O
+    // УЖЕ занят ("открыть файл") - буквальный chord с удержанием Ctrl на
+    // всех трёх буквах сломал бы оба существующих шортката (Ctrl+L
+    // сработал бы как "очистить" ДО того, как код успел бы понять, что
+    // это начало цепочки). Развёл конфликт: старт цепочки - Ctrl+Alt+L
+    // (свободная комбинация, ничем не занята), дальше просто "O" и "G"
+    // без модификаторов подряд в течение 1.5с. Если это не то, что
+    // ожидалось - решение легко заменить на другую комбинацию, сама
+    // структура (chordRef + таймаут сброса) не изменится.
+    let chordStage = 0;
+    let chordTimer: number | null = null;
+    const resetChord = () => {
+      chordStage = 0;
+      if (chordTimer !== null) window.clearTimeout(chordTimer);
+      chordTimer = null;
+    };
+    const armChord = () => {
+      if (chordTimer !== null) window.clearTimeout(chordTimer);
+      chordTimer = window.setTimeout(resetChord, 1500);
+    };
+
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.altKey && e.key.toLowerCase() === "l") {
+        e.preventDefault();
+        chordStage = 1;
+        armChord();
+        return;
+      }
+      if (chordStage === 1 && !mod && !e.altKey && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        chordStage = 2;
+        armChord();
+        return;
+      }
+      if (chordStage === 2 && !mod && !e.altKey && e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        resetChord();
+        window.nano.openLogWindow();
+        return;
+      }
+      if (chordStage !== 0) resetChord(); // любая другая клавиша прерывает цепочку
+
       if (mod && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPaletteOpen(v => !v);
@@ -1233,7 +1281,10 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      resetChord();
+    };
   }, [openFileDialog]);
 
   const runningJob = useMemo(() => jobs.find(j => j.status === "running") ?? null, [jobs]);

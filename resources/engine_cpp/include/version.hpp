@@ -63,5 +63,19 @@ namespace nd {
 // одно зеркало). Движок декомпиляции (байткод и т.п.) в этом релизе НЕ
 // трогался - это последний чисто GUI-релиз перед серией 1.10.x,
 // нацеленной на сам движок.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.7 «Пре-Релизность»";
+// НОВОЕ v1.9.7 «Källa» (источник): легитимность плагинов - "RuSpigot"
+// (spigotmc.ru) убран из источников проверки по умолчанию (найдено прямое
+// предупреждение сообщества - искать плагины строго на spigotmc.org, не
+// на ".ru"-копиях, известный вектор бэкдоров; живого подтверждения, что
+// spigotmc.ru вообще ещё официален, тоже не нашлось - инструмент проверки
+// легитимности не должен сам держать сомнительный источник в доверенных).
+// Вместо него - Hangar (hangar.papermc.io, официальный репозиторий
+// плагинов PaperMC), новый SiteKind::HangarApi в legitimacy_check.cpp.
+// GitHub/Modrinth/SpigotMC(Spiget) - все три перепроверены веб-поиском,
+// подтверждены актуальными. См. legitimacy_sites.json и
+// resources/engine/LEGITIMACY_SITES_MINI_LANGUAGE_SPEC.md.
+// НОВОЕ v1.9.8: окно логов разработчика (Ctrl+Alt+L, затем O, затем G -
+// буквальный chord "Ctrl+L+O+G" конфликтовал с уже занятыми Ctrl+L/Ctrl+O,
+// см. engine.tsx) - второе BrowserWindow, источник записей - toast().
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.8";
 }

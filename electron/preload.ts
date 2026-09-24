@@ -42,6 +42,15 @@ contextBridge.exposeInMainWorld("nano", {
   openInVSCode: (target: string): Promise<ShellResult> => ipcRenderer.invoke("shell:openInVSCode", target),
   // НОВОЕ v1.7.6: "Открыть в..." - список редакторов + проверка доступности.
   detectApps: (): Promise<Record<string, boolean>> => ipcRenderer.invoke("apps:detect"),
+  // НОВОЕ v1.9.8 (окно логов разработчика, HANDOFF п.16)
+  pushAppLog: (kind: string, msg: string): void => ipcRenderer.send("applog:push", kind, msg),
+  getAppLog: (): Promise<Array<{ id: number; ts: number; kind: string; msg: string }>> => ipcRenderer.invoke("applog:getAll"),
+  openLogWindow: (): Promise<void> => ipcRenderer.invoke("applog:open"),
+  onAppLogUpdate: (cb: (entry: { id: number; ts: number; kind: string; msg: string }) => void) => {
+    const handler = (_e: unknown, entry: { id: number; ts: number; kind: string; msg: string }) => cb(entry);
+    ipcRenderer.on("applog:update", handler);
+    return () => ipcRenderer.removeListener("applog:update", handler);
+  },
   openWith: (editorId: string, target: string): Promise<ShellResult> => ipcRenderer.invoke("apps:openWith", editorId, target),
   // НОВОЕ v1.7.6: поиск похожих репозиториев на GitHub.
   searchGithubSimilar: (

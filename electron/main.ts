@@ -33,6 +33,31 @@ function expandHome(p: string): string {
 }
 
 let mainWindow: BrowserWindow | null = null;
+// НОВОЕ v1.9.8 (HANDOFF п.16 - окно логов разработчика): второе,
+// независимо перемещаемое окно - первый и единственный случай в проекте,
+// когда открывается больше одного BrowserWindow (см. предупреждение в
+// HANDOFF про это). Загружает ТОТ ЖЕ index.html, но с #/logs в хэше -
+// App.tsx/main.tsx решает, что рендерить, по location.hash (см. main.tsx).
+let logWindow: BrowserWindow | null = null;
+// Централизованный буфер - живёт в main-процессе, а не в renderer'е,
+// потому что у каждого BrowserWindow СВОЙ, полностью изолированный JS-
+// контекст (два разных React-дерева не могут просто "расшарить" состояние
+// между собой) - единственный способ показать ОДНИ И ТЕ ЖЕ записи в обоих
+// окнах без сложной синхронизации - держать источник истины здесь и
+// широковещательно слать обновления в оба окна через webContents.send.
+type AppLogEntry = { id: number; ts: number; kind: string; msg: string };
+const appLogBuffer: AppLogEntry[] = [];
+let appLogIdSeq = 0;
+const APP_LOG_MAX = 1000; // не даём буферу расти бесконечно за долгую сессию
+
+function pushAppLog(kind: string, msg: string) {
+  const entry: AppLogEntry = { id: ++appLogIdSeq, ts: Date.now(), kind, msg };
+  appLogBuffer.push(entry);
+  if (appLogBuffer.length > APP_LOG_MAX) appLogBuffer.splice(0, appLogBuffer.length - APP_LOG_MAX);
+  for (const w of [mainWindow, logWindow]) {
+    if (w && !w.isDestroyed()) w.webContents.send("applog:update", entry);
+  }
+}
 let runningProc: ChildProcessWithoutNullStreams | null = null;
 
 const isDev = !app.isPackaged;
@@ -217,6 +242,53 @@ function createWindow() {
 app.whenReady().then(() => {
   registerUpdateHandlers(engineDir, engineInvocation);
   createWindow();
+});
+
+// НОВОЕ v1.9.8: создаёт/фокусирует окно логов - вызывается по IPC
+// (applog:open, см. ниже) из renderer'а главного окна (по keyboard chord
+// в App.tsx). Отдельная функция, а не инлайн в handle(), т.к. вызывается
+// и с нуля, и повторно (просто focus(), если уже открыто).
+function openLogWindow() {
+  if (logWindow && !logWindow.isDestroyed()) {
+    logWindow.focus();
+    return;
+  }
+  logWindow = new BrowserWindow({
+    width: 820,
+    height: 560,
+    minWidth: 480,
+    minHeight: 320,
+    backgroundColor: "#0c100d",
+    autoHideMenuBar: true,
+    frame: false,
+    icon: iconPathFor(loadSettings().appIcon),
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  const hash = "#/logs";
+  if (isDev && process.env.VITE_DEV_SERVER_URL) {
+    logWindow.loadURL(process.env.VITE_DEV_SERVER_URL + hash);
+  } else {
+    logWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"), { hash: "/logs" });
+  }
+  logWindow.on("closed", () => {
+    logWindow = null;
+  });
+}
+
+ipcMain.handle("applog:open", () => {
+  openLogWindow();
+});
+
+ipcMain.handle("applog:getAll", () => appLogBuffer);
+
+// fire-and-forget со стороны renderer'а (см. toast() в engine.tsx) - не
+// invoke, специально handle с "on", а не "handle" - ответ не нужен никому.
+ipcMain.on("applog:push", (_event, kind: string, msg: string) => {
+  pushAppLog(String(kind), String(msg));
 });
 
 app.on("window-all-closed", () => {
@@ -814,18 +886,27 @@ ipcMain.handle("telemetry:sendReport", async (_e, report: unknown) => {
 // Реальное управление окном для кастомного Titlebar.tsx - см. frame:false
 // выше (без родной рамки ОС нужно самим сворачивать/разворачивать/
 // закрывать через IPC, раньше эти кнопки были фиктивными заглушками).
-ipcMain.handle("window:minimize", async () => {
-  mainWindow?.minimize();
+//
+// БАГ-ФИКС v1.9.8: раньше все четыре хендлера были жёстко привязаны к
+// `mainWindow`, а НЕ к окну-отправителю IPC-вызова - с появлением второго
+// окна (логи, см. openLogWindow выше) кнопки свернуть/закрыть в НЁМ на
+// самом деле управляли бы главным окном, а не собой. BrowserWindow.
+// fromWebContents(event.sender) корректно резолвит именно то окно, из
+// которого реально пришёл вызов - работает одинаково для главного окна
+// и для любого будущего дополнительного.
+ipcMain.handle("window:minimize", async event => {
+  BrowserWindow.fromWebContents(event.sender)?.minimize();
 });
-ipcMain.handle("window:toggleMaximize", async () => {
-  if (!mainWindow) return;
-  if (mainWindow.isMaximized()) mainWindow.unmaximize();
-  else mainWindow.maximize();
+ipcMain.handle("window:toggleMaximize", async event => {
+  const w = BrowserWindow.fromWebContents(event.sender);
+  if (!w) return;
+  if (w.isMaximized()) w.unmaximize();
+  else w.maximize();
 });
-ipcMain.handle("window:close", async () => {
-  mainWindow?.close();
+ipcMain.handle("window:close", async event => {
+  BrowserWindow.fromWebContents(event.sender)?.close();
 });
-ipcMain.handle("window:isMaximized", async () => mainWindow?.isMaximized() ?? false);
+ipcMain.handle("window:isMaximized", async event => BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false);
 
 ipcMain.handle("engine:version", async () => {
   if (cachedEngineVersion) return { ok: true, version: cachedEngineVersion };

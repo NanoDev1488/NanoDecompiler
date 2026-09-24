@@ -16,6 +16,11 @@ declare global {
       openExternal: (url: string) => Promise<void>;
       openInVSCode: (target: string) => Promise<{ ok: boolean; error?: string }>;
       detectApps: () => Promise<Record<string, boolean>>;
+      // НОВОЕ v1.9.8 (окно логов разработчика, HANDOFF п.16)
+      pushAppLog: (kind: string, msg: string) => void;
+      getAppLog: () => Promise<Array<{ id: number; ts: number; kind: string; msg: string }>>;
+      openLogWindow: () => Promise<void>;
+      onAppLogUpdate: (cb: (entry: { id: number; ts: number; kind: string; msg: string }) => void) => () => void;
       openWith: (editorId: string, target: string) => Promise<{ ok: boolean; error?: string }>;
       searchGithubSimilar: (
         pluginName: string | null,
