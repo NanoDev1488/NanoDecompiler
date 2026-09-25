@@ -131,6 +131,9 @@ export interface LegitimacyCandidate {
 export interface LegitimacySourceResult {
   checked: boolean;
   found: boolean;
+  // НОВОЕ v1.9.13: null = probe не выполнялся (HtmlSearch-источник),
+  // false = недоступен/гео-блок, true = источник отвечает.
+  host_reachable: boolean | null;
   candidates: LegitimacyCandidate[];
 }
 

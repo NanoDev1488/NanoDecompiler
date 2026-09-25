@@ -75,6 +75,13 @@ std::string malware_findings_json(const std::vector<MalwareFinding>& findings) {
 std::string legitimacy_source_json(const LegitimacySourceResult& r) {
     std::string out = "{\"checked\":" + std::string(r.checked ? "true" : "false");
     out += ",\"found\":" + std::string(r.found ? "true" : "false");
+    // НОВОЕ v1.9.13: host_reachable - nullopt сериализуется как null (probe не
+    // выполнялся, напр. HtmlSearch-источник), false - недоступен, true - ок.
+    if (r.host_reachable.has_value()) {
+        out += ",\"host_reachable\":" + std::string(*r.host_reachable ? "true" : "false");
+    } else {
+        out += ",\"host_reachable\":null";
+    }
     out += ",\"candidates\":[";
     for (size_t i = 0; i < r.candidates.size(); ++i) {
         if (i) out += ",";

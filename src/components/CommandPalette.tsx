@@ -10,7 +10,7 @@ import {
   Square,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent } from "react";
 import { useEngine } from "../state/engine";
 import { cn } from "../utils/cn";
 
@@ -120,7 +120,10 @@ export function CommandPalette() {
     a.run();
   };
 
-  const onKey = (e: React.KeyboardEvent) => {
+  // БАГ-ФИКС v1.9.13 (tsc TS2503 "Cannot find namespace 'React'"): React не
+  // импортирован как namespace - заменяем React.KeyboardEvent на именованный
+  // импорт KeyboardEvent из "react" (добавлен выше).
+  const onKey = (e: KeyboardEvent) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setIndex(i => Math.min(filtered.length - 1, i + 1));

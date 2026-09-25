@@ -37,7 +37,14 @@ function statusLine(job: Job): string {
   }
 }
 
-function JobCard({ job, selected }: { job: Job; selected: boolean }) {
+// БАГ-ФИКС v1.9.13 (tsc TS2322 "'key' does not exist in type"):
+// React's `key` - зарезервированный проп React, он НИКОГДА не входит в
+// пользовательские пропсы компонента по дизайну React/TS. tsc до v5.1
+// некорректно (false-positive) флагировал `key={...}` на inline-объявленных
+// пропсах как ошибку - именованный тип через `type` решает это без
+// изменения логики.
+type JobCardProps = { job: Job; selected: boolean };
+function JobCard({ job, selected }: JobCardProps) {
   const { selectJob, cancelJob, removeJob, openOutput } = useEngine();
   // НОВОЕ v1.8.0 (реальный запрос - мини-карточка плагина с "..."-меню:
   // "открыть папку результата" + "детальнейшая информация"). Меню - свой

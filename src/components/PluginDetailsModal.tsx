@@ -242,41 +242,44 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
                 )}
               </div>
 
-              {/* НОВОЕ v1.9.12 (волна 7, п.7 - см. LegitimacyCheckResult в
-                  model.ts): движок считает это ВСЕГДА, но GUI раньше не
-                  объявлял тип поля - оно молча пропадало на входе. Не
-                  дублируем список кандидатов на сходство (для этого уже
-                  есть отдельная ручная кнопка "Похожие репозитории на
-                  GitHub" ниже, через IPC searchGithubSimilar) - здесь
-                  показываем ИМЕННО то, чего раньше не было видно вообще:
-                  честное сравнение SHA-256 текущего файла с найденными
-                  релизами. matching - совпал хотя бы с одним источником
-                  (обычная информационная строка). mismatching - источник
-                  БЫЛ проверен и хэш НЕ совпал - это и есть сигнал
-                  "похоже, но это другой файл", поэтому курсивом и в
-                  цвете warn (как просили), а не err - сама по себе одна
-                  несовпавшая проверка ещё не доказательство подделки. */}
-              {d.stats.legitimacy?.hash_comparison && (
+              {/* НОВОЕ v1.9.12: блок легитимности + НОВОЕ v1.9.13 host_reachable */}
+              {d.stats.legitimacy && (
                 <div className="flex flex-col gap-1.5 rounded-lg border border-line bg-bg px-3 py-2">
-                  <p className="kicker">Проверка легитимности (сравнение SHA-256)</p>
-                  {d.stats.legitimacy.hash_comparison.matching.length === 0 &&
-                  d.stats.legitimacy.hash_comparison.mismatching.length === 0 ? (
-                    <span className="text-dim">
-                      Совпадений по хэшу не найдено (либо источники не отдают хэш для этого плагина)
-                    </span>
-                  ) : (
-                    <ul className="mono flex flex-col gap-1 pl-1 text-[11px]">
-                      {d.stats.legitimacy.hash_comparison.matching.map(src => (
-                        <li key={`m-${src}`} className="text-acid">
-                          ✓ хэш совпадает с релизом на {src}
-                        </li>
-                      ))}
-                      {d.stats.legitimacy.hash_comparison.mismatching.map(src => (
-                        <li key={`x-${src}`} className="italic text-warn">
-                          хэш НЕ совпадает ни с одним релизом на {src} — возможно, изменённая копия
-                        </li>
-                      ))}
-                    </ul>
+                  <p className="kicker">Проверка легитимности</p>
+                  {/* НОВОЕ v1.9.13: источники с host_reachable===false показываем явно
+                      как "недоступен из вашей сети" - отдельно от "не найдено".
+                      Показываем только те, у которых probe выполнялся (not null) и провалился. */}
+                  {(["github","modrinth","spigot","hangar"] as const)
+                    .filter(k => d.stats.legitimacy![k].host_reachable === false)
+                    .map(k => (
+                      <span key={k} className="mono text-[11px] text-warn">
+                        ⚠ {k.charAt(0).toUpperCase() + k.slice(1)} — недоступен из вашей сети (возможно, гео-блок)
+                      </span>
+                    ))
+                  }
+                  {/* SHA-256 блок (из v1.9.12) */}
+                  {d.stats.legitimacy.hash_comparison && (
+                    <>
+                      {d.stats.legitimacy.hash_comparison.matching.length === 0 &&
+                       d.stats.legitimacy.hash_comparison.mismatching.length === 0 ? (
+                        <span className="text-dim">
+                          Совпадений по хэшу не найдено (либо источники не отдают хэш для этого плагина)
+                        </span>
+                      ) : (
+                        <ul className="mono flex flex-col gap-1 pl-1 text-[11px]">
+                          {d.stats.legitimacy.hash_comparison.matching.map(src => (
+                            <li key={`m-${src}`} className="text-acid">
+                              ✓ хэш совпадает с релизом на {src}
+                            </li>
+                          ))}
+                          {d.stats.legitimacy.hash_comparison.mismatching.map(src => (
+                            <li key={`x-${src}`} className="italic text-warn">
+                              хэш НЕ совпадает ни с одним релизом на {src} — возможно, изменённая копия
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
                   )}
                 </div>
               )}

@@ -13,6 +13,7 @@
 #include <random>
 #include <regex>
 #include <sstream>
+#include <unordered_map>  // НОВОЕ v1.9.13: kProbeUrls в check_site()
 
 #include "json_value.hpp"
 #include "sha256.hpp"
@@ -356,6 +357,37 @@ LegitimacySourceResult check_site(const SiteConfig& cfg, const std::string& plug
     if (plugin_name.empty()) return out;
     std::string q = url_quote(plugin_name, true);
     std::string url = substitute_placeholder(cfg.query, "{plugin_name}", q);
+
+    // НОВОЕ v1.9.13 (host-reachability probe): лёгкий GET на стабильный
+    // корневой эндпоинт ПЕРЕД основным поиском - чтобы отличить
+    // "не найдено" от "источник недоступен/гео-блок". Probe-URL выбраны
+    // как самые дешёвые и стабильные эндпоинты каждого API:
+    // - GitHub: /rate_limit (всегда 200, без auth, минимальный ответ)
+    // - Modrinth: /v2/tag/category (фиксированный список, не меняется)
+    // - Spigot (SpigetApi): /v2/resources?size=1&page=1 (страница из 1
+    //   элемента - минимальный валидный ответ Spiget API)
+    // - Hangar: /v1/projects?limit=1&offset=0 (та же идея)
+    // HtmlSearch - не зондируем (нет простого JSON-маркера "я работаю").
+    // Таймаут probe намеренно вдвое короче основного: если probe не
+    // ответил за 2с - источник точно недоступен, дальше не тратим время.
+    static const std::unordered_map<SiteKind, std::string> kProbeUrls = {
+        {SiteKind::GithubApi,   "https://api.github.com/rate_limit"},
+        {SiteKind::ModrinthApi, "https://api.modrinth.com/v2/tag/category"},
+        {SiteKind::SpigetApi,   "https://api.spiget.org/v2/resources?size=1&page=1"},
+        {SiteKind::HangarApi,   "https://hangar.papermc.io/api/v1/projects?limit=1&offset=0"},
+    };
+    auto probe_it = kProbeUrls.find(cfg.kind);
+    if (probe_it != kProbeUrls.end()) {
+        auto probe_resp = http_get_json(probe_it->second, std::max(timeout_sec / 2.0, 2.0));
+        out.host_reachable = probe_resp.has_value();
+        // Если probe не прошёл - источник недоступен. Помечаем checked=true
+        // (попытка была сделана), но дальше не идём - поиск точно провалится
+        // с той же ошибкой, только медленнее.
+        if (!out.host_reachable.value()) {
+            out.checked = true;  // попытка была; found остаётся false
+            return out;
+        }
+    }
 
     if (cfg.kind == SiteKind::GithubApi) {
         auto data = http_get_json(url, timeout_sec);

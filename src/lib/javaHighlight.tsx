@@ -380,19 +380,23 @@ function renderChipPreview(tokens: Token[], region: Region): ReactNode {
   return <>{inRange.map((t, i) => renderToken(t, i, stripQuotes(t.text)))}</>;
 }
 
+// БАГ-ФИКС v1.9.13 (tsc TS2322 "'key' does not exist in type" - та же
+// причина, что и в Sidebar.tsx/JobCard - см. тот комментарий): именованный
+// тип вместо inline-объекта в параметрах.
+type ChainChipProps = {
+  tokens: Token[];
+  region: Region;
+  chipKey: string;
+  expanded: boolean;
+  onToggle: (key: string) => void;
+};
 function ChainChip({
   tokens,
   region,
   chipKey,
   expanded,
   onToggle,
-}: {
-  tokens: Token[];
-  region: Region;
-  chipKey: string;
-  expanded: boolean;
-  onToggle: (key: string) => void;
-}) {
+}: ChainChipProps) {
   if (expanded) {
     const inRange = tokensInRange(tokens, region.start, region.end);
     return (
