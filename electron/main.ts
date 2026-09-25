@@ -125,7 +125,19 @@ function loadSettings(): Settings {
       setupCompleted: typeof parsed.setupCompleted === "boolean" ? parsed.setupCompleted : DEFAULT_SETTINGS.setupCompleted,
       language: parsed.language === "ru" || parsed.language === "en" ? parsed.language : DEFAULT_SETTINGS.language,
       telemetryEnabled: typeof parsed.telemetryEnabled === "boolean" ? parsed.telemetryEnabled : DEFAULT_SETTINGS.telemetryEnabled,
-      telemetryUrl: typeof parsed.telemetryUrl === "string" && parsed.telemetryUrl ? parsed.telemetryUrl : DEFAULT_SETTINGS.telemetryUrl,
+      // БАГ-ФИКС v1.9.12 (жалоба "новый IP не работает"): telemetryUrl
+      // ВСЕГДА берётся из DEFAULT_SETTINGS, сохранённое значение из
+      // settings.json на диске ИГНОРИРУЕТСЯ. Причина: ввод URL был убран из
+      // UI ещё несколько волн назад (поле больше не показывается, не
+      // редактируется) - значит пользователь ЗАВЕДОМО не контролирует его
+      // вручную, и хранить его в settings.json как "пользовательскую
+      // настройку" больше не имеет смысла. Конкретная проблема: у
+      // пользователей, у которых уже есть settings.json со старым IP,
+      // loadSettings() читал СТАРЫЙ IP из файла, и отчёты летели на
+      // несуществующий сервер - несмотря на то что DEFAULT_SETTINGS
+      // давно содержит актуальный адрес. Теперь смена адреса в
+      // DEFAULT_SETTINGS.telemetryUrl гарантированно работает для всех.
+      telemetryUrl: DEFAULT_SETTINGS.telemetryUrl,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };

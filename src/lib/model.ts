@@ -107,7 +107,45 @@ export interface JobDetails {
       bytecode: string[];
       java_after: string[];
     }[];
+    // НОВОЕ v1.9.12 (волна 7, п.7 из HANDOFF_NEXT_AGENT_HANDOVER_WAVE7.md -
+    // "hash_comparison/legitimacy вообще ещё не подключены к GUI"): движок
+    // считает и отдаёт это ВСЕГДА (см. legitimacy_check.hpp/stats_json.cpp,
+    // поле "legitimacy" внутри "stats") с версии, в которой появился сам
+    // модуль легитимности - GUI просто никогда не объявлял тип для этого
+    // поля, поэтому TS его молча отбрасывал, и PluginDetailsModal.tsx его
+    // не рендерил. null - если проверка легитимности была явно отключена
+    // (skip_legitimacy) для этого прогона.
+    legitimacy: LegitimacyCheckResult | null;
   };
+}
+
+export interface LegitimacyCandidate {
+  full_name: string;
+  url: string;
+  stars: number;
+  // null - источник не даёт хэш дёшево (см. LEGITIMACY_SITES_MINI_LANGUAGE_
+  // SPEC.md в архиве движка), либо конкретно этот кандидат не проверился.
+  sha256_hex: string | null;
+}
+
+export interface LegitimacySourceResult {
+  checked: boolean;
+  found: boolean;
+  candidates: LegitimacyCandidate[];
+}
+
+export interface HashComparisonResult {
+  matching: string[];
+  mismatching: string[];
+}
+
+export interface LegitimacyCheckResult {
+  plugin_yml_fields: { website: string | null; authors: string[] };
+  github: LegitimacySourceResult;
+  modrinth: LegitimacySourceResult;
+  spigot: LegitimacySourceResult;
+  hangar: LegitimacySourceResult;
+  hash_comparison: HashComparisonResult | null;
 }
 
 export type LogLevel = "info" | "ok" | "warn" | "err";
