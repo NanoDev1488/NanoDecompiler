@@ -81,5 +81,14 @@ namespace nd {
 // в CodeView.tsx, textarea-режим (БЕЗ живой подсветки при печати - для неё
 // нужен CodeMirror/Monaco, отдельная зависимость), fs:writeTextFile в
 // main.ts (симметрично fs:readTextFile, тот же resolveWithinRoot).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.9";
+// НОВОЕ v1.9.10: см. HANDOFF_NEXT_AGENT_HANDOVER.md, раздел "Волна 5" -
+// z-index дропдаунов (уходили под Toasts), Ctrl+Alt+L для окна логов
+// заменён на F12 (Ctrl+Alt+L оказался системным шорткатом блокировки
+// экрана в GNOME - серьёзный баг предыдущей версии), баг сворачивания
+// логгер-вызовов в javaHighlight.tsx (метод после строки исчезал вместо
+// показа), read-write вьюер кода переделан на оверлей textarea поверх
+// подсветки (Ctrl+S + автосохранение 5с, кнопка входа в режим убрана).
+// ОСТАНОВЛЕНО ПО ПРОСЬБЕ ПОЛЬЗОВАТЕЛЯ с большим списком нерешённого -
+// см. хэндофф, это НЕ финальная версия, а контрольная точка.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.10";
 }

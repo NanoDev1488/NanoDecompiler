@@ -256,6 +256,30 @@ function findColorChainRegions(tokens: Token[], excludeRanges: Region[]): Region
   return regions;
 }
 
+/** Токены, попадающие в диапазон [start,end), с корректной обрезкой
+ * ЧАСТИЧНО перекрывающего токена на границе end - та же проблема, что
+ * чинилась в renderLineTokens (см. комментарий там про `));`): простой
+ * `t.end <= end` фильтр молча ВЫБРАСЫВАЕТ токен целиком, если его конец
+ * чуть-чуть вылезает за границу региона (например "))" закрытие
+ * getVersion() слито с "))" закрытием внешнего info(...) в один сырой
+ * токен, а дальше ещё и ";") - из-за чего видимый текст терял последние
+ * символы. Обрезаем текст токена по границе вместо того, чтобы дропать
+ * его целиком. */
+function tokensInRange(tokens: Token[], start: number, end: number): Token[] {
+  const out: Token[] = [];
+  for (const t of tokens) {
+    if (t.end <= start || t.start >= end) continue;
+    if (t.start >= start && t.end <= end) {
+      out.push(t);
+    } else {
+      const sliceStart = Math.max(start, t.start) - t.start;
+      const sliceEnd = Math.min(end, t.end) - t.start;
+      out.push({ ...t, text: t.text.slice(sliceStart, sliceEnd), start: Math.max(start, t.start), end: Math.min(end, t.end) });
+    }
+  }
+  return out;
+}
+
 /** Убирает окружающие кавычки строкового литерала для показа "как будет
  * выглядеть в игре" внутри свёрнутого чипа - сырые кавычки там не нужны. */
 function stripQuotes(text: string): string {
@@ -301,13 +325,48 @@ function renderToken(t: Token, i: number | string, textOverride?: string): React
 
 const LOG_LEVEL_SEVERITY = new Set(["severe", "warning"]);
 
-/** Содержимое СВЁРНУТОГО чипа - только "результат" (цветной текст без
- * кавычек/скобок/имени метода). Для color-региона - просто раскрашенные
- * строковые куски. Для log-региона - тег уровня + то же самое. */
+/** Содержимое СВЁРНУТОГО чипа. Для color-региона - раскрашенные строковые
+ * куски (нестроковые токены туда физически попасть не могут - любое
+ * нестроковое выражение уже обрывает цепочку в findColorChainRegions,
+ * см. isBreaker). Для log-региона - ДРУГАЯ история: аргументом может
+ * быть произвольное выражение (`getDescription().getVersion()`), а не
+ * только строка.
+ *
+ * БАГ-ФИКС 1.9.10 (реальный репорт - "метод после лог-строки заменяется
+ * на пустоту"): раньше здесь фильтровались ТОЛЬКО строковые токены -
+ * нестроковая часть (вызовы методов, переменные) молча выбрасывалась из
+ * превью, из-за чего казалось, что кусок сообщения просто исчез. Теперь
+ * для log-региона рендерятся ВСЕ токены внутри (кроме самого имени
+ * метода и открывающей/закрывающей скобки вызова - см. filter ниже) -
+ * строки раскрашиваются и лишаются кавычек, как раньше, а код (вызовы
+ * методов, `+`, переменные) показывается как есть. */
 function renderChipPreview(tokens: Token[], region: Region): ReactNode {
-  const inRange = tokens.filter(t => t.start >= region.start && t.end <= region.end && t.isStr);
-  const parts = inRange.map((t, i) => renderToken(t, i, stripQuotes(t.text)));
   if (region.kind === "log") {
+    // methodNameEnd - конец слова "warning"/"info"/... (см. region.start в
+    // findLogRegions - он указывает точно на начало этого слова).
+    const inRange = tokensInRange(tokens, region.start, region.end);
+    const parts: ReactNode[] = [];
+    for (let i = 0; i < inRange.length; i++) {
+      const t = inRange[i];
+      const isMethodWord = i === 0 && t.cls === null && !t.isStr; // сам "warning"/"info" - слово, не строка
+      const isOpenParen = i <= 1 && t.text.trim() === "(";
+      const isLast = i === inRange.length - 1;
+      if (isMethodWord) continue; // имя метода само по себе скрываем - тег уровня его уже заменяет
+      if (isOpenParen) continue;
+      if (isLast && !t.isStr && t.text.endsWith(")")) {
+        // ПОСЛЕДНИЙ токен в диапазоне ВСЕГДА заканчивается ровно на
+        // закрывающую скобку самого лог-вызова (так задаёт region.end в
+        // findLogRegions) - убираем ровно ОДИН этот символ с конца, а не
+        // требуем точного совпадения всего токена с ")" (после
+        // tokensInRange токен на границе может быть куском вроде "())"
+        // - там ")" самого method-вызова внутри нужно оставить, а
+        // отсекается только САМАЯ последняя, "чужая" скобка).
+        const trimmed = t.text.slice(0, -1);
+        if (trimmed) parts.push(renderToken(t, i, trimmed));
+        continue;
+      }
+      parts.push(t.isStr ? renderToken(t, i, stripQuotes(t.text)) : renderToken(t, i));
+    }
     return (
       <>
         <span className={"chain-chip-tag" + (LOG_LEVEL_SEVERITY.has(region.logLevel ?? "") ? " tag-warn" : "")}>
@@ -317,7 +376,8 @@ function renderChipPreview(tokens: Token[], region: Region): ReactNode {
       </>
     );
   }
-  return <>{parts}</>;
+  const inRange = tokensInRange(tokens, region.start, region.end).filter(t => t.isStr);
+  return <>{inRange.map((t, i) => renderToken(t, i, stripQuotes(t.text)))}</>;
 }
 
 function ChainChip({
@@ -334,7 +394,7 @@ function ChainChip({
   onToggle: (key: string) => void;
 }) {
   if (expanded) {
-    const inRange = tokens.filter(t => t.start >= region.start && t.end <= region.end);
+    const inRange = tokensInRange(tokens, region.start, region.end);
     return (
       <span className="chain-chip-expanded" title="Свернуть обратно" onClick={() => onToggle(chipKey)}>
         {inRange.map((t, i) => renderToken(t, i))}

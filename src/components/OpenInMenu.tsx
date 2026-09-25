@@ -54,13 +54,13 @@ export function OpenInMenu({ filePath, projectDir }: { filePath?: string; projec
       {open && (
         <>
           <div
-            className="fixed inset-0 z-20"
+            className="fixed inset-0 z-[79]"
             onClick={() => {
               setOpen(false);
               setPendingEditor(null);
             }}
           />
-          <div className="animate-rise absolute top-9 right-0 z-30 w-52 overflow-hidden rounded-lg border border-line bg-surface py-1 shadow-xl shadow-black/40">
+          <div className="animate-rise absolute top-9 right-0 z-[80] w-52 overflow-hidden rounded-lg border border-line bg-surface py-1 shadow-xl shadow-black/40">
             {EDITOR_ORDER.map(id => {
               const isAvailable = available?.[id] ?? false;
               const label = EDITOR_LABELS[id];

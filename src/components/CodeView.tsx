@@ -1,4 +1,4 @@
-import { Copy, Pencil, Save, Search, WrapText, X as XIcon } from "lucide-react";
+import { Copy, Search, WrapText } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useEngine } from "../state/engine";
 import { JavaCode } from "../lib/javaHighlight";
@@ -51,17 +51,30 @@ export const CodeView = memo(function CodeView({
 }) {
   const { copyText, selectFile, updateFileCode, toast } = useEngine();
   const [wrap, setWrap] = useState(false);
-  // НОВОЕ v1.9.9 (read-write вьюер кода, HANDOFF п.6): ЧЕСТНАЯ ОГОВОРКА ПО
-  // ОБЪЁМУ - это простой <textarea> с моноширинным шрифтом, НЕ полноценный
-  // редактор с живой подсветкой синтаксиса во время печати (для этого
-  // понадобился бы CodeMirror/Monaco - отдельная зависимость, которой в
-  // проекте сейчас нет, и её подключение - самостоятельная большая
-  // задача). В режиме редактирования подсветка временно отключается,
-  // возвращается после сохранения/отмены - это сознательный компромисс,
-  // не половинчатый баг.
-  const [editing, setEditing] = useState(false);
+  // БАГ-ФИКС 1.9.10 (прямая правка предыдущей версии - "редактор всегда
+  // должен работать, без отдельной кнопки входа, и подсветка не должна
+  // пропадать"): 1.9.9 переключался в РАЗДЕЛЬНЫЙ textarea-режим по кнопке
+  // (подсветка пропадала, потому что показывался textarea ВМЕСТО
+  // подсвеченного кода). Теперь редактирование ВСЕГДА активно, когда файл
+  // редактируемый (canEdit) - textarea лежит ПРОЗРАЧНЫМ слоем ПОВЕРХ
+  // подсвеченного кода (тот же приём, что у react-simple-code-editor:
+  // видимый текст - из подсветки снизу, курсор/выделение/ввод - от
+  // невидимого textarea сверху, идеально совпадающие по шрифту/отступам).
+  //
+  // ЧЕСТНАЯ ОГОВОРКА (нет возможности визуально проверить в песочнице -
+  // тут нет Electron/браузера для рендера и скриншота): перенос строк
+  // (wrap) ПРИНУДИТЕЛЬНО выключен, пока файл редактируется - оверлей
+  // держится на том, что каждая СТРОКА текста в textarea и в подсветке
+  // занимает одну и ту же физическую строку по вертикали; перенос строк
+  // зависит от ширины контейнера и мог бы читаться по-разному в textarea
+  // (нет своих цветных span'ов, ширина текста чуть отличается) и в
+  // подсветке - чтобы не рисковать рассинхроном, при редактировании
+  // всегда используется горизонтальная прокрутка. Если после реальной
+  // проверки на живой сборке окажется, что что-то не совпадает по
+  // пикселям - дайте знать конкретику, поправить возможно, но не вслепую.
   const [draft, setDraft] = useState("");
-  const [saving, setSaving] = useState(false);
+  const lastSavedRef = useRef<string>("");
+  const [saveState, setSaveState] = useState<"saving" | "err" | null>(null);
   // НОВОЕ v1.7.6: ref именно на контейнер С КОДОМ (не на весь CodeView) -
   // FindBar ищет ТОЛЬКО внутри него, см. БАГ-ФИКС в FindBar.tsx.
   const codeContainerRef = useRef<HTMLDivElement>(null);
@@ -76,14 +89,58 @@ export const CodeView = memo(function CodeView({
   useEffect(() => {
     if (!file) return;
     setWrap(/\.(txt|md)$/i.test(file.name));
-    // НОВОЕ v1.9.9: переключение на другой файл всегда сбрасывает
-    // незавершённое редактирование ТЕКУЩЕГО - несохранённый черновик
-    // молча теряется, но это стандартное ожидаемое поведение (как в
-    // большинстве редакторов без вкладок с "несохранёнными изменениями"
-    // индикатором - усложнять до полноценного dirty-tracking с
-    // предупреждением при закрытии вкладки не стал, отдельная фича).
-    setEditing(false);
+    // Смена файла - подхватываем его код как новый черновик и сбрасываем
+    // индикатор сохранения. Несохранённые правки ПРЕДЫДУЩЕГО файла молча
+    // теряются при переключении - как и раньше, отдельный dirty-guard на
+    // закрытие вкладки не делаем (нет вкладок как таковых).
+    setDraft(file.code ?? "");
+    lastSavedRef.current = file.code ?? "";
+    setSaveState(null);
   }, [file?.id]);
+
+  // НОВОЕ 1.9.10: сохранение - Ctrl+S ИЛИ автосохранение раз в 5с, БЕЗ
+  // отдельной кнопки (по прямой просьбе - "уберите кнопку, редактор
+  // должен работать сам"). saveNow вынесен в ref, чтобы не пересоздавать
+  // интервал/обработчик клавиш при каждом изменении draft.
+  const saveNowRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    saveNowRef.current = () => {
+      if (!outDir || !jobId || !file) return;
+      if (draft === lastSavedRef.current) return; // нечего сохранять
+      setSaveState("saving");
+      window.nano
+        .writeTextFile(outDir, file.relPath, draft)
+        .then(res => {
+          if (res.ok) {
+            lastSavedRef.current = draft;
+            updateFileCode(jobId, file.id, draft);
+            setSaveState(null);
+          } else {
+            setSaveState("err");
+            toast(`Не удалось сохранить ${file.name}: ${res.error ?? "неизвестная ошибка"}`, "err");
+          }
+        })
+        .catch(e => {
+          setSaveState("err");
+          toast(`Не удалось сохранить ${file.name}: ${String(e)}`, "err");
+        });
+    };
+  });
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        saveNowRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    const timer = window.setInterval(() => saveNowRef.current(), 5000);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.clearInterval(timer);
+    };
+  }, []);
   // НОВОЕ v1.8.0 (реальный запрос - "хороший поиск в файле"): Ctrl+F
   // локально в этом компоненте (не глобальный шорткат в engine.tsx) -
   // поиск в файле имеет смысл, только пока файл вообще открыт.
@@ -103,10 +160,19 @@ export const CodeView = memo(function CodeView({
   // useMemo вызывается БЕЗУСЛОВНО (до раннего return ниже) - иначе при
   // переключении file между null/не-null менялось бы число вызванных хуков
   // между рендерами, что React запрещает (Rules of Hooks).
-  const displayCode = useMemo(
-    () => (file?.code === undefined ? undefined : prettyPrintIfJson(file.name, file.code)),
-    [file?.name, file?.code],
-  );
+  //
+  // БАГ-ФИКС 1.9.10: когда файл редактируемый, показываем СЫРОЙ draft
+  // (без prettyPrintIfJson) - редактирование теперь ВСЕГДА активно (нет
+  // отдельного read-only просмотра для .json), а pretty-print только для
+  // отображения при живом редактировании развёл бы то, что человек видит
+  // и печатает, с тем, что реально уйдёт на диск. Для НЕредактируемых
+  // файлов (нет outDir/jobId - см. canEdit ниже) pretty-print остаётся,
+  // это чисто просмотровый режим, сохранять там нечего.
+  const canEdit = !!outDir && !!jobId && file?.code !== undefined && file?.loadError === undefined;
+  const displayCode = useMemo(() => {
+    if (file?.code === undefined) return undefined;
+    return canEdit ? draft : prettyPrintIfJson(file.name, file.code);
+  }, [file?.name, file?.code, canEdit, draft]);
 
   if (!file) {
     return (
@@ -119,36 +185,6 @@ export const CodeView = memo(function CodeView({
   // БАГ-ФИКС v1.9.6 - см. комментарий у pkg в state/engine.tsx.
   const crumbs = [...file.pkg.split("/").filter(Boolean), file.name];
   const CodeComponent = codeComponentFor(file.name);
-
-  // НОВОЕ v1.9.9: редактируем СЫРОЙ file.code, а не displayCode - для
-  // .json файлов displayCode пропущен через prettyPrintIfJson (только
-  // для отображения, см. комментарий у функции выше) - сохранение
-  // отформатированной версии молча переформатировало бы исходный файл
-  // на диске, даже если пользователь ничего не менял, кроме одного слова.
-  const canEdit = !!outDir && !!jobId && file.code !== undefined && file.loadError === undefined;
-  const startEdit = () => {
-    setDraft(file.code ?? "");
-    setEditing(true);
-  };
-  const cancelEdit = () => setEditing(false);
-  const saveEdit = async () => {
-    if (!outDir || !jobId) return;
-    setSaving(true);
-    try {
-      const res = await window.nano.writeTextFile(outDir, file.relPath, draft);
-      if (res.ok) {
-        updateFileCode(jobId, file.id, draft);
-        setEditing(false);
-        toast(`Сохранено: ${file.name}`, "ok");
-      } else {
-        toast(`Не удалось сохранить: ${res.error ?? "неизвестная ошибка"}`, "err");
-      }
-    } catch (e) {
-      toast(`Не удалось сохранить: ${String(e)}`, "err");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <section className="relative flex min-w-0 flex-1 flex-col bg-bg">
@@ -182,15 +218,14 @@ export const CodeView = memo(function CodeView({
             Ctrl+Shift+F) без единой видимой кнопки - пользователь просто
             не мог узнать, что фича существует. Видимая кнопка + подсказка
             с сочетанием клавиш в title. */}
-        {!editing && (
-          <button className="icon-btn h-7 w-7" title="Найти в файле (Ctrl+F)" onClick={() => setFindOpen(true)}>
-            <Search size={14} />
-          </button>
-        )}
+        <button className="icon-btn h-7 w-7" title="Найти в файле (Ctrl+F)" onClick={() => setFindOpen(true)}>
+          <Search size={14} />
+        </button>
         <button
           className="icon-btn h-7 w-7"
           title={wrap ? "Отключить перенос строк" : "Переносить строки"}
           data-active={wrap}
+          disabled={canEdit}
           onClick={() => setWrap(v => !v)}
         >
           <WrapText size={14} />
@@ -203,29 +238,23 @@ export const CodeView = memo(function CodeView({
         >
           <Copy size={14} />
         </button>
-        {/* НОВОЕ v1.9.9 (read-write вьюер кода, HANDOFF п.6): простой
-            textarea-режим, без живой подсветки во время печати - см.
-            оговорку выше у объявления editing/draft. */}
-        {canEdit &&
-          (editing ? (
-            <>
-              <button className="icon-btn h-7 w-7" title="Отменить" disabled={saving} onClick={cancelEdit}>
-                <XIcon size={14} />
-              </button>
-              <button
-                className="btn btn-acid h-7 gap-1 px-2 text-[11px]"
-                disabled={saving}
-                onClick={() => void saveEdit()}
-              >
-                <Save size={13} />
-                {saving ? "Сохранение…" : "Сохранить"}
-              </button>
-            </>
-          ) : (
-            <button className="icon-btn h-7 w-7" title="Редактировать файл" onClick={startEdit}>
-              <Pencil size={14} />
-            </button>
-          ))}
+        {/* НОВОЕ 1.9.10: без кнопки "редактировать" - см. оговорку у
+            объявления draft/saveState выше. Индикатор вместо кнопки -
+            статус САМ отражает, что происходит, действие от человека не
+            требуется (Ctrl+S или просто подождать до 5с). */}
+        {canEdit && (
+          <span className="mono flex items-center gap-1 text-[10.5px] text-faint" title="Ctrl+S сохраняет сразу; иначе автосохранение раз в 5с">
+            {saveState === "saving" ? (
+              "Сохранение…"
+            ) : saveState === "err" ? (
+              <span className="text-err">ошибка сохранения</span>
+            ) : draft === lastSavedRef.current ? (
+              "сохранено"
+            ) : (
+              "есть изменения"
+            )}
+          </span>
+        )}
       </div>
 
       <div ref={codeContainerRef} className="min-h-0 flex-1 overflow-auto py-3">
@@ -234,58 +263,67 @@ export const CodeView = memo(function CodeView({
             {file.note}
           </div>
         )}
-        {editing ? (
-          <textarea
-            className="mono h-full min-h-[60vh] w-full resize-none border-0 bg-transparent px-4 text-[12.5px] leading-[1.75] text-ink/90 outline-none"
-            value={draft}
-            spellCheck={false}
-            onChange={e => setDraft(e.target.value)}
-            autoFocus
-          />
+        {file.loadError !== undefined ? (
+          <div className="mono flex flex-col items-start gap-2 px-4 text-[11.5px]">
+            <p className="text-err">// не удалось загрузить файл: {file.loadError}</p>
+            {/* БАГ-ФИКС v1.8.3 (HANDOFF_URGENT п.7 - "hex-viewer бинарников"):
+                полноценный hex-viewer - отдельная большая фича (новый IPC для
+                чтения сырых байт + новый UI-компонент), не стал делать
+                вслепую. Но бэкенд УЖЕ детектит бинарные файлы честной
+                эвристикой (нулевой байт в первых 8000 байтах, см.
+                fs:readTextFile в main.ts) - раньше при этой ОДНОЙ конкретной
+                ошибке всё равно показывалась кнопка "Повторить", хотя для
+                бинарника результат гарантированно тот же самый при каждой
+                попытке. OpenInMenu (открыть в системном приложении / показать
+                в папке) уже существует и работает для ЛЮБОГО файла - просто
+                был виден только в хедере сверху, не рядом с самой ошибкой. */}
+            {/(?:похоже на )?бинарн/i.test(file.loadError) ? (
+              <p className="text-dim">
+                Просмотр бинарных файлов внутри вьюера пока не поддерживается - воспользуйтесь кнопкой «Открыть
+                в…» справа сверху (системное приложение или папка с файлом).
+              </p>
+            ) : /слишком больш/i.test(file.loadError) ? (
+              // БАГ-ФИКС 1.9.6 (HANDOFF п.13): "слишком большой файл" -
+              // ОТДЕЛЬНАЯ ветка от бинарной (лимит MAX_TEXT_FILE_BYTES в
+              // fs:readTextFile, main.ts), результат так же детерминирован
+              // при повторе - "Повторить" тут вводит в заблуждение так же,
+              // как раньше для бинарников. Особенно часто встречается для
+              // .jar (они обычно больше лимита, но при этом не всегда
+              // проходят через binary-эвристику первой).
+              <p className="text-dim">
+                Файл слишком большой для просмотра в редакторе - воспользуйтесь кнопкой «Открыть в…» справа сверху
+                (системное приложение или папка с файлом).
+              </p>
+            ) : (
+              <button className="btn btn-tonal h-7 text-[11px]" onClick={() => jobId && selectFile(jobId, file.id)}>
+                Повторить
+              </button>
+            )}
+          </div>
+        ) : displayCode === undefined ? (
+          <p className="mono px-4 text-[11.5px] text-faint">// загрузка…</p>
+        ) : canEdit ? (
+          // НОВОЕ 1.9.10: оверлей - textarea НЕВИДИМЫЙ (прозрачный текст,
+          // виден только курсор через caret-color), лежит В ТОЙ ЖЕ ячейке
+          // grid, что и подсвеченный код снизу (приём react-simple-code-
+          // editor). Шрифт/отступы/leading у textarea и у CodeComponent
+          // ниже должны совпадать СИМВОЛ В СИМВОЛ - см. честную оговорку
+          // про непроверенность вживую у объявления draft выше.
+          <div className="grid min-w-max" style={{ gridTemplateAreas: '"stack"' }}>
+            <div style={{ gridArea: "stack" }} aria-hidden className="pointer-events-none">
+              <CodeComponent code={displayCode} wrap={false} />
+            </div>
+            <textarea
+              style={{ gridArea: "stack" }}
+              className="mono h-full w-full resize-none border-0 bg-transparent px-4 pl-[64px] text-[12.5px] leading-[1.75] whitespace-pre text-transparent caret-ink outline-none"
+              value={draft}
+              spellCheck={false}
+              onChange={e => setDraft(e.target.value)}
+            />
+          </div>
         ) : (
           <div className={wrap ? undefined : "min-w-max"}>
-          {file.loadError !== undefined ? (
-            <div className="mono flex flex-col items-start gap-2 px-4 text-[11.5px]">
-              <p className="text-err">// не удалось загрузить файл: {file.loadError}</p>
-              {/* БАГ-ФИКС v1.8.3 (HANDOFF_URGENT п.7 - "hex-viewer бинарников"):
-                  полноценный hex-viewer - отдельная большая фича (новый IPC для
-                  чтения сырых байт + новый UI-компонент), не стал делать
-                  вслепую. Но бэкенд УЖЕ детектит бинарные файлы честной
-                  эвристикой (нулевой байт в первых 8000 байтах, см.
-                  fs:readTextFile в main.ts) - раньше при этой ОДНОЙ конкретной
-                  ошибке всё равно показывалась кнопка "Повторить", хотя для
-                  бинарника результат гарантированно тот же самый при каждой
-                  попытке. OpenInMenu (открыть в системном приложении / показать
-                  в папке) уже существует и работает для ЛЮБОГО файла - просто
-                  был виден только в хедере сверху, не рядом с самой ошибкой. */}
-              {/(?:похоже на )?бинарн/i.test(file.loadError) ? (
-                <p className="text-dim">
-                  Просмотр бинарных файлов внутри вьюера пока не поддерживается - воспользуйтесь кнопкой «Открыть
-                  в…» справа сверху (системное приложение или папка с файлом).
-                </p>
-              ) : /слишком больш/i.test(file.loadError) ? (
-                // БАГ-ФИКС 1.9.6 (HANDOFF п.13): "слишком большой файл" -
-                // ОТДЕЛЬНАЯ ветка от бинарной (лимит MAX_TEXT_FILE_BYTES в
-                // fs:readTextFile, main.ts), результат так же детерминирован
-                // при повторе - "Повторить" тут вводит в заблуждение так же,
-                // как раньше для бинарников. Особенно часто встречается для
-                // .jar (они обычно больше лимита, но при этом не всегда
-                // проходят через binary-эвристику первой).
-                <p className="text-dim">
-                  Файл слишком большой для просмотра в редакторе - воспользуйтесь кнопкой «Открыть в…» справа сверху
-                  (системное приложение или папка с файлом).
-                </p>
-              ) : (
-                <button className="btn btn-tonal h-7 text-[11px]" onClick={() => jobId && selectFile(jobId, file.id)}>
-                  Повторить
-                </button>
-              )}
-            </div>
-          ) : displayCode === undefined ? (
-            <p className="mono px-4 text-[11.5px] text-faint">// загрузка…</p>
-          ) : (
             <CodeComponent code={displayCode} wrap={wrap} />
-          )}
           </div>
         )}
       </div>

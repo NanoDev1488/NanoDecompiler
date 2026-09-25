@@ -378,7 +378,24 @@ export function EngineProvider({ children }: { children: ReactNode }) {
           unsubscribe();
           setInstallingTool(null);
           setInstallProgress(null);
-          checkEnv();  // подтягиваем реальный статус после установки (успешной или нет)
+          // БАГ-ФИКС 1.9.10 (реальная жалоба - "Maven скачан/установлен,
+          // тост говорит 'установлен', но кнопка в настройках не
+          // меняется"): НЕ смог железно подтвердить единственную причину
+          // без живого воспроизведения (нет Electron-рантайма в
+          // песочнице), но нашёл вероятную: apt/пакетный менеджер
+          // (см. try_apt_install в toolinstaller.cpp) может отчитаться о
+          // успехе ДО того, как файловая система/симлинки (`update-
+          // alternatives` и т.п.) реально устаканятся - checkEnv() сразу
+          // следом мог попадать в короткое окно, где `mvn`/`java` ещё не
+          // резолвятся. Даю системе полсекунды устаканиться, ПОТОМ
+          // перепроверяю - и перепроверяю ЕЩЁ РАЗ через 2с контрольно
+          // (не мешает, если первая проверка уже была верной - checkEnv
+          // идемпотентен). Если проблема НЕ в этом - опишите точный
+          // сценарий (какая ОС, apt или portable-скачивание, после
+          // РЕСТАРТА приложения статус верный или нет) - это сразу
+          // отсечёт часть версий и сузит настоящую причину.
+          window.setTimeout(checkEnv, 500);
+          window.setTimeout(checkEnv, 2500);
         });
     },
     [installingTool, checkEnv, toast],
@@ -1226,49 +1243,24 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
   // глобальные горячие клавиши
   useEffect(() => {
-    // НОВОЕ v1.9.8 (окно логов разработчика, HANDOFF п.16 - буквально
-    // "Ctrl+L+O+G"): Ctrl+L УЖЕ занят ("очистить лог", см. ниже), Ctrl+O
-    // УЖЕ занят ("открыть файл") - буквальный chord с удержанием Ctrl на
-    // всех трёх буквах сломал бы оба существующих шортката (Ctrl+L
-    // сработал бы как "очистить" ДО того, как код успел бы понять, что
-    // это начало цепочки). Развёл конфликт: старт цепочки - Ctrl+Alt+L
-    // (свободная комбинация, ничем не занята), дальше просто "O" и "G"
-    // без модификаторов подряд в течение 1.5с. Если это не то, что
-    // ожидалось - решение легко заменить на другую комбинацию, сама
-    // структура (chordRef + таймаут сброса) не изменится.
-    let chordStage = 0;
-    let chordTimer: number | null = null;
-    const resetChord = () => {
-      chordStage = 0;
-      if (chordTimer !== null) window.clearTimeout(chordTimer);
-      chordTimer = null;
-    };
-    const armChord = () => {
-      if (chordTimer !== null) window.clearTimeout(chordTimer);
-      chordTimer = window.setTimeout(resetChord, 1500);
-    };
-
+    // БАГ-ФИКС 1.9.10 (реальный, серьёзный репорт - "Ctrl+L на Linux
+    // разлогинивает сессию"): предыдущий вариант (Ctrl+Alt+L, затем O,
+    // затем G) был ОШИБКОЙ - Ctrl+Alt+L является СИСТЕМНЫМ шорткатом
+    // блокировки экрана в GNOME и многих других Linux DE, приложение не
+    // может и не должно пытаться его перехватить (событие клавиатуры до
+    // Electron может вообще не дойти - WM перехватывает раньше). Заменил
+    // на одиночный F12 - НЕ используется этим приложением ни для чего
+    // другого (проверено - grep по всему src/ и main.ts), не пересекается
+    // с типичными системными шорткатами Linux/Windows/macOS (F12 занят
+    // только под DevTools в браузерах, но НЕ в собранном Electron-
+    // приложении без явного открытия devtools, что тут не подключено).
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
-      if (mod && e.altKey && e.key.toLowerCase() === "l") {
+      if (e.key === "F12" && !mod && !e.altKey && !e.shiftKey) {
         e.preventDefault();
-        chordStage = 1;
-        armChord();
-        return;
-      }
-      if (chordStage === 1 && !mod && !e.altKey && e.key.toLowerCase() === "o") {
-        e.preventDefault();
-        chordStage = 2;
-        armChord();
-        return;
-      }
-      if (chordStage === 2 && !mod && !e.altKey && e.key.toLowerCase() === "g") {
-        e.preventDefault();
-        resetChord();
         window.nano.openLogWindow();
         return;
       }
-      if (chordStage !== 0) resetChord(); // любая другая клавиша прерывает цепочку
 
       if (mod && e.key.toLowerCase() === "k") {
         e.preventDefault();
@@ -1295,10 +1287,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      resetChord();
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [openFileDialog]);
 
   const runningJob = useMemo(() => jobs.find(j => j.status === "running") ?? null, [jobs]);

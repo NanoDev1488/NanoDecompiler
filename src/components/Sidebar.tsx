@@ -99,9 +99,9 @@ function JobCard({ job, selected }: { job: Job; selected: boolean }) {
       {menuOpen && (
         <>
           {/* клик по фону закрывает меню, не выделяя карточку под ним */}
-          <div className="fixed inset-0 z-20" onClick={e => (e.stopPropagation(), setMenuOpen(false))} />
+          <div className="fixed inset-0 z-[79]" onClick={e => (e.stopPropagation(), setMenuOpen(false))} />
           <div
-            className="animate-rise absolute top-9 right-2.5 z-30 w-52 overflow-hidden rounded-lg border border-line bg-surface py-1 shadow-xl shadow-black/40"
+            className="animate-rise absolute top-9 right-2.5 z-[80] w-52 overflow-hidden rounded-lg border border-line bg-surface py-1 shadow-xl shadow-black/40"
             onClick={e => e.stopPropagation()}
           >
             <button

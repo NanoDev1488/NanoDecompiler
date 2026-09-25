@@ -167,8 +167,13 @@ function ToolbarMenu({
       </button>
       {open && (
         <>
-          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="animate-rise absolute top-9 right-0 z-30 w-52 overflow-hidden rounded-lg border border-line bg-surface py-1 shadow-xl shadow-black/40">
+          {/* БАГ-ФИКС 1.9.10 (реальный репорт - "плашка уходит под сам GUI"):
+              z-30 оказался ниже других слоёв приложения (например,
+              Toasts.tsx - z-[70]) - выпадающее меню тулбара ДОЛЖНО быть
+              выше буквально всего, кроме ничего (это не модалка, а
+              overlay-меню, которое просят "самый верх"). */}
+          <div className="fixed inset-0 z-[79]" onClick={() => setOpen(false)} />
+          <div className="animate-rise absolute top-9 right-0 z-[80] w-52 overflow-hidden rounded-lg border border-line bg-surface py-1 shadow-xl shadow-black/40">
             <button
               className="flex w-full items-center justify-between px-3 py-1.5 text-left text-[12px] text-ink/90 hover:bg-raised"
               onClick={() => {
