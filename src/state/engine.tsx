@@ -212,6 +212,21 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const [log, setLog] = useState<LogLine[]>([]);
   const jobsRef = useRef<Job[]>(jobs);
   jobsRef.current = jobs;
+  // БАГ-ФИКС v1.9.11 (жалоба "автоматически байткод не отправляется, хотя
+  // сбор ошибок включён"): patchJob(jobId, {details}) ниже вызывает
+  // setJobs() - React-состояние обновляется АСИНХРОННО (следующий рендер),
+  // а `jobsRef.current = jobs` (строка выше) синхронизируется только В
+  // МОМЕНТ рендера. Движок печатает "##ND_RESULT:...##" ПРЯМО ПЕРЕД
+  // выходом из процесса - событие "closed" дочернего процесса (которое
+  // вызывает finalize()) может прийти раньше, чем React успеет
+  // перерендериться и обновить jobsRef.current. finalize() в этом случае
+  // читал jobsRef.current.find(...).details = undefined -> fallbackCount
+  // считался нулём -> автоотправка тихо пропускалась, даже когда реальные
+  // fallback_contexts были. jobDetailsRef заполняется СИНХРОННО, в тот же
+  // момент, что и вызов patchJob (не ждёт рендера) - finalize() теперь
+  // берёт details оттуда как источник истины, а из jobsRef только как
+  // запасной вариант.
+  const jobDetailsRef = useRef<Record<string, JobDetails>>({});
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [openFileByJob, setOpenFileByJob] = useState<Record<string, string>>({});
   const [terminalOpen, setTerminalOpen] = useState(true);
@@ -293,11 +308,14 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   // telemetryEnabled включён в настройках - это отдельная защита ОТ
   // случайной массовой отправки чужого кода, а не просто формальность.
   const sendErrorReport = useCallback(
-    async (jobId: string, comment: string) => {
+    // БАГ-ФИКС v1.9.11: detailsOverride - см. jobDetailsRef/liveDetails в
+    // finalize() ниже по файлу. Без него buildTelemetryReport читал бы
+    // job.details напрямую из (возможно ещё не обновлённого) jobsRef.
+    async (jobId: string, comment: string, detailsOverride?: JobDetails) => {
       const job = jobsRef.current.find(j => j.id === jobId);
       if (!job) return;
       try {
-        const report = await buildTelemetryReport(job, comment);
+        const report = await buildTelemetryReport(job, comment, detailsOverride);
         const res = await window.nano.sendTelemetryReport(report);
         if (res.ok) toast("Отчёт отправлен", "ok");
         else toast(`Не удалось отправить отчёт: ${res.error ?? "неизвестная ошибка"}`, "err");
@@ -328,6 +346,17 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     }
   }, [toast]);
 
+  // БАГ-ФИКС v1.9.11 (найдено при разборе жалобы "Maven-кнопка не
+  // обновляется" из волны 5/6): installTool() ниже вызывает checkEnv()
+  // ДВАЖДЫ подряд (через 500мс и через 2500мс) как защиту от гонки с
+  // файловой системой после установки - но сам checkEnv() ничем не
+  // помечал, КАКОЙ именно вызов отвечает за результат. Если по любой
+  // причине (лишняя нагрузка на систему, медленный spawn) первый вызов
+  // (500мс) реально отвечает ПОЗЖЕ второго (2500мс) - его самый СВЕЖИЙ на
+  // самом деле УСТАРЕВШИЙ результат перезаписывал бы более новый. Добавлен
+  // счётчик поколений (checkEnvSeqRef) - результат применяется, только
+  // если это ответ на САМЫЙ последний запущенный checkEnv().
+  const checkEnvSeqRef = useRef(0);
   const checkEnv = useCallback(() => {
     // БАГ-ФИКС: раньше не сбрасывал javaEnv/mavenEnv перед перепроверкой -
     // UI продолжал показывать старое значение, пока идёт новый запрос, из-за
@@ -335,14 +364,17 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     // происходит (нет "проверяю…" между кликом и ответом).
     setJavaEnv(null);
     setMavenEnv(null);
+    const seq = ++checkEnvSeqRef.current;
     window.nano
       .checkEnv()
       .then(r => {
+        if (checkEnvSeqRef.current !== seq) return;  // устаревший ответ - его обогнал более новый checkEnv()
         setJavaEnv(r.java);
         setMavenEnv(r.maven);
         setEnvIssue(!r.java.ok);
       })
       .catch(() => {
+        if (checkEnvSeqRef.current !== seq) return;
         setJavaEnv({ ok: false });
         setMavenEnv({ ok: false });
       });
@@ -667,19 +699,23 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       setRunningElapsed(null);
 
       const job = jobsRef.current.find(j => j.id === jobId);
+      // БАГ-ФИКС v1.9.11: job.details на объекте из jobsRef может ещё не
+      // быть обновлён (см. jobDetailsRef выше) - берём details оттуда в
+      // приоритете, job.details - как запасной вариант (например, если
+      // движок вообще не печатал ND_RESULT в этом прогоне). Объявлено ЗДЕСЬ
+      // (не только внутри try ниже), т.к. нужно и для fallbackCount/
+      // автоотправки телеметрии дальше по функции.
+      const liveDetails = jobDetailsRef.current[jobId] ?? job?.details;
       let files: SourceFile[] | undefined;
       if (ok && job) {
         try {
           files = await collectSourceFiles(job.outDir);
           // БАГ-ФИКС v1.8.4 (реальная жалоба - "тултип не вижу где" - сама
           // ⚠-иконка на файле с предупреждением никогда не появлялась,
-          // потому что SourceFile.note нигде не заполнялся). job.details
-          // (patchJob чуть раньше, см. ниже по потоку лога) к этому моменту
-          // уже должен быть на job'е - движок печатает "##ND_RESULT:...##"
-          // ДО завершения процесса, до этого коллбэка. file_notes - карта
-          // relPath -> текст, собранная движком по тому же принципу, что и
-          // total_source_lines (см. process_jar.cpp/verify.hpp).
-          const notes = job.details?.stats.file_notes;
+          // потому что SourceFile.note нигде не заполнялся). file_notes -
+          // карта relPath -> текст, собранная движком по тому же принципу,
+          // что и total_source_lines (см. process_jar.cpp/verify.hpp).
+          const notes = liveDetails?.stats.file_notes;
           if (notes && Object.keys(notes).length) {
             files = files.map(f => (notes[f.relPath] ? { ...f, note: notes[f.relPath] } : f));
           }
@@ -714,9 +750,16 @@ export function EngineProvider({ children }: { children: ReactNode }) {
           // без дополнительного подтверждения. Сама настройка
           // (выключена по умолчанию) - и есть то самое согласие, кнопка
           // остаётся для ручной повторной отправки/отправки старых job'ов.
-          const fallbackCount = job.details?.stats.fallback_contexts.length ?? 0;
+          // БАГ-ФИКС v1.9.11 (жалоба "автоматически байткод не отправляется,
+          // хотя сбор ошибок включён"): считаем по liveDetails (см. выше),
+          // не по job.details напрямую - иначе на быстрых job'ах (мало
+          // строк лога) React ещё не успевал бы применить patchJob с
+          // ND_RESULT к моменту закрытия процесса, fallbackCount всегда
+          // читался бы как 0, и автоотправка молча не срабатывала бы,
+          // несмотря на реально включённую настройку и реальные fallback'и.
+          const fallbackCount = liveDetails?.stats.fallback_contexts.length ?? 0;
           if (settings.telemetryEnabled && fallbackCount > 0) {
-            void sendErrorReport(jobId, "автоматическая отправка (telemetryEnabled)");
+            void sendErrorReport(jobId, "автоматическая отправка (telemetryEnabled)", liveDetails);
           }
         } else {
           toast(`Ошибка: ${job.fileName}${error ? ` — ${error}` : ""}`, "err");
@@ -821,6 +864,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
           }
           const details = parseEngineResult(l.line);
           if (details !== null) {
+            jobDetailsRef.current[jobId] = details;  // синхронно, ДО отрисовки - см. комментарий у объявления jobDetailsRef
             patchJob(jobId, { details });
             continue;
           }

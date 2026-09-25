@@ -90,5 +90,5 @@ namespace nd {
 // подсветки (Ctrl+S + автосохранение 5с, кнопка входа в режим убрана).
 // ОСТАНОВЛЕНО ПО ПРОСЬБЕ ПОЛЬЗОВАТЕЛЯ с большим списком нерешённого -
 // см. хэндофф, это НЕ финальная версия, а контрольная точка.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.10";
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.11";
 }

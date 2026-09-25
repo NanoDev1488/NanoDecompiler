@@ -260,8 +260,12 @@ std::string clean_plugin_name_for_search(const std::string& raw_name) {
 
 std::vector<SiteConfig> default_legitimacy_sites_config() {
     return {
+        // БАГ-ФИКС v1.9.11: было "/releases/latest" (один релиз, объект) -
+        // теперь список ВСЕХ релизов (массив, до 10 - GitHub отдаёт
+        // новейшие первыми) - см. check_site()/SiteKind::GithubApi для
+        // причины и деталей перебора.
         {"GitHub", SiteKind::GithubApi, "github.com", "https://api.github.com/search/repositories?q={plugin_name}+in:name&per_page=5",
-         std::optional<std::string>("https://api.github.com/repos/{full_name}/releases/latest")},
+         std::optional<std::string>("https://api.github.com/repos/{full_name}/releases?per_page=10")},
         {"Modrinth", SiteKind::ModrinthApi, "modrinth.com", "https://api.modrinth.com/v2/search?query={plugin_name}&limit=5",
          std::optional<std::string>("https://api.modrinth.com/v2/project/{slug}/version")},
         {"SpigotMC", SiteKind::SpigetApi, "spigotmc.org", "https://api.spiget.org/v2/search/resources/{plugin_name}?field=name&size=5",
@@ -370,14 +374,55 @@ LegitimacySourceResult check_site(const SiteConfig& cfg, const std::string& plug
                 c.url = html_url->str_v;
                 const JsonValue* stars = item.get("stargazers_count");
                 c.stars = (stars && stars->kind == JsonValue::Kind::Number) ? static_cast<int64_t>(stars->num_v) : 0;
+                // БАГ-ФИКС v1.9.11 (жалоба, волна 5 - "хэш должен браться из
+                // ВСЕХ найденных проектов и ВСЕХ их релизов, а не только
+                // последнего"): раньше release_query всегда указывал на
+                // GET /releases/latest (см. default_legitimacy_sites_config)
+                // и брался ТОЛЬКО первый asset этого ОДНОГО релиза - если
+                // пользователь качал не самую свежую версию, или искомый
+                // файл был вторым/третьим ассетом релиза (напр. отдельно
+                // jar + sources.jar), хэш никогда бы не совпал, даже если
+                // файл подлинный. Теперь release_query указывает на список
+                // ВСЕХ релизов (см. правку ниже в default_legitimacy_sites_
+                // config + LEGITIMACY_SITES_MINI_LANGUAGE_SPEC.md), и здесь
+                // перебираются ВСЕ релизы И ВСЕ ассеты каждого - с ранним
+                // выходом при первом совпадении хэша (не тратим сеть/время
+                // дальше, как только нашли совпадение). Кап на количество
+                // релизов/ассетов - защита от неограниченной сетевой
+                // нагрузки на очень старых/активных репозиториях, а не
+                // произвольное ограничение "только последнее".
                 if (!jar_sha256_hex.empty() && cfg.release_query.has_value()) {
                     std::string rel_url = substitute_placeholder(*cfg.release_query, "{full_name}", c.full_name);
                     auto rel = http_get_json(rel_url, timeout_sec);
-                    if (rel.has_value() && rel->is_object()) {
-                        const JsonValue* assets = rel->get("assets");
-                        if (assets && assets->is_array() && !assets->arr_v->empty()) {
-                            const JsonValue* dl = (*assets->arr_v)[0].get("browser_download_url");
-                            if (dl && dl->is_string()) c.sha256_hex = download_and_sha256(dl->str_v, 50ULL * 1024 * 1024, timeout_sec);
+                    // Обратная совместимость: старый release_query (в
+                    // локальном кэше/пользовательском конфиге до 1.9.11)
+                    // мог указывать на /releases/latest - тогда ответ ОБЪЕКТ,
+                    // не массив. Оборачиваем в одноэлементный "массив", чтобы
+                    // код ниже работал одинаково для обоих случаев.
+                    std::vector<const JsonValue*> releases;
+                    if (rel.has_value() && rel->is_array()) {
+                        for (auto& r : *rel->arr_v) releases.push_back(&r);
+                    } else if (rel.has_value() && rel->is_object()) {
+                        releases.push_back(&*rel);
+                    }
+                    constexpr size_t kMaxReleasesChecked = 10;
+                    constexpr size_t kMaxAssetsPerRelease = 10;
+                    bool matched = false;
+                    for (size_t ri = 0; ri < releases.size() && ri < kMaxReleasesChecked && !matched; ++ri) {
+                        const JsonValue* assets = releases[ri]->get("assets");
+                        if (!assets || !assets->is_array()) continue;
+                        size_t ai = 0;
+                        for (auto& asset : *assets->arr_v) {
+                            if (ai >= kMaxAssetsPerRelease) break;
+                            const JsonValue* dl = asset.get("browser_download_url");
+                            if (dl && dl->is_string()) {
+                                auto digest = download_and_sha256(dl->str_v, 50ULL * 1024 * 1024, timeout_sec);
+                                if (digest.has_value()) {
+                                    c.sha256_hex = digest;
+                                    if (*digest == jar_sha256_hex) { matched = true; break; }
+                                }
+                            }
+                            ai += 1;
                         }
                     }
                 }
@@ -406,18 +451,34 @@ LegitimacySourceResult check_site(const SiteConfig& cfg, const std::string& plug
                 c.url = "https://modrinth.com/plugin/" + slug->str_v;
                 const JsonValue* downloads = item.get("downloads");
                 c.stars = (downloads && downloads->kind == JsonValue::Kind::Number) ? static_cast<int64_t>(downloads->num_v) : 0;
+                // БАГ-ФИКС v1.9.11 (та же жалоба, что и у GitHub выше - см.
+                // комментарий там): раньше брали только files[0] самой
+                // свежей (rel[0]) версии - теперь перебираем ВСЕ версии И
+                // ВСЕ файлы каждой, ранний выход при первом совпадении.
+                // Modrinth отдаёт хэш НАПРЯМУЮ в JSON - скачивать сам файл
+                // не нужно (см. спеку), поэтому кап здесь намного щедрее,
+                // чем у GitHub (нет реальной сетевой цены за лишние версии).
                 if (!jar_sha256_hex.empty() && cfg.release_query.has_value()) {
-                    // HANDOFF_53: Modrinth отдаёт хэш НАПРЯМУЮ в JSON - скачивать
-                    // сам файл не нужно (см. спеку).
                     std::string rel_url = substitute_placeholder(*cfg.release_query, "{slug}", slug->str_v);
                     auto rel = http_get_json(rel_url, timeout_sec);
-                    if (rel.has_value() && rel->is_array() && !rel->arr_v->empty()) {
-                        const JsonValue& ver = (*rel->arr_v)[0];  // самая свежая версия
-                        const JsonValue* files = ver.get("files");
-                        if (files && files->is_array() && !files->arr_v->empty()) {
-                            const JsonValue* hashes = (*files->arr_v)[0].get("hashes");
-                            const JsonValue* sha256_v = hashes ? hashes->get("sha256") : nullptr;
-                            if (sha256_v && sha256_v->is_string()) c.sha256_hex = sha256_v->str_v;
+                    if (rel.has_value() && rel->is_array()) {
+                        constexpr size_t kMaxVersionsChecked = 50;
+                        bool matched = false;
+                        size_t vi = 0;
+                        for (auto& ver : *rel->arr_v) {
+                            if (vi >= kMaxVersionsChecked || matched) break;
+                            const JsonValue* files = ver.get("files");
+                            if (files && files->is_array()) {
+                                for (auto& file : *files->arr_v) {
+                                    const JsonValue* hashes = file.get("hashes");
+                                    const JsonValue* sha256_v = hashes ? hashes->get("sha256") : nullptr;
+                                    if (sha256_v && sha256_v->is_string()) {
+                                        c.sha256_hex = sha256_v->str_v;
+                                        if (sha256_v->str_v == jar_sha256_hex) { matched = true; break; }
+                                    }
+                                }
+                            }
+                            vi += 1;
                         }
                     }
                 }

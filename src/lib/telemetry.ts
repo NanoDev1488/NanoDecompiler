@@ -4,7 +4,7 @@
 // "##ND_RESULT:...##", см. parseEngineResult) + версий приложения/движка.
 // Отправка (IPC -> main-процесс -> fetch на telemetryUrl из настроек) -
 // отдельно, см. sendTelemetryReport в state/engine.tsx.
-import type { Job } from "./model";
+import type { Job, JobDetails } from "./model";
 
 export interface TelemetryReport {
   app_version: string;
@@ -43,9 +43,16 @@ async function getAppVersions(): Promise<{ app_version: string; engine_version: 
   };
 }
 
-export async function buildTelemetryReport(job: Job, userComment: string): Promise<TelemetryReport> {
+// БАГ-ФИКС v1.9.11: detailsOverride - см. jobDetailsRef в state/engine.tsx.
+// job.details (из React-состояния) может быть на пару рендеров позади
+// самой свежей "##ND_RESULT:...##" из лога - при автоотправке сразу по
+// завершении job'а (finalize()) это раньше могло привести к отправке
+// отчёта с пустой статистикой (или к пропуску отправки вовсе, если
+// решение "отправлять или нет" тоже принималось по этому же устаревшему
+// job.details). Если override передан - используем его вместо job.details.
+export async function buildTelemetryReport(job: Job, userComment: string, detailsOverride?: JobDetails): Promise<TelemetryReport> {
   const versions = await getAppVersions();
-  const stats = job.details?.stats;
+  const stats = (detailsOverride ?? job.details)?.stats;
   return {
     ...versions,
     // НОВОЕ: коммит подставляется Vite на этапе сборки (см. define в
@@ -81,7 +88,15 @@ export async function buildFreeformBugReport(userComment: string): Promise<Telem
     app_commit: BUILD_COMMIT,
     os: navigator.userAgent,
     target_plugin_name: "(общий отчёт, не привязан к плагину)",
-    target_platform: "n/a",
+    // БАГ-ФИКС v1.9.11 (жалоба "'платформа' пишет n/a после отправки"):
+    // ПРОВЕРЕНО - это НЕ баг, поле честно пустое по design, т.к. у
+    // произвольного багрепорта нет привязанного job'а/плагина (см.
+    // комментарий класса выше). Голое "n/a" в отчёте выглядело как
+    // недостающее значение/баг сбора данных - заменено на явную фразу,
+    // чтобы человек, читающий отчёт (в т.ч. сам пользователь на
+    // сервере/в Telegram), сразу понимал ПОЧЕМУ платформы нет, а не
+    // подозревал сломанный сбор телеметрии.
+    target_platform: "(нет — общий отчёт без привязки к плагину)",
     jar_file_name: "(общий отчёт)",
     classes_total: 0,
     total_methods: 0,
