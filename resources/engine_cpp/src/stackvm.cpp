@@ -1830,6 +1830,9 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
             } else {
                 elem = field_descriptor_to_java(base);
             }
+            if (strip > dims.size()) {
+                for (size_t k = 0; k < strip - dims.size(); ++k) elem += "[]";
+            }
             push(std::make_shared<NewArray>(elem, dims));
             i += 1; continue;
         }
