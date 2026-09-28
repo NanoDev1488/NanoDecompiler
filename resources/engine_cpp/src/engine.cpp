@@ -1348,6 +1348,23 @@ bool contains_unfolded_monitor_list(const std::vector<StmtPtr>& lst) {
     return false;
 }
 
+std::vector<StmtPtr> collapse_adjacent_monitors(std::vector<StmtPtr> stmts) {
+    std::vector<StmtPtr> out;
+    for (size_t i = 0; i < stmts.size(); ++i) {
+        if (i + 1 < stmts.size()) {
+            auto* m1 = dynamic_cast<MonitorMarkerStmt*>(stmts[i].get());
+            auto* m2 = dynamic_cast<MonitorMarkerStmt*>(stmts[i + 1].get());
+            if (m1 && m2 && m1->kind == "enter" && m2->kind == "exit") {
+                out.push_back(std::make_shared<SyncStmt>(m1->expr, std::vector<StmtPtr>{}));
+                i += 1;
+                continue;
+            }
+        }
+        out.push_back(stmts[i]);
+    }
+    return out;
+}
+
 bool contains_unfolded_monitor(const std::vector<StmtPtr>& stmts) { return contains_unfolded_monitor_list(stmts); }
 
 // ---------------- enum switch desugaring ----------------
@@ -2432,6 +2449,7 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
         stmts = eliminate_dead_locals(stmts);
         collapse_sb_in_stmts(stmts);
         prune_unused_imports(stmts, ctx);
+        stmts = collapse_adjacent_monitors(stmts);
         if (contains_unfolded_monitor(stmts)) throw DecompileAbort("synchronized-блок не свёрнут (monitorenter/monitorexit)");
         if (has_escaping_local_decl(stmts)) {
             throw DecompileAbort("переменная объявлена в блоке, но используется за его пределами "
