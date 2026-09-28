@@ -86,7 +86,7 @@ async function collectSourceFiles(outDir: string, relDir = ""): Promise<SourceFi
       const pkg = lastSlash === -1 ? "" : stripped.slice(0, lastSlash);
       out.push({
         id: rid("f"),
-        pkg: pkg || "(корень)",
+        pkg: pkg || t(lang(), "toast.root_pkg"),
         name: item.name,
         relPath: rel,
         loc: 0,
@@ -319,10 +319,10 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       try {
         const report = await buildTelemetryReport(job, comment, detailsOverride);
         const res = await window.nano.sendTelemetryReport(report);
-        if (res.ok) toast("Отчёт отправлен", "ok");
-        else toast(`Не удалось отправить отчёт: ${res.error ?? "неизвестная ошибка"}`, "err");
+        if (res.ok) toast(t(lang(), "toast.report_sent"), "ok");
+        else toast(`${t(lang(), "toast.report_failed")}: ${res.error ?? t(lang(), "toast.unknown_error")}`, "err");
       } catch (e) {
-        toast(`Не удалось отправить отчёт: ${String(e)}`, "err");
+        toast(`${t(lang(), "toast.report_failed")}: ${String(e)}`, "err");
       }
     },
     [toast],
@@ -338,12 +338,12 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     try {
       const report = await buildFreeformBugReport(comment);
       const res = await window.nano.sendTelemetryReport(report);
-      if (res.ok) toast("Отчёт отправлен", "ok");
-      else toast(`Не удалось отправить отчёт: ${res.error ?? "неизвестная ошибка"}`, "err");
+      if (res.ok) toast(t(lang(), "toast.report_sent"), "ok");
+      else toast(`${t(lang(), "toast.report_failed")}: ${res.error ?? t(lang(), "toast.unknown_error")}`, "err");
       return res;
     } catch (e) {
       const error = String(e);
-      toast(`Не удалось отправить отчёт: ${error}`, "err");
+      toast(`${t(lang(), "toast.report_failed")}: ${error}`, "err");
       return { ok: false, error };
     }
   }, [toast]);
@@ -404,8 +404,8 @@ export function EngineProvider({ children }: { children: ReactNode }) {
         .installTools(which)
         .then(r => {
           const ok = which === "java" ? !!r.java : !!r.maven;
-          if (ok) toast(`${which === "java" ? "Java" : "Maven"} установлен(а)`, "ok");
-          else toast(r.errors?.[0] ?? r.error ?? `Не удалось установить ${which === "java" ? "Java" : "Maven"}`, "err");
+          if (ok) toast(`${which === "java" ? "Java" : "Maven"} ${t(lang(), "toast.installed")}`, "ok");
+          else toast(r.errors?.[0] ?? r.error ?? `${t(lang(), "toast.install_failed")} ${which === "java" ? "Java" : "Maven"}`, "err");
         })
         .catch(err => toast(String(err?.message ?? err), "err"))
         .finally(() => {
@@ -442,7 +442,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       .then(r => {
         if (!r.ok) {
           setUpdateInfo(u => ({ ...u, checking: false, error: r.error }));
-          if (!silent) toast(r.error ?? "Не удалось проверить обновления", "err");
+          if (!silent) toast(r.error ?? t(lang(), "toast.check_update_failed"), "err");
           return;
         }
         setUpdateInfo({
@@ -457,13 +457,13 @@ export function EngineProvider({ children }: { children: ReactNode }) {
         });
         if (!silent) {
           if (r.updateKind === "none") toast("У вас последняя версия", "ok");
-          else if (r.updateKind === "engine") toast(`Доступно обновление движка: ${r.latestVersion}`, "info");
+          else if (r.updateKind === "engine") toast(`${t(lang(), "toast.update_engine")}: ${r.latestVersion}`, "info");
           else if (r.updateKind === "client") toast(`Доступно обновление приложения: ${r.latestVersion}`, "info");
         }
       })
       .catch(e => {
         setUpdateInfo(u => ({ ...u, checking: false, error: String(e) }));
-        if (!silent) toast("Не удалось проверить обновления", "err");
+        if (!silent) toast(t(lang(), "toast.check_update_failed"), "err");
       });
   }, [toast]);
 
@@ -489,7 +489,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
   const openClientDownload = useCallback(() => {
     const url = updateInfo.clientDownloadUrl ?? updateInfo.releaseUrl;
-    if (url) window.nano.openExternal(url).catch(() => toast("Не удалось открыть ссылку", "err"));
+    if (url) window.nano.openExternal(url).catch(() => toast(t(lang(), "toast.link_failed"), "err"));
   }, [toast, updateInfo.clientDownloadUrl, updateInfo.releaseUrl]);
 
 
@@ -741,7 +741,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
       if (job) {
         if (ok) {
-          toast(`Готово: ${job.fileName} — ${fmtSeconds(elapsed)}`, "ok");
+          toast(`${t(lang(), "toast.done")}: ${job.fileName} — ${fmtSeconds(elapsed)}`, "ok");
           if (settings.openFolderOnDone) window.nano.openPath(job.outDir).catch(() => {});
           // НОВОЕ v1.9.5 (прямая просьба пользователя - "если телеметрия
           // включена, ОБЯЗАТЕЛЬНО отправлять всё, все байткоды ошибок, что
@@ -773,7 +773,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
             void sendErrorReport(jobId, autoComment, liveDetails);
           }
         } else {
-          toast(`Ошибка: ${job.fileName}${error ? ` — ${error}` : ""}`, "err");
+          toast(`${t(lang(), "toast.error")}: ${job.fileName}${error ? ` — ${error}` : ""}`, "err");
         }
       }
 
@@ -978,7 +978,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     const wasRunning = runningIdRef.current !== null;
     stopRunning();
     setJobs(prev => prev.map(j => (j.status === "queued" ? { ...j, status: "canceled" } : j)));
-    if (!wasRunning) toast("Очередь очищена", "warn");
+    if (!wasRunning) toast(t(lang(), "toast.stopped"), "warn");
   }, [stopRunning, toast]);
 
   // Добавление через реальный системный диалог (Electron) - единственный
@@ -1262,10 +1262,10 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       window.nano
         .setSettings(next)
         .then(r => {
-          if (r.ok) toast("Настройки сохранены", "ok");
+          if (r.ok) toast(t(lang(), "toast.settings_saved"), "ok");
           else toast(`Не удалось сохранить настройки: ${r.error ?? "неизвестная ошибка"}`, "err");
         })
-        .catch(e => toast(`Не удалось сохранить настройки: ${String(e)}`, "err"));
+        .catch(e => toast(`${t(lang(), "toast.settings_failed")}: ${String(e)}`, "err"));
     },
     [toast],
   );
