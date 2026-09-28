@@ -96,13 +96,19 @@ std::optional<std::array<uint8_t, 16>> str_decrypt_find_decryptor_in_class(const
     if (!str_decrypt_has_marker(cf)) return std::nullopt;
     std::vector<int32_t> ints;
     for (auto& f : cf.fields) {
-        if (f.constant_value.has_value() && f.constant_value->tag == CpTag::Integer) {
-            ints.push_back(static_cast<int32_t>(f.constant_value->int_value));
+        if (f.constant_value.has_value()) {
+            if (f.constant_value->tag == CpTag::Integer) {
+                ints.push_back(static_cast<int32_t>(f.constant_value->int_value));
+            } else if (f.constant_value->tag == CpTag::Long) {
+                uint64_t lv = f.constant_value->long_value;
+                ints.push_back(static_cast<int32_t>(lv >> 32));
+                ints.push_back(static_cast<int32_t>(lv & 0xffffffffULL));
+            }
         }
     }
     if (ints.size() < 2) {
         // Fallback: если ConstantValue атрибуты срезаны обфускатором,
-        // извлекаем int-константы из статического инициализатора <clinit>.
+        // извлекаем int/long-константы из статического инициализатора <clinit>.
         for (const auto& m : cf.methods) {
             if (m.name == "<clinit>" && m.has_code && !m.code.empty()) {
                 const auto& code = m.code;
@@ -131,6 +137,15 @@ std::optional<std::array<uint8_t, 16>> str_decrypt_find_decryptor_in_class(const
                         auto it = cf.pool.find(cpidx);
                         if (it != cf.pool.end() && it->second.tag == CpTag::Integer) {
                             ints.push_back(static_cast<int32_t>(it->second.int_value));
+                        }
+                        pc += 3;
+                    } else if (op == 0x14 && pc + 2 < n) {  // ldc2_w (Long seed)
+                        uint16_t cpidx = (static_cast<uint16_t>(code[pc + 1]) << 8) | code[pc + 2];
+                        auto it = cf.pool.find(cpidx);
+                        if (it != cf.pool.end() && it->second.tag == CpTag::Long) {
+                            uint64_t lv = it->second.long_value;
+                            ints.push_back(static_cast<int32_t>(lv >> 32));
+                            ints.push_back(static_cast<int32_t>(lv & 0xffffffffULL));
                         }
                         pc += 3;
                     } else {
