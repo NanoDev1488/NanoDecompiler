@@ -149,7 +149,7 @@ export function SetupWizard() {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center bg-black/70 p-4 backdrop-blur-[2px]">
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-black/80 p-4">
       <div className="animate-rise flex w-[400px] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl shadow-black/50">
         <div className="flex flex-col items-center gap-4 px-6 py-7 text-center">
           {step === "welcome" && (

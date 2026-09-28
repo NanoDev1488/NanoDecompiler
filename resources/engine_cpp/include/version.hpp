@@ -94,5 +94,7 @@ namespace nd {
 // НОВОЕ v1.9.15: сквозная интеграция i18n переводов во все UI-компоненты
 // (AppHeader, Sidebar, Workspace, Terminal, CodeView, PluginDetailsModal,
 // BugReportModal, SetupWizard).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.15";
+// НОВОЕ v1.9.16: оптимизация производительности оверлеев модальных окон
+// для слабых GPU (убран дорогостоящий backdrop-blur), ускорение CI-кэша.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.16";
 }

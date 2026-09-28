@@ -139,7 +139,7 @@ export function CommandPalette() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-center bg-black/60 pt-[11vh] backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex justify-center bg-black/70 pt-[11vh]"
       onMouseDown={e => {
         if (e.target === e.currentTarget) setPaletteOpen(false);
       }}

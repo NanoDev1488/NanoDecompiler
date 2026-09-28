@@ -26,7 +26,7 @@ export function BugReportModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 grid place-items-center bg-black/70"
       onMouseDown={e => e.target === e.currentTarget && onClose()}
     >
       <div className="animate-rise flex w-[520px] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl shadow-black/50">

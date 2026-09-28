@@ -44,7 +44,7 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4"
       onMouseDown={e => {
         if (e.target === e.currentTarget) onClose();
       }}
