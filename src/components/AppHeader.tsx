@@ -31,7 +31,7 @@ export function AppHeader() {
   const hasUpdate = updateInfo.kind === "engine" || updateInfo.kind === "client";
 
   return (
-    <div className="flex h-12 flex-none items-center gap-3 overflow-x-auto border-b border-line bg-surface px-3">
+    <div className="flex h-12 flex-none items-center gap-3 z-20 border-b border-line bg-surface px-3">
       {/* статус движка — ассист-чип с точкой, наследие gui_neon.py */}
       <div
         className={cn(

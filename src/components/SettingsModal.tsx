@@ -1,4 +1,4 @@
-﻿import { Check, FolderOpen, Loader2, Minus, Plus, Send, X } from "lucide-react";
+import { Check, FolderOpen, Loader2, Minus, Plus, Send, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useEngine } from "../state/engine";
 import { Toggle, Kbd } from "./ui";
@@ -484,10 +484,9 @@ export function SettingsModal() {
                 }
               />
               <Row
-                label="Отключить VS Code стиль визуализации логгеров (log.info)"
-                control={
-                  <Toggle
-                    label={t(lang, "app.disable_vscode_label")}
+                label={t(draft.language, "settings.disable_vscode_logs")}
+                  control={
+                    <Toggle
                     checked={draft.disableVsCodeLogs}
                     onChange={v => setDraft(d => ({ ...d, disableVsCodeLogs: v }))}
                   />
