@@ -324,6 +324,12 @@ std::vector<std::string> emit_stmt(const StmtPtr& s, int indent) {
                         }
                     }
                 }
+                if (&c == &sw->cases.back() && !clean_body.empty()) {
+                    auto* last_break = dynamic_cast<BreakStmt*>(clean_body.back().get());
+                    if (last_break != nullptr) {
+                        clean_body.pop_back();
+                    }
+                }
                 auto case_lines = emit_stmts(clean_body, indent + 2);
                 out.insert(out.end(), case_lines.begin(), case_lines.end());
             }
