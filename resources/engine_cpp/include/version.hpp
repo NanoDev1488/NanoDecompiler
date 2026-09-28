@@ -107,5 +107,6 @@ namespace nd {
 // switch(String.hashCode()), очистка мёртвых локальных объявлений после схлопывания switch.
 // НОВОЕ v1.9.21: сквозной инлайнинг временных переменных __stk/__temp в выражения любой вложенности (if/while/return/throw/switch/decl),
 // рекурсивное упрощение булевых выражений (x == true/false, !!x, x ? true : false) для максимальной читаемости.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.21";
+// НОВОЕ v1.9.22: нефатальная обработка неизвестных bootstrap-методов invokedynamic (генерация читаемых узлов вызова вместо полного сброса метода в байткод).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.22";
 }

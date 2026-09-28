@@ -1058,7 +1058,10 @@ ExprPtr handle_invokedynamic(const ClassFile& cf, const Instruction& ins, Method
     if (bsm_owner == "java/lang/runtime/ObjectMethods" && bsm_name == "bootstrap") {
         return build_object_methods(cf, bm.args, call_args, indy_name, ctx);
     }
-    throw DecompileAbort("неподдерживаемый invokedynamic bootstrap: " + bsm_owner + "." + bsm_name);
+    std::string ret_type = indy_ret.empty() ? "Object" : indy_ret;
+    return std::make_shared<MethodCall>(
+        std::make_shared<Raw>("/* indy: " + bsm_owner + "." + bsm_name + " */ " + indy_name),
+        indy_name, call_args, ret_type, false, false, std::nullopt);
 }
 
 }  // namespace
