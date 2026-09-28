@@ -115,12 +115,12 @@ jobs:
             mingw-w64-x86_64-make
             mingw-w64-x86_64-ccache
 
-      - name: Собрать NanoDecompilerCLI.exe
+      - name: Собрать NanoDecompilerCLI.exe (1 ядро, память <= 512MB)
         shell: msys2 {0}
         working-directory: resources/engine_cpp
         run: |
           cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
-          cmake --build build --parallel
+          cmake --build build --parallel 1
           cp build/NanoDecompilerCLI.exe ../engine/NanoDecompilerCLI.exe
 
       - name: Записать .engine-api-version (см. electron/updater.ts)
@@ -128,14 +128,16 @@ jobs:
         working-directory: resources/engine
         run: printf '%s' "$API_VERSION" > .engine-api-version
 
-      - name: Проверка - собранный движок реально работает
+      - name: Проверка - собранный движок реально работает (смоук-тест и реальный плагин)
         shell: bash
         run: |
-          # БАГ-ФИКС: раньше при падении причина оставалась невидимой -
-          # печатаем реальный вывод движка перед exit 1.
-          echo "=== вывод движка (обычный режим) ==="
+          echo "=== 1. Смоук-тест ==="
           resources/engine/NanoDecompilerCLI.exe test_jars/smoketest_plugin.jar out_check_client_cli --no-legitimacy-check
-          if [ ! -d "out_check_client_cli" ]; then echo "движок: out_dir не создан - см. вывод выше"; exit 1; fi
+          if [ ! -d "out_check_client_cli" ]; then echo "движок: out_dir не создан"; exit 1; fi
+
+          echo "=== 2. Декомпиляция реального плагина BukkitOfUtils ==="
+          resources/engine/NanoDecompilerCLI.exe test_jars/large_legit/BukkitOfUtils-1_19_0.jar out_check_bukkit_utils --no-legitimacy-check
+          if [ ! -d "out_check_bukkit_utils" ]; then echo "движок: out_check_bukkit_utils не создан"; exit 1; fi
 
       # НОВОЕ v1.7.3 (реальный краш в CI - STATUS_STACK_BUFFER_OVERRUN,
       # 0xC0000409 - выше просто печатался exit-код без единой зацепки,
@@ -215,11 +217,11 @@ jobs:
       - name: Установить zlib dev-заголовки и ccache
         run: sudo apt-get update && sudo apt-get install -y zlib1g-dev ccache
 
-      - name: Собрать NanoDecompilerCLI
+      - name: Собрать NanoDecompilerCLI (1 ядро, память <= 512MB)
         working-directory: resources/engine_cpp
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
-          cmake --build build --parallel
+          cmake --build build --parallel 1
           cp build/NanoDecompilerCLI ../engine/NanoDecompilerCLI
           chmod +x ../engine/NanoDecompilerCLI
 
@@ -227,13 +229,15 @@ jobs:
         working-directory: resources/engine
         run: printf '%s' "$API_VERSION" > .engine-api-version
 
-      - name: Проверка - собранный движок реально работает
+      - name: Проверка - собранный движок реально работает (смоук-тест и реальный плагин)
         run: |
-          # БАГ-ФИКС: раньше при падении причина оставалась невидимой -
-          # печатаем реальный вывод движка перед exit 1.
-          echo "=== вывод движка (обычный режим) ==="
+          echo "=== 1. Смоук-тест ==="
           resources/engine/NanoDecompilerCLI test_jars/smoketest_plugin.jar out_check_client_cli --no-legitimacy-check
-          if [ ! -d "out_check_client_cli" ]; then echo "движок: out_dir не создан - см. вывод выше"; exit 1; fi
+          if [ ! -d "out_check_client_cli" ]; then echo "движок: out_dir не создан"; exit 1; fi
+
+          echo "=== 2. Декомпиляция реального плагина BukkitOfUtils ==="
+          resources/engine/NanoDecompilerCLI test_jars/large_legit/BukkitOfUtils-1_19_0.jar out_check_bukkit_utils --no-legitimacy-check
+          if [ ! -d "out_check_bukkit_utils" ]; then echo "движок: out_check_bukkit_utils не создан"; exit 1; fi
 
       - uses: actions/setup-node@v4
         with:

@@ -108,5 +108,7 @@ namespace nd {
 // НОВОЕ v1.9.21: сквозной инлайнинг временных переменных __stk/__temp в выражения любой вложенности (if/while/return/throw/switch/decl),
 // рекурсивное упрощение булевых выражений (x == true/false, !!x, x ? true : false) для максимальной читаемости.
 // НОВОЕ v1.9.22: нефатальная обработка неизвестных bootstrap-методов invokedynamic (генерация читаемых узлов вызова вместо полного сброса метода в байткод).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.22";
+// НОВОЕ v1.9.23: оптимизация сборки движка под строгое ограничение 512 МБ RAM / 1 ядро CPU (-fno-var-tracking),
+// автоматизированная верификация декомпиляции реального Bukkit-плагина (BukkitOfUtils) в CI-пайплайне.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.23";
 }

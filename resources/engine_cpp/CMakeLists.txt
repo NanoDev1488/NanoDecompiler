@@ -18,6 +18,11 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
+# Оптимизация потребления памяти при сборке движка (гарантирует прохождение в 512 МБ RAM / 1 ядро)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  add_compile_options(-fno-var-tracking -fno-var-tracking-assignments)
+endif()
+
 file(GLOB ND_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 add_executable(NanoDecompilerCLI ${ND_SOURCES})
