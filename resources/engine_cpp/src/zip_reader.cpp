@@ -98,14 +98,32 @@ ZipReader::ZipReader(const std::string& path) : path_(path) {
         uint32_t local_header_offset = rd_u32(&cd[pos + 42]);
         std::string name(reinterpret_cast<const char*>(&cd[pos + 46]), name_len);
 
+        // Защита от Zip Slip (патологические/вредоносные имена с ../ или абсолютными путями)
+        std::string clean_name = name;
+        for (char& c : clean_name) if (c == '\\') c = '/';
+        while (!clean_name.empty() && clean_name.front() == '/') clean_name.erase(clean_name.begin());
+        bool dangerous = false;
+        std::stringstream ss(clean_name);
+        std::string segment;
+        while (std::getline(ss, segment, '/')) {
+            if (segment == ".." || segment.find(':') != std::string::npos) {
+                dangerous = true;
+                break;
+            }
+        }
+        if (dangerous) {
+            pos += 46 + name_len + extra_len + comment_len;
+            continue;
+        }
+
         ZipEntryInfo info;
-        info.name = name;
+        info.name = clean_name;
         info.uncompressed_size = uncompressed_size;
         info.compressed_size = compressed_size_cd;
         info.compression_method = method;
-        entries_[name] = info;
-        order_.push_back(name);
-        local_header_offset_[name] = local_header_offset;
+        entries_[clean_name] = info;
+        order_.push_back(clean_name);
+        local_header_offset_[clean_name] = local_header_offset;
 
         pos += 46 + name_len + extra_len + comment_len;
     }
