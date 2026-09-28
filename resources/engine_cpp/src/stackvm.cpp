@@ -1844,7 +1844,11 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
             if (!cname.has_value()) throw DecompileAbort("bad checkcast target");
             ExprPtr v = pop();
             std::string disp = (!cname->empty() && (*cname)[0] == '[') ? array_type_str(*cname, ctx) : ctx.owner_display(*cname);
-            push(std::make_shared<Cast>(disp, v));
+            if (v->kind == ExprKind::Cast && static_cast<Cast*>(v.get())->type == disp) {
+                push(v);
+            } else {
+                push(std::make_shared<Cast>(disp, v));
+            }
             i += 1; continue;
         }
         if (mn == "instanceof") {

@@ -122,5 +122,6 @@ namespace nd {
 // НОВОЕ v1.9.33: расширенная детекция платформ (поддержка META-INF/paper-plugin.yml, waterfall.yml, fallback по id для Velocity и вложенных имён Quilt).
 // НОВОЕ v1.9.34: расширенная деобфускация строк (извлечение seed-констант расшифровщика из статического инициализатора <clinit> при срезанных ConstantValue).
 // НОВОЕ v1.9.35: исправление отрисовки сигнатур методов (защита от выпадения параметров при частичном несовпадении таблиц локальных переменных LVT).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.35";
+// НОВОЕ v1.9.36: дедупликация цепочек тождественных приведений типов checkcast (устранение мусорных повторных кастов обфускаторов в стек-машине).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.36";
 }
