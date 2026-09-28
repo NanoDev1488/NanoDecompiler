@@ -129,10 +129,12 @@ PlatformInfo detect_platform(const std::vector<std::string>& all_names,
         return std::find(all_names.begin(), all_names.end(), path) != all_names.end();
     };
 
-    if (has("velocity-plugin.json")) {
+    std::string vel_path = has("velocity-plugin.json") ? "velocity-plugin.json"
+                                                        : (has("META-INF/velocity-plugin.json") ? "META-INF/velocity-plugin.json" : "");
+    if (!vel_path.empty()) {
         info.kind = PlatformKind::Velocity;
-        info.manifest_path = "velocity-plugin.json";
-        if (auto text = read_entry("velocity-plugin.json")) {
+        info.manifest_path = vel_path;
+        if (auto text = read_entry(vel_path)) {
             info.name = extract_json_field(*text, "name");
             if (!info.name.has_value()) info.name = extract_json_field(*text, "id");
         }
@@ -161,10 +163,12 @@ PlatformInfo detect_platform(const std::vector<std::string>& all_names,
 
     // Ни одного серверного манифеста не нашлось - только теперь проверяем
     // моды.
-    if (has("fabric.mod.json")) {
+    std::string fabric_path = has("fabric.mod.json") ? "fabric.mod.json"
+                                                     : (has("META-INF/fabric.mod.json") ? "META-INF/fabric.mod.json" : "");
+    if (!fabric_path.empty()) {
         info.kind = PlatformKind::ModFabric;
-        info.manifest_path = "fabric.mod.json";
-        if (auto text = read_entry("fabric.mod.json")) info.name = extract_json_field(*text, "name");
+        info.manifest_path = fabric_path;
+        if (auto text = read_entry(fabric_path)) info.name = extract_json_field(*text, "name");
         return info;
     }
     if (has("quilt.mod.json")) {
