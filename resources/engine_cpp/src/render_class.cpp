@@ -346,10 +346,21 @@ std::pair<std::string, OrderedImports> render_class(
     bool is_record = !cf.record_components.empty();
     std::string kind = is_annotation ? "@interface" : (is_interface ? "interface" : (is_enum ? "enum" : (is_record ? "record" : "class")));
 
+    uint16_t effective_access = cf.access;
+    for (const auto& ic : cf.inner_classes) {
+        if (ic.inner.has_value() && *ic.inner == cf.this_class_name) {
+            effective_access = ic.access;
+            break;
+        }
+    }
+
     std::vector<std::string> mod_bits;
-    if (cf.access & 0x0001) mod_bits.push_back("public");
-    if ((cf.access & 0x0010) && !is_enum) mod_bits.push_back("final");
-    if ((cf.access & 0x0400) && !is_interface && !is_enum) mod_bits.push_back("abstract");
+    if (effective_access & 0x0001) mod_bits.push_back("public");
+    else if (effective_access & 0x0004) mod_bits.push_back("protected");
+    else if (effective_access & 0x0002) mod_bits.push_back("private");
+    if ((effective_access & 0x0008) && !is_interface && !is_enum) mod_bits.push_back("static");
+    if ((effective_access & 0x0010) && !is_enum && !is_record) mod_bits.push_back("final");
+    if ((effective_access & 0x0400) && !is_interface && !is_enum) mod_bits.push_back("abstract");
     std::string mods;
     for (size_t i = 0; i < mod_bits.size(); ++i) {
         if (i) mods += " ";
