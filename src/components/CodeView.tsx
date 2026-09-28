@@ -1,5 +1,5 @@
-import { Copy, Search, WrapText } from "lucide-react";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { Copy, Hash, Search, WrapText } from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEngine } from "../state/engine";
 import { JavaCode } from "../lib/javaHighlight";
 import { PlainCode, PropertiesCode, JsonCode, XmlCode, YamlCode } from "../lib/textHighlight";
@@ -7,6 +7,64 @@ import { joinOutDir, type SourceFile } from "../lib/model";
 import { t } from "../lib/i18n";
 import { FindBar } from "./FindBar";
 import { OpenInMenu } from "./OpenInMenu";
+
+function GotoLineBar({
+  maxLines,
+  onJump,
+  onClose,
+  lang,
+}: {
+  maxLines: number;
+  onJump: (line: number) => void;
+  onClose: () => void;
+  lang: string;
+}) {
+  const [val, setVal] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const n = parseInt(val, 10);
+    if (!isNaN(n) && n >= 1) {
+      onJump(Math.min(n, Math.max(1, maxLines)));
+      onClose();
+    }
+  };
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="absolute top-10 right-4 z-20 flex items-center gap-1.5 rounded border border-line-strong bg-surface p-1.5 shadow-lg"
+    >
+      <span className="mono text-[11px] text-faint">{lang === "ru" ? "Строка:" : "Line:"}</span>
+      <input
+        ref={inputRef}
+        type="number"
+        min={1}
+        max={Math.max(1, maxLines)}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        placeholder={`1..${Math.max(1, maxLines)}`}
+        className="h-6 w-20 rounded border border-line bg-bg px-2 text-[11px] text-ink outline-none focus:border-acid"
+        onKeyDown={e => {
+          if (e.key === "Escape") onClose();
+        }}
+      />
+      <button type="submit" className="btn btn-tonal h-6 px-2 text-[10.5px]">
+        {lang === "ru" ? "Перейти" : "Go"}
+      </button>
+      <button
+        type="button"
+        onClick={onClose}
+        className="icon-btn h-6 w-6 text-faint hover:text-ink"
+        title={lang === "ru" ? "Закрыть (Esc)" : "Close (Esc)"}
+      >
+        ✕
+      </button>
+    </form>
+  );
+}
 
 // БАГ-ФИКС: раньше ЛЮБОЙ файл в просмотрщике рендерился через JavaCode
 // независимо от расширения - .yml подсвечивался java-ключевыми словами.
@@ -114,13 +172,30 @@ export const CodeView = memo(function CodeView({
   }, []);
 
   const [findOpen, setFindOpen] = useState(false);
+  const [gotoOpen, setGotoOpen] = useState(false);
+
+  const jumpToLine = useCallback((lineNum: number) => {
+    const el = codeContainerRef.current?.querySelector(`#codeline-${lineNum}`) as HTMLElement | null;
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("bg-acid/20");
+      setTimeout(() => el.classList.remove("bg-acid/20"), 1500);
+    } else if (codeContainerRef.current) {
+      codeContainerRef.current.scrollTop = Math.max(0, (lineNum - 1) * 22);
+    }
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "f") {
         e.preventDefault();
         setFindOpen(true);
+      } else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        setGotoOpen(true);
       } else if (e.key === "Escape") {
         setFindOpen(false);
+        setGotoOpen(false);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -149,6 +224,14 @@ export const CodeView = memo(function CodeView({
   return (
     <section className="relative flex min-w-0 flex-1 flex-col bg-bg">
       {findOpen && <FindBar containerRef={codeContainerRef} onClose={() => setFindOpen(false)} />}
+      {gotoOpen && (
+        <GotoLineBar
+          maxLines={file.loc || (displayCode?.split("\n").length ?? 1)}
+          onJump={jumpToLine}
+          onClose={() => setGotoOpen(false)}
+          lang={lang}
+        />
+      )}
       <div className="flex h-9 flex-none items-center gap-2.5 border-b border-line px-3">
         <nav className="mono flex min-w-0 items-center gap-1 text-[11.5px] text-faint" aria-label="Путь к файлу">
           {crumbs.map((c, i) => (
@@ -188,6 +271,13 @@ export const CodeView = memo(function CodeView({
         {outDir && (
           <OpenInMenu filePath={joinOutDir(outDir, file.relPath)} projectDir={outDir} />
         )}
+        <button
+          className="icon-btn h-7 w-7"
+          title={lang === "ru" ? "Перейти к строке (Ctrl+G)" : "Go to line (Ctrl+G)"}
+          onClick={() => setGotoOpen(true)}
+        >
+          <Hash size={14} />
+        </button>
         <button
           className="icon-btn h-7 w-7"
           title={lang === "ru" ? "Найти в файле (Ctrl+F)" : "Find in file (Ctrl+F)"}
