@@ -965,13 +965,14 @@ std::pair<std::string, OrderedImports> render_class(
         std::vector<std::vector<Annotation>> param_anns = m.param_annotations;
         if (is_enum_ctor && param_anns.size() >= 2) param_anns.erase(param_anns.begin(), param_anns.begin() + 2);
         std::vector<std::string> param_parts;
-        for (size_t i = 0; i < params_disp.size() && i < param_names.size(); ++i) {
+        for (size_t i = 0; i < params_disp.size(); ++i) {
+            std::string pname = (i < param_names.size()) ? param_names[i] : ("arg" + std::to_string(i));
             std::string prefix;
             if (i < param_anns.size() && !param_anns[i].empty()) {
                 for (auto& a : param_anns[i]) prefix += format_annotation(a, renamer, known_internal_by_dotted, all_imports) + " ";
             }
             std::string ptype = used_generic_sig ? params_disp[i] : mark_type(params_disp[i]);
-            param_parts.push_back(prefix + ptype + " " + param_names[i]);
+            param_parts.push_back(prefix + ptype + " " + pname);
         }
         std::string param_str;
         for (size_t i = 0; i < param_parts.size(); ++i) {
