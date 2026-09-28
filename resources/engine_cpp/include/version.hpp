@@ -165,5 +165,6 @@ namespace nd {
 // НОВОЕ v1.9.76: расширенное извлечение версии (version) и описания (description) плагинов и модов из манифестов всех платформ в detect_platform.
 // НОВОЕ v1.9.77: отображение статуса окружения Java и кнопка быстрой повторной проверки в мастере первоначальной настройки (SetupWizard).
 // НОВОЕ v1.9.78: аннотирование имён локальных переменных из таблицы LVT в листингах дизассемблера для iload/aload/astore инструкций.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.78";
+// НОВОЕ v1.9.79: быстрый фильтр и бейдж обнаруженных угроз безопасности и вредоносного кода в терминале логов GUI.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.79";
 }

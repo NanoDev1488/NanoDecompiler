@@ -1,4 +1,4 @@
-import { ArrowDownToLine, ChevronDown, ChevronUp, Copy, Trash2 } from "lucide-react";
+import { ArrowDownToLine, ChevronDown, ChevronUp, Copy, ShieldAlert, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useEngine } from "../state/engine";
 import { fmtClock, type LogFilter, type LogLevel } from "../lib/model";
@@ -41,6 +41,8 @@ export function Terminal() {
     for (const l of log) c[l.level] += 1;
     return c;
   }, [log]);
+
+  const malwareCount = useMemo(() => log.filter(l => l.tag === "malware").length, [log]);
 
   const visible = useMemo(() => {
     let items = logFilter === "all" ? log : log.filter(l => l.level === logFilter);
@@ -159,6 +161,21 @@ export function Terminal() {
                 <span className={logFilter === f.id ? "text-acid/70" : "text-faint"}>{counts[f.id]}</span>
               </button>
             ))}
+            {malwareCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery(searchQuery === "malware" ? "" : "malware")}
+                className={cn(
+                  "chip h-[22px] px-2 text-[10px] transition-colors border-err/50 text-err flex items-center gap-1",
+                  searchQuery.toLowerCase() === "malware" ? "bg-err/25 font-bold shadow-sm" : "bg-err/10 hover:bg-err/20",
+                )}
+                title={lang === "ru" ? "Показать только предупреждения безопасности и вредоносный код" : "Show security and malware findings"}
+              >
+                <ShieldAlert size={11} className="text-err" />
+                <span>{lang === "ru" ? "Угрозы" : "Threats"}</span>
+                <span className="font-mono text-err font-bold">{malwareCount}</span>
+              </button>
+            )}
           </div>
         )}
 
