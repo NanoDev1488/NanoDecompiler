@@ -108,12 +108,9 @@ export const CodeView = memo(function CodeView({
   jobId?: string;
   outDir?: string;
 }) {
-  const { copyText, selectFile, updateFileCode, toast, settings } = useEngine();
+  const { copyText, selectFile, toast, settings } = useEngine();
   const lang = settings.language;
   const [wrap, setWrap] = useState(false);
-  const [draft, setDraft] = useState("");
-  const lastSavedRef = useRef<string>("");
-  const [saveState, setSaveState] = useState<"saving" | "err" | null>(null);
   const codeContainerRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(() => {
     try {
@@ -140,49 +137,11 @@ export const CodeView = memo(function CodeView({
   useEffect(() => {
     if (!file) return;
     setWrap(/\.(txt|md)$/i.test(file.name));
-    setDraft(file.code ?? "");
-    lastSavedRef.current = file.code ?? "";
-    setSaveState(null);
-  }, [file?.id]);
-
-  const saveNowRef = useRef<() => void>(() => {});
-  useEffect(() => {
-    saveNowRef.current = () => {
-      if (!outDir || !jobId || !file) return;
-      if (draft === lastSavedRef.current) return;
-      setSaveState("saving");
-      window.nano
-        .writeTextFile(outDir, file.relPath, draft)
-        .then(res => {
-          if (res.ok) {
-            lastSavedRef.current = draft;
-            updateFileCode(jobId, file.id, draft);
-            setSaveState(null);
-          } else {
-            setSaveState("err");
-            toast(`Не удалось сохранить ${file.name}: ${res.error ?? "неизвестная ошибка"}`, "err");
-          }
-        })
-        .catch(e => {
-          setSaveState("err");
-          toast(`Не удалось сохранить ${file.name}: ${String(e)}`, "err");
-        });
-    };
-  });
-
-  // Автоматический flush несохранённых данных при смене файла или закрытии
-  useEffect(() => {
-    return () => {
-      saveNowRef.current();
-    };
   }, [file?.id]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        saveNowRef.current();
-      } else if (e.altKey && e.key.toLowerCase() === "z") {
+      if (e.altKey && e.key.toLowerCase() === "z") {
         e.preventDefault();
         setWrap(v => !v);
       } else if ((e.ctrlKey || e.metaKey) && (e.key === "=" || e.key === "+")) {
@@ -200,10 +159,8 @@ export const CodeView = memo(function CodeView({
       }
     };
     window.addEventListener("keydown", onKey);
-    const timer = window.setInterval(() => saveNowRef.current(), 5000);
     return () => {
       window.removeEventListener("keydown", onKey);
-      window.clearInterval(timer);
     };
   }, [jobId, selectFile]);
 
@@ -238,11 +195,20 @@ export const CodeView = memo(function CodeView({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const canEdit = !!outDir && !!jobId && file?.code !== undefined && file?.loadError === undefined;
+  const job = jobId ? useEngine().jobs[jobId] : undefined;
+  const platformVersion = job?.stats?.platform_version;
+
   const displayCode = useMemo(() => {
     if (file?.code === undefined) return undefined;
-    return canEdit ? draft : prettyPrintIfJson(file.name, file.code);
-  }, [file?.name, file?.code, canEdit, draft]);
+    let code = prettyPrintIfJson(file.name, file.code);
+    if (platformVersion && /\.java$/i.test(file.name)) {
+      const v = `"${platformVersion}"`;
+      code = code.replace(/this\.getDescription\(\)\.getVersion\(\)/g, v);
+      code = code.replace(/plugin\.getDescription\(\)\.getVersion\(\)/g, v);
+      code = code.replace(/getDescription\(\)\.getVersion\(\)/g, v);
+    }
+    return code;
+  }, [file?.name, file?.code, platformVersion]);
 
   if (!file) {
     return (
@@ -278,21 +244,6 @@ export const CodeView = memo(function CodeView({
           ))}
         </nav>
 
-        {canEdit && (draft !== lastSavedRef.current || saveState !== null) && (
-          <span className="mono flex items-center gap-1.5 text-[10.5px]">
-            {saveState === "saving" ? (
-              <span className="text-acid">{lang === "ru" ? "сохранение…" : "saving…"}</span>
-            ) : saveState === "err" ? (
-              <span className="text-err">{lang === "ru" ? "ошибка сохранения" : "save error"}</span>
-            ) : (
-              <span className="flex items-center gap-1 text-warn">
-                <span className="h-1.5 w-1.5 rounded-full bg-warn" />
-                {lang === "ru" ? "не сохранено" : "unsaved"}
-              </span>
-            )}
-          </span>
-        )}
-
         {file.note && (
           <span className="chip hidden border-warn/35 text-warn lg:inline-flex" title={file.note}>
             {lang === "ru" ? "замечание движка" : "engine note"}
@@ -304,7 +255,7 @@ export const CodeView = memo(function CodeView({
         <span className="mono hidden text-[10.5px] text-faint md:inline" title={lang === "ru" ? "Строк и символов в файле" : "Lines and characters in file"}>
           {displayCode ? displayCode.split("\n").length : file.loc} {t(lang, "code.lines")}
           {displayCode ? ` · ${fmtNum(displayCode.length)} ${lang === "ru" ? "симв." : "chars"}` : ""}
-          {canEdit ? "" : ` · ${t(lang, "code.readonly")}`}
+          {` · ${t(lang, "code.readonly")}`}
         </span>
         {outDir && (
           <OpenInMenu filePath={joinOutDir(outDir, file.relPath)} projectDir={outDir} />
@@ -327,7 +278,6 @@ export const CodeView = memo(function CodeView({
           className="icon-btn h-7 w-7"
           title={`${wrap ? (lang === "ru" ? "Отключить перенос строк" : "Disable word wrap") : (lang === "ru" ? "Переносить строки" : "Enable word wrap")} (Alt+Z)`}
           data-active={wrap}
-          disabled={canEdit}
           onClick={() => setWrap(v => !v)}
         >
           <WrapText size={14} />
@@ -363,22 +313,6 @@ export const CodeView = memo(function CodeView({
             <ZoomIn size={13} />
           </button>
         </div>
-        {canEdit && (
-          <span
-            className="mono flex items-center gap-1 text-[10.5px] text-faint"
-            title={lang === "ru" ? "Ctrl+S сохраняет сразу; иначе автосохранение раз в 5с" : "Ctrl+S saves immediately; otherwise autosaves every 5s"}
-          >
-            {saveState === "saving" ? (
-              t(lang, "code.saving")
-            ) : saveState === "err" ? (
-              <span className="text-err">{t(lang, "code.save_error")}</span>
-            ) : draft === lastSavedRef.current ? (
-              t(lang, "code.saved")
-            ) : (
-              t(lang, "code.unsaved")
-            )}
-          </span>
-        )}
       </div>
 
       <div
@@ -396,13 +330,23 @@ export const CodeView = memo(function CodeView({
             <p className="text-err">
               {lang === "ru" ? `// не удалось загрузить файл: ${file.loadError}` : `// failed to load file: ${file.loadError}`}
             </p>
-            {/(?:похоже на )?бинарн/i.test(file.loadError) ? (
-              <p className="text-dim">
-                {lang === "ru"
-                  ? "Просмотр бинарных файлов внутри вьюера пока не поддерживается - воспользуйтесь кнопкой «Открыть в…» справа сверху (системное приложение или папка с файлом)."
-                  : "Viewing binary files inside the viewer is not supported yet - use the 'Open in...' button at top right."}
-              </p>
-            ) : /слишком больш/i.test(file.loadError) ? (
+              {/(?:бинарм|binary)/i.test(file.loadError) ? (
+                <div className="flex flex-col items-start gap-3">
+                  <p className="text-dim">
+                    {lang === "ru"
+                      ? "Просмотр бинарных файлов внутри просмотровщика пока не поддерживается - используйте кнопку «Открыть в...» (справа сверху)."
+                      : "Viewing binary files inside the viewer is not supported yet - use the 'Open in...' button at top right."}
+                  </p>
+                  {(file.name.toLowerCase().endsWith('.jar') || file.name.toLowerCase().endsWith('.jar.patch')) && outDir && (
+                    <button 
+                      className="btn btn-primary h-8 px-4 text-[12px]" 
+                      onClick={() => addJarPaths([joinOutDir(outDir, file.id)])}
+                    >
+                      {lang === "ru" ? "Декомпилировать этот .jar" : "Decompile this .jar"}
+                    </button>
+                  )}
+                </div>
+              ) : /слишком больш/i.test(file.loadError) ? (
               <p className="text-dim">
                 {lang === "ru"
                   ? "Файл слишком большой для просмотра в редакторе - воспользуйтесь кнопкой «Открыть в…» справа сверху (системное приложение или папка с файлом)."
@@ -416,36 +360,9 @@ export const CodeView = memo(function CodeView({
           </div>
         ) : displayCode === undefined ? (
           <p className="mono px-4 text-[11.5px] text-faint">{lang === "ru" ? "// загрузка…" : "// loading…"}</p>
-        ) : canEdit ? (
-          <div className="grid min-w-max" style={{ gridTemplateAreas: '"stack"' }}>
-            <div style={{ gridArea: "stack" }} aria-hidden className="pointer-events-none">
-              <CodeComponent code={displayCode} wrap={false} />
-            </div>
-            <textarea
-              style={{ gridArea: "stack" }}
-              className="mono h-full w-full resize-none border-0 bg-transparent px-4 pl-[64px] text-[12.5px] leading-[1.75] whitespace-pre text-transparent caret-ink outline-none"
-              value={draft}
-              spellCheck={false}
-              onChange={e => setDraft(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === "Tab") {
-                  e.preventDefault();
-                  const target = e.currentTarget;
-                  const start = target.selectionStart;
-                  const end = target.selectionEnd;
-                  const val = target.value;
-                  const next = val.substring(0, start) + "    " + val.substring(end);
-                  setDraft(next);
-                  requestAnimationFrame(() => {
-                    target.selectionStart = target.selectionEnd = start + 4;
-                  });
-                }
-              }}
-            />
-          </div>
         ) : (
           <div className={wrap ? undefined : "min-w-max"}>
-            <CodeComponent code={displayCode} wrap={wrap} />
+            <CodeComponent code={displayCode} wrap={wrap} disableVsCodeLogs={settings.disableVsCodeLogs} />
           </div>
         )}
       </div>

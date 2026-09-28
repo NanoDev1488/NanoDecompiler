@@ -22,6 +22,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <fstream>
 
 #include "api.hpp"
 #include "jar_summary.hpp"
@@ -311,7 +312,50 @@ int run_cli(int argc, char** argv) {
         return 0;
     }
 
-    if (args[0] == "--jar-summary") {
+      if (args[0] == "--check-update" || args[0] == "--update") {
+#ifdef _WIN32
+          std::string script =
+              "$url = 'https://api.github.com/repos/WaveDevelopment/NanoDecompiler/releases/latest'\n"
+              "$json = Invoke-RestMethod -Uri $url -Headers @{'User-Agent'='NanoDecompiler-CLI'}\n"
+              "Write-Host '��������� ������:' $json.tag_name\n"
+              "if ('" + args[0] + "' -eq '--update') {\n"
+              "  $asset = $json.assets | Where-Object { $_.name -like '*ClApi-windows.exe' }\n"
+              "  if (-not $asset) { Write-Host '���� ���������� �� ������'; exit 1 }\n"
+              "  Write-Host '����������...'\n"
+              "  Invoke-WebRequest -Uri $asset.browser_download_url -OutFile 'NanoDecompilerClApi.new.exe'\n"
+              "  $exe = (Get-Process -Id $PID).Path\n"
+              "  $bat = '@echo off`nping 127.0.0.1 -n 2 > nul`ndel /f /q \"' + $exe + '\"`nmove /y NanoDecompilerClApi.new.exe \"' + $exe + '\"`necho ���������!'\n"
+              "  Set-Content nd_update.bat $bat -Encoding UTF8\n"
+              "  Start-Process -FilePath nd_update.bat -WindowStyle Hidden\n"
+              "}\n";
+          std::string ps1_path = (fs::temp_directory_path() / "nd_update.ps1").string();
+          std::ofstream(ps1_path) << script;
+          int rc = std::system(("powershell -NoProfile -ExecutionPolicy Bypass -File " + ps1_path).c_str());
+          fs::remove(ps1_path);
+          return rc;
+#else
+          std::string script =
+              "LATEST=$(curl -s https://api.github.com/repos/WaveDevelopment/NanoDecompiler/releases/latest | grep '\"tag_name\":' | cut -d '\"' -f 4)\n"
+              "echo \"��������� ������: $LATEST\"\n"
+              "if [ '" + args[0] + "' = '--update' ]; then\n"
+              "  echo '����������...'\n"
+              "  TARGET=\"$0\"\n"
+              "  if [ -L \"/proc/self/exe\" ]; then TARGET=$(readlink -f /proc/self/exe); fi\n"
+              "  curl -fsSL -o \"${TARGET}.new\" \"https://github.com/WaveDevelopment/NanoDecompiler/releases/latest/download/NanoDecompilerClApi-$(uname | tr 'A-Z' 'a-z')\"\n"
+              "  chmod +x \"${TARGET}.new\"\n"
+              "  mv \"${TARGET}.new\" \"$TARGET\"\n"
+              "  echo '���������!'\n"
+              "fi\n";
+          std::string sh_path = (fs::temp_directory_path() / "nd_update.sh").string();
+          std::ofstream(sh_path) << script;
+          int rc = std::system(("bash " + sh_path).c_str());
+          fs::remove(sh_path);
+          return rc;
+#endif
+      }
+
+      if (args[0] == "--jar-summary") {
+
         if (args.size() < 2) {
             std::cout << "{\"error\":\"использование: NanoDecompilerCLI --jar-summary plugin.jar\"}\n";
             return 0;

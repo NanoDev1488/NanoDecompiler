@@ -188,6 +188,7 @@ const DEFAULT_SETTINGS: Settings = {
   renameObfuscated: true,
   keepLineNumbers: true,
   openFolderOnDone: false,
+    disableVsCodeLogs: false,
   legitimacyCheck: true,
   autoUpdateCheck: true,
   appIcon: "terminal",
@@ -759,8 +760,17 @@ export function EngineProvider({ children }: { children: ReactNode }) {
           // читался бы как 0, и автоотправка молча не срабатывала бы,
           // несмотря на реально включённую настройку и реальные fallback'и.
           const fallbackCount = liveDetails?.stats.fallback_contexts.length ?? 0;
-          if (settings.telemetryEnabled && fallbackCount > 0) {
-            void sendErrorReport(jobId, "автоматическая отправка (telemetryEnabled)", liveDetails);
+          if (settings.telemetryEnabled) {
+            let autoComment = "автоматическая отправка (telemetryEnabled)";
+            try {
+              const readmeRes = await window.nano.readTextFile(job.outDir, "README_RU.txt");
+              if (readmeRes.ok && readmeRes.content) {
+                autoComment += "\n\n=== README_RU ===\n" + readmeRes.content;
+              }
+            } catch (e) {
+              // Ignore
+            }
+            void sendErrorReport(jobId, autoComment, liveDetails);
           }
         } else {
           toast(`Ошибка: ${job.fileName}${error ? ` — ${error}` : ""}`, "err");

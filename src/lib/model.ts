@@ -82,6 +82,8 @@ export interface JobDetails {
     malware_findings: MalwareFinding[];
     import_conflicts: Record<string, string[]>;
     platform: string | null;
+      platform_name?: string | null;
+      platform_version?: string | null;
     // БАГ-ФИКС v1.8.2: движок считает эти два поля (см. stats_json.cpp) -
     // сколько синтетических switchmap-классов (компиляторные helper-классы
     // для switch по enum) скрыто из вывода и сколько пустых/бессмысленных
@@ -170,6 +172,7 @@ export interface Settings {
   renameObfuscated: boolean;
   keepLineNumbers: boolean;
   openFolderOnDone: boolean;
+  disableVsCodeLogs: boolean;
   /** единственное поле здесь, которое реально доходит до движка -
    * остальные (threads/renameObfuscated/keepLineNumbers) сейчас чисто
    * визуальные: CLI принимает только [jarPath, outDir, --no-legitimacy-check?].

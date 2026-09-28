@@ -97,7 +97,7 @@ export function AppHeader() {
             <button
               className="icon-btn h-8 w-8 flex-none border border-line"
               onClick={stopRunning}
-              title="Остановить только текущий"
+              title={t(lang, "app.stop_current")}
             >
               <Square size={11} />
             </button>

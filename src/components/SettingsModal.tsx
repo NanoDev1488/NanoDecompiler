@@ -1,4 +1,4 @@
-import { Check, FolderOpen, Loader2, Minus, Plus, Send, X } from "lucide-react";
+﻿import { Check, FolderOpen, Loader2, Minus, Plus, Send, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useEngine } from "../state/engine";
 import { Toggle, Kbd } from "./ui";
@@ -110,7 +110,7 @@ export function SettingsModal() {
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4"
+      className="fixed inset-0 z-[110] grid place-items-center bg-black/70 p-4"
       onMouseDown={e => {
         if (e.target === e.currentTarget) setSettingsOpen(false);
       }}
@@ -483,6 +483,16 @@ export function SettingsModal() {
                   />
                 }
               />
+              <Row
+                label="Отключить VS Code стиль визуализации логгеров (log.info)"
+                control={
+                  <Toggle
+                    label={t(lang, "app.disable_vscode_label")}
+                    checked={draft.disableVsCodeLogs}
+                    onChange={v => setDraft(d => ({ ...d, disableVsCodeLogs: v }))}
+                  />
+                }
+              />
             </div>
 
             {/* НОВОЕ v1.8.4 (телеметрия по запросу пользователя): ВЫКЛЮЧЕНО
@@ -598,3 +608,5 @@ export function SettingsModal() {
     </div>
   );
 }
+
+

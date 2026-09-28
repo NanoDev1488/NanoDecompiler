@@ -430,13 +430,14 @@ function ChainChip({
  * useMemo), только собирает регионы (зависят лишь от токенов, дёшево) и
  * расставляет обычные токены / чипы, учитывая текущее expanded-состояние. */
 function renderLineTokens(
+  disableVsCodeLogs: boolean,
   tokens: Token[],
   lineKey: string,
   expanded: Set<string>,
   onToggle: (key: string) => void,
 ): ReactNode[] {
-  const logRegions = findLogRegions(tokens.map(t => t.text).join(""));
-  const colorRegions = findColorChainRegions(tokens, logRegions);
+  const logRegions = disableVsCodeLogs ? [] : findLogRegions(tokens.map(t => t.text).join(""));
+  const colorRegions = disableVsCodeLogs ? [] : findColorChainRegions(tokens, logRegions);
   const regions = [...logRegions, ...colorRegions].sort((a, b) => a.start - b.start);
 
   const out: ReactNode[] = [];
@@ -517,7 +518,7 @@ function tokenizeCode(code: string): LineSeg[][] {
   return lines;
 }
 
-export const JavaCode = memo(function JavaCode({ code, wrap }: { code: string; wrap?: boolean }) {
+export const JavaCode = memo(function JavaCode({ code, wrap, disableVsCodeLogs }: { code: string; wrap?: boolean; disableVsCodeLogs?: boolean }) {
   const lines = useMemo(() => tokenizeCode(code), [code]);
   // НОВОЕ 1.9.6: ключ чипа = "номер строки:номер сегмента:номер региона на
   // строке" - стабилен, пока не меняется сам код (что и так пересоздаёт
@@ -539,13 +540,13 @@ export const JavaCode = memo(function JavaCode({ code, wrap }: { code: string; w
         <div key={li} id={`codeline-${li + 1}`} className="flex">
           <span
             aria-hidden
-            className="mono w-12 flex-none pr-4 text-right text-[11px] leading-[1.75] text-faint select-none"
+            className="mono w-12 flex-none pr-4 text-right text-[0.88em] leading-[1.75] text-faint select-none"
           >
             {li + 1}
           </span>
           <span
             className={
-              "mono text-[12.5px] leading-[1.75] text-ink/90 " +
+              "mono text-[1em] leading-[1.75] text-ink/90 " +
               (wrap ? "whitespace-pre-wrap break-words" : "whitespace-pre")
             }
           >
@@ -555,7 +556,7 @@ export const JavaCode = memo(function JavaCode({ code, wrap }: { code: string; w
                   {seg.text}
                 </span>
               ) : (
-                <span key={si}>{renderLineTokens(seg.tokens, `${li}:${si}`, expanded, onToggle)}</span>
+                <span key={si}>{renderLineTokens(!!disableVsCodeLogs, seg.tokens, `${li}:${si}`, expanded, onToggle)}</span>
               ),
             )}
           </span>

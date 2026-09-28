@@ -1,3 +1,4 @@
+#include <algorithm>
 // legitimacy_check.cpp - см. legitimacy_check.hpp (и ОБЯЗАТЕЛЬНО оговорку
 // там же про отсутствие живого сетевого тестирования в этой сессии).
 #include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
@@ -278,7 +279,7 @@ std::vector<SiteConfig> default_legitimacy_sites_config() {
         // авторизации для чтения. Хэш-сравнение НЕ реализовано (как и для
         // SpigotMC/Spiget) - в подтверждённой структуре ответа Hangar не
         // нашлось поля с хэшем файла версии, только сам файл для скачивания.
-        {"Hangar", SiteKind::HangarApi, "hangar.papermc.io", "https://hangar.papermc.io/api/v1/projects?q={plugin_name}&limit=5&offset=0",
+        {"Hangar", SiteKind::HangarApi, "hangar.papermc.io", "https://hangar.papermc.io/api/v1/projects?q={plugin_name}&limit=25&offset=0",
          std::nullopt},
     };
 }

@@ -197,13 +197,13 @@ function renderShell(lines: ReactNode[], wrap?: boolean): ReactNode {
         <div key={i} id={`codeline-${i + 1}`} className="flex">
           <span
             aria-hidden
-            className="mono w-12 flex-none pr-4 text-right text-[11px] leading-[1.75] text-faint select-none"
+            className="mono w-12 flex-none pr-4 text-right text-[0.88em] leading-[1.75] text-faint select-none"
           >
             {i + 1}
           </span>
           <span
             className={
-              "mono text-[12.5px] leading-[1.75] text-ink/90 " + (wrap ? "whitespace-pre-wrap break-words" : "whitespace-pre")
+              "mono text-[1em] leading-[1.75] text-ink/90 " + (wrap ? "whitespace-pre-wrap break-words" : "whitespace-pre")
             }
           >
             {row}
@@ -214,22 +214,22 @@ function renderShell(lines: ReactNode[], wrap?: boolean): ReactNode {
   );
 }
 
-export const YamlCode = memo(function YamlCode({ code, wrap }: { code: string; wrap?: boolean }) {
+export const YamlCode = memo(function YamlCode({ code, wrap, disableVsCodeLogs }: { code: string; wrap?: boolean; disableVsCodeLogs?: boolean }) {
   const lines = useMemo(() => code.split("\n").map((l, i) => renderTokens(tokenizeYamlLine(l), i)), [code]);
   return renderShell(lines, wrap);
 });
 
-export const PropertiesCode = memo(function PropertiesCode({ code, wrap }: { code: string; wrap?: boolean }) {
+export const PropertiesCode = memo(function PropertiesCode({ code, wrap, disableVsCodeLogs }: { code: string; wrap?: boolean; disableVsCodeLogs?: boolean }) {
   const lines = useMemo(() => code.split("\n").map((l, i) => renderTokens(tokenizePropertiesLine(l), i)), [code]);
   return renderShell(lines, wrap);
 });
 
-export const JsonCode = memo(function JsonCode({ code, wrap }: { code: string; wrap?: boolean }) {
+export const JsonCode = memo(function JsonCode({ code, wrap, disableVsCodeLogs }: { code: string; wrap?: boolean; disableVsCodeLogs?: boolean }) {
   const lines = useMemo(() => code.split("\n").map((l, i) => renderTokens(tokenizeJsonLine(l), i)), [code]);
   return renderShell(lines, wrap);
 });
 
-export const XmlCode = memo(function XmlCode({ code, wrap }: { code: string; wrap?: boolean }) {
+export const XmlCode = memo(function XmlCode({ code, wrap, disableVsCodeLogs }: { code: string; wrap?: boolean; disableVsCodeLogs?: boolean }) {
   const lines = useMemo(() => code.split("\n").map((l, i) => renderTokens(tokenizeXmlLine(l), i)), [code]);
   return renderShell(lines, wrap);
 });
@@ -237,7 +237,7 @@ export const XmlCode = memo(function XmlCode({ code, wrap }: { code: string; wra
 // Форматы без своего токенизатора (.json/.md/.txt/.gitignore и т.п.) -
 // честно показываем как обычный текст без подсветки, а не подделываем под
 // java/yaml - неверная подсветка хуже, чем её отсутствие.
-export const PlainCode = memo(function PlainCode({ code, wrap }: { code: string; wrap?: boolean }) {
+export const PlainCode = memo(function PlainCode({ code, wrap, disableVsCodeLogs }: { code: string; wrap?: boolean; disableVsCodeLogs?: boolean }) {
   const lines = useMemo(() => code.split("\n").map((l, i) => <span key={i}>{l}</span>), [code]);
   return renderShell(lines, wrap);
 });

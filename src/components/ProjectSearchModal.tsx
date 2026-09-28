@@ -59,7 +59,7 @@ export function ProjectSearchModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-start justify-center bg-black/70 pt-24"
+      className="fixed inset-0 z-[110] grid place-items-start justify-center bg-black/70 pt-24"
       onMouseDown={e => e.target === e.currentTarget && onClose()}
     >
       <div className="animate-rise flex max-h-[70vh] w-[560px] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl shadow-black/50">

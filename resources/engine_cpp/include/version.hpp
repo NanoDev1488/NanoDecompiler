@@ -1,4 +1,4 @@
-// version.hpp - единственное место с версией движка (HANDOFF_46) - раньше
+﻿// version.hpp - единственное место с версией движка (HANDOFF_46) - раньше
 // строка NANO_DECOMPILER_VERSION дублировалась бы в cli_main.cpp/api.cpp
 // по отдельности, теперь один источник для обоих.
 #pragma once
@@ -176,7 +176,7 @@ namespace nd {
 // НОВОЕ v1.9.87: комплексное устранение ошибок сборки движка C++ в CI (Reader::remaining, CpEntry::long_value, Const::value, сигнатура MethodCall в invokedynamic, include sstream, Clang/macOS -fno-var-tracking флаги).
 // НОВОЕ v1.9.88: закрытие файла по Alt+W, обновление описания релизов в CI.
 // НОВОЕ v1.9.89: кроссплатформенный автоматический установщик обновлений через отдельный скрипт NewVerSetup (Windows/Linux/macOS).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.89";
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.90";
 }
 
 

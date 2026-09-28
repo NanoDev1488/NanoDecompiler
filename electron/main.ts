@@ -883,7 +883,7 @@ ipcMain.handle("telemetry:sendReport", async (_e, report: unknown) => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(report),
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(60000),
     });
     if (!res.ok) {
       const bodyText = await res.text().catch(() => "");

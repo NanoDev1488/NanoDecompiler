@@ -99,8 +99,8 @@ jobs:
       - name: Кэш ccache (Windows)
         uses: actions/cache@v4
         with:
-          path: ~/.ccache
-          key: ${{ runner.os }}-msys2-ccache-${{ hashFiles('resources/engine_cpp/include/**', 'resources/engine_cpp/src/**') }}
+          path: C:\msys64\home\runneradmin\.ccache
+          key: ${{ runner.os }}-msys2-ccache-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-msys2-ccache-
 
@@ -210,7 +210,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
-          key: ${{ runner.os }}-ccache-${{ hashFiles('resources/engine_cpp/include/**', 'resources/engine_cpp/src/**') }}
+          key: ${{ runner.os }}-ccache-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-ccache-
 
@@ -286,7 +286,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/Library/Caches/ccache
-          key: ${{ runner.os }}-ccache-${{ hashFiles('resources/engine_cpp/include/**', 'resources/engine_cpp/src/**') }}
+          key: ${{ runner.os }}-ccache-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-ccache-
 
@@ -367,8 +367,8 @@ jobs:
       - name: Кэш ccache (Windows)
         uses: actions/cache@v4
         with:
-          path: ~/.ccache
-          key: ${{ runner.os }}-msys2-ccache-${{ hashFiles('resources/engine_cpp/include/**', 'resources/engine_cpp/src/**') }}
+          path: C:\msys64\home\runneradmin\.ccache
+          key: ${{ runner.os }}-msys2-ccache-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-msys2-ccache-
 
@@ -425,7 +425,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
-          key: ${{ runner.os }}-ccache-${{ hashFiles('resources/engine_cpp/include/**', 'resources/engine_cpp/src/**') }}
+          key: ${{ runner.os }}-ccache-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-ccache-
 
@@ -460,7 +460,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/Library/Caches/ccache
-          key: ${{ runner.os }}-ccache-${{ hashFiles('resources/engine_cpp/include/**', 'resources/engine_cpp/src/**') }}
+          key: ${{ runner.os }}-ccache-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-ccache-
 

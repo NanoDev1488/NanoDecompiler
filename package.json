@@ -1,6 +1,6 @@
-{
+﻿{
   "name": "nano-decompiler-gui",
-  "version": "1.9.89",
+  "version": "1.9.90",
   "description": "NanoDecompiler — Electron/React GUI поверх C++ движка декомпиляции",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -21,9 +21,7 @@
     "typescript": "5.9.3",
     "vite": "7.3.2",
     "@tailwindcss/vite": "4.1.17",
-    "tailwindcss": "4.1.17"
-  },
-  "dependencies": {
+    "tailwindcss": "4.1.17",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "clsx": "2.1.1",
