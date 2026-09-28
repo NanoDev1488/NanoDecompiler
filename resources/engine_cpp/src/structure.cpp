@@ -1383,6 +1383,14 @@ StmtPtr simplify_while_true(const std::shared_ptr<WhileStmt>& s) {
                 is_plain_break(tb[0])) {
                 return std::make_shared<DoWhileStmt>(negate(li->cond), std::vector<StmtPtr>(body.begin(), body.end() - 1), s->label);
             }
+            // Паттерн 3: if (cond) break; в конце тела while(true) без else
+            if (!tb.empty() && tb.size() == 1 && is_plain_break(tb[0]) && (!eb.has_value() || eb->empty())) {
+                return std::make_shared<DoWhileStmt>(negate(li->cond), std::vector<StmtPtr>(body.begin(), body.end() - 1), s->label);
+            }
+            // Паттерн 4: if (cond) break; в конце тела while(true) в ветке else (при пустом then)
+            if (tb.empty() && eb.has_value() && eb->size() == 1 && is_plain_break((*eb)[0])) {
+                return std::make_shared<DoWhileStmt>(li->cond, std::vector<StmtPtr>(body.begin(), body.end() - 1), s->label);
+            }
         }
     }
     bool cond_is_true = s->cond->kind == ExprKind::Const && static_cast<Const*>(s->cond.get())->literal == "true";
@@ -1421,6 +1429,7 @@ StmtPtr simplify_stmt(StmtPtr s) {
         auto w = std::static_pointer_cast<WhileStmt>(s);
         if (w->cond) w->cond = simplify_expr(w->cond);
         w->body = simplify_stmts(w->body);
+        while (!w->body.empty() && is_plain_continue(w->body.back())) w->body.pop_back();
         if (w->cond->kind == ExprKind::Const && static_cast<Const*>(w->cond.get())->literal == "true") {
             return simplify_while_true(w);
         }
@@ -1430,6 +1439,7 @@ StmtPtr simplify_stmt(StmtPtr s) {
         auto* w = static_cast<DoWhileStmt*>(s.get());
         if (w->cond) w->cond = simplify_expr(w->cond);
         w->body = simplify_stmts(w->body);
+        while (!w->body.empty() && is_plain_continue(w->body.back())) w->body.pop_back();
         return s;
     }
     if (s->kind == StmtKind::ForStmt) {
@@ -1441,6 +1451,7 @@ StmtPtr simplify_stmt(StmtPtr s) {
             if (es->expr) es->expr = simplify_expr(es->expr);
         }
         f->body = simplify_stmts(f->body);
+        while (!f->body.empty() && is_plain_continue(f->body.back())) f->body.pop_back();
         return s;
     }
     if (s->kind == StmtKind::IfStmt) {
