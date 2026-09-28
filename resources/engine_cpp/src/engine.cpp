@@ -699,7 +699,7 @@ bool uses_name_in_stmts(const std::vector<StmtPtr>& stmts, const std::string& na
             if (uses_name_in_stmts(w->body, name)) return true;
         } else if (s->kind == StmtKind::ForStmt) {
             auto* f = static_cast<ForStmt*>(s.get());
-            if (f->init && uses_name_in_expr(static_cast<ExprStmtNode*>(f->init.get())->expr, name)) return true;
+            if (f->init && uses_name_in_expr(f->init, name)) return true;
             if (f->cond && uses_name_in_expr(f->cond, name)) return true;
             if (uses_name_in_stmts(f->body, name)) return true;
         } else if (s->kind == StmtKind::SwitchStmt) {
@@ -753,7 +753,7 @@ bool uses_name_in_expr(const ExprPtr& e, const std::string& name) {
         return uses_name_in_expr(t->cond, name) || uses_name_in_expr(t->tval, name) || uses_name_in_expr(t->fval, name);
     }
     if (e->kind == ExprKind::Cast) {
-        return uses_name_in_expr(static_cast<CastExpr*>(e.get())->expr, name);
+        return uses_name_in_expr(static_cast<Cast*>(e.get())->expr, name);
     }
     if (e->kind == ExprKind::InstanceOf) {
         return uses_name_in_expr(static_cast<InstanceOf*>(e.get())->expr, name);
