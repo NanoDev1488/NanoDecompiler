@@ -1433,6 +1433,7 @@ StmtPtr simplify_while_true(const std::shared_ptr<WhileStmt>& s) {
         }
     }
     s->body = body;
+    if (s->cond) s->cond = simplify_expr(s->cond);
     if (s->cond->kind == ExprKind::Const && static_cast<Const*>(s->cond.get())->literal == "true" && !body.empty()) {
         StmtPtr last = body.back();
         if (last->kind == StmtKind::IfStmt) {
