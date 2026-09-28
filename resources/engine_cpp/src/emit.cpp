@@ -116,12 +116,14 @@ std::string emit_expr(const ExprPtr& e) {
             if (n->initializer.has_value()) {
                 std::vector<std::string> item_strs;
                 for (auto& v : *n->initializer) item_strs.push_back(emit_expr(v));
-                return "new " + simple(base) + "[]" + extra_brackets + "{" + join(item_strs, ", ") + "}";
+                std::string body = item_strs.empty() ? "{}" : "{ " + join(item_strs, ", ") + " }";
+                return "new " + simple(base) + "[]" + extra_brackets + body;
             }
             std::string dims_txt;
             for (auto& d : n->dims) {
                 dims_txt += d ? ("[" + emit_expr(d) + "]") : "[]";
             }
+            if (dims_txt.empty() && extra_brackets.empty()) dims_txt = "[0]";
             return "new " + simple(base) + dims_txt + extra_brackets;
         }
         case ExprKind::Cast: {
