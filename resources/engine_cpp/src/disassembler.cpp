@@ -223,6 +223,13 @@ std::vector<std::string> disassemble(const std::vector<uint8_t>& code, const Cla
             }
         }
 
+        if (operand_txt.empty()) {
+            if (mnemonic == "dup_x1") operand_txt = "// (v2, v1 -> v1, v2, v1)";
+            else if (mnemonic == "dup_x2") operand_txt = "// (v3, v2, v1 -> v1, v3, v2, v1)";
+            else if (mnemonic == "dup2_x1") operand_txt = "// (v3, v2, v1 -> v2, v1, v3, v2, v1)";
+            else if (mnemonic == "dup2_x2") operand_txt = "// (v4, v3, v2, v1 -> v2, v1, v4, v3, v2, v1)";
+        }
+
         char head[32];
         std::snprintf(head, sizeof(head), "%6zu: ", start);
         std::string line = std::string(head) + mnemonic;
