@@ -152,5 +152,6 @@ namespace nd {
 // НОВОЕ v1.9.63: сквозной инлайнинг временных переменных __tempX наряду с __stkX в теле методов для чистоты декомпилированного кода.
 // НОВОЕ v1.9.64: форматирование специальных вещественных констант Float.NaN, Float.POSITIVE_INFINITY, Double.NaN и др. в генераторе кода.
 // НОВОЕ v1.9.65: отображение активного jar-файла, его размера и пути во всплывающей подсказке в шапке GUI.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.65";
+// НОВОЕ v1.9.66: устранение избыточных блоков else после безусловного return/throw внутри then-ветки в структуризаторе CFG.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.66";
 }

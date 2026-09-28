@@ -1313,6 +1313,34 @@ std::vector<StmtPtr> hoist_common_branch_tail(const std::vector<StmtPtr>& stmts)
     return out;
 }
 
+bool is_unconditional_exit(const StmtPtr& s) {
+    if (!s) return false;
+    return s->kind == StmtKind::ReturnStmt || s->kind == StmtKind::ThrowStmt;
+}
+
+bool block_always_exits(const std::vector<StmtPtr>& block) {
+    if (block.empty()) return false;
+    return is_unconditional_exit(block.back());
+}
+
+std::vector<StmtPtr> eliminate_redundant_else_after_return(const std::vector<StmtPtr>& stmts) {
+    std::vector<StmtPtr> out;
+    for (auto& s : stmts) {
+        if (s->kind == StmtKind::IfStmt) {
+            auto* i = static_cast<IfStmt*>(s.get());
+            if (i->else_body.has_value() && !i->else_body->empty() && block_always_exits(i->then_body)) {
+                std::vector<StmtPtr> eb = *i->else_body;
+                i->else_body = std::nullopt;
+                out.push_back(s);
+                for (auto& es : eb) out.push_back(es);
+                continue;
+            }
+        }
+        out.push_back(s);
+    }
+    return out;
+}
+
 bool substitute_expr_or_root(ExprPtr& expr, const std::string& name, const ExprPtr& replacement) {
     if (!expr) return false;
     if (expr->kind == ExprKind::Local && static_cast<Local*>(expr.get())->name == name) {
@@ -1533,6 +1561,7 @@ std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
         out = fold_boolean_materialization(out);
         out = collapse_temp_chains(out);
         out = hoist_common_branch_tail(out);
+        out = eliminate_redundant_else_after_return(out);
         out = inline_single_use_temps_anywhere(out);
     }
     return out;
