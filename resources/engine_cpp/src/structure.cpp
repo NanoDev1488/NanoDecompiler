@@ -991,7 +991,7 @@ std::pair<StmtPtr, std::optional<int64_t>> Structurer::build_try(int64_t pc, con
 namespace {
 
 bool is_synth_temp(const std::string& name) {
-    static const std::regex re(R"(^__stk\d+$)");
+    static const std::regex re(R"(^__(stk|temp|cross|sb|[a-zA-Z]+)\d+$)");
     return std::regex_match(name, re);
 }
 
@@ -1044,6 +1044,113 @@ bool looks_like_update(const StmtPtr& stmt) {
         if (u->op == "++" || u->op == "--") return true;
     }
     return e->kind == ExprKind::Assign;
+}
+
+ExprPtr simplify_expr(ExprPtr e) {
+    if (!e) return nullptr;
+    switch (e->kind) {
+        case ExprKind::FieldAccess: {
+            auto* fa = static_cast<FieldAccess*>(e.get());
+            if (fa->target) fa->target = simplify_expr(fa->target);
+            break;
+        }
+        case ExprKind::ArrayAccess: {
+            auto* aa = static_cast<ArrayAccess*>(e.get());
+            if (aa->array) aa->array = simplify_expr(aa->array);
+            if (aa->index) aa->index = simplify_expr(aa->index);
+            break;
+        }
+        case ExprKind::MethodCall: {
+            auto* mc = static_cast<MethodCall*>(e.get());
+            if (mc->target) mc->target = simplify_expr(mc->target);
+            for (auto& arg : mc->args) arg = simplify_expr(arg);
+            break;
+        }
+        case ExprKind::NewObject: {
+            auto* no = static_cast<NewObject*>(e.get());
+            for (auto& arg : no->args) arg = simplify_expr(arg);
+            break;
+        }
+        case ExprKind::NewArray: {
+            auto* na = static_cast<NewArray*>(e.get());
+            for (auto& d : na->dims) d = simplify_expr(d);
+            if (na->initializer.has_value()) {
+                for (auto& v : *na->initializer) v = simplify_expr(v);
+            }
+            break;
+        }
+        case ExprKind::Cast: {
+            auto* c = static_cast<Cast*>(e.get());
+            if (c->expr) c->expr = simplify_expr(c->expr);
+            break;
+        }
+        case ExprKind::InstanceOf: {
+            auto* io = static_cast<InstanceOf*>(e.get());
+            if (io->expr) io->expr = simplify_expr(io->expr);
+            break;
+        }
+        case ExprKind::BinOp: {
+            auto* b = static_cast<BinOp*>(e.get());
+            if (b->left) b->left = simplify_expr(b->left);
+            if (b->right) b->right = simplify_expr(b->right);
+            if (b->op == "==") {
+                if (b->right && b->right->kind == ExprKind::Const) {
+                    auto* c = static_cast<Const*>(b->right.get());
+                    if (c->literal == "true") return b->left;
+                    if (c->literal == "false") return negate(b->left);
+                }
+                if (b->left && b->left->kind == ExprKind::Const) {
+                    auto* c = static_cast<Const*>(b->left.get());
+                    if (c->literal == "true") return b->right;
+                    if (c->literal == "false") return negate(b->right);
+                }
+            }
+            if (b->op == "!=") {
+                if (b->right && b->right->kind == ExprKind::Const) {
+                    auto* c = static_cast<Const*>(b->right.get());
+                    if (c->literal == "true") return negate(b->left);
+                    if (c->literal == "false") return b->left;
+                }
+                if (b->left && b->left->kind == ExprKind::Const) {
+                    auto* c = static_cast<Const*>(b->left.get());
+                    if (c->literal == "true") return negate(b->right);
+                    if (c->literal == "false") return b->right;
+                }
+            }
+            break;
+        }
+        case ExprKind::UnOp: {
+            auto* u = static_cast<UnOp*>(e.get());
+            if (u->expr) u->expr = simplify_expr(u->expr);
+            if (u->op == "!" && u->expr && u->expr->kind == ExprKind::UnOp) {
+                auto* inner_u = static_cast<UnOp*>(u->expr.get());
+                if (inner_u->op == "!") return inner_u->expr;
+            }
+            break;
+        }
+        case ExprKind::Ternary: {
+            auto* t = static_cast<Ternary*>(e.get());
+            if (t->cond) t->cond = simplify_expr(t->cond);
+            if (t->tval) t->tval = simplify_expr(t->tval);
+            if (t->fval) t->fval = simplify_expr(t->fval);
+            if (t->tval && t->tval->kind == ExprKind::Const && t->fval && t->fval->kind == ExprKind::Const) {
+                auto* c1 = static_cast<Const*>(t->tval.get());
+                auto* c2 = static_cast<Const*>(t->fval.get());
+                if (c1->literal == "true" && c2->literal == "false") return t->cond;
+                if (c1->literal == "false" && c2->literal == "true") return negate(t->cond);
+            }
+            break;
+        }
+        case ExprKind::Assign: {
+            auto* a = static_cast<Assign*>(e.get());
+            if (a->target) a->target = simplify_expr(a->target);
+            if (a->value) a->value = simplify_expr(a->value);
+            break;
+        }
+        default:
+            break;
+    }
+    return e;
 }
 
 std::vector<StmtPtr> fold_boolean_materialization(const std::vector<StmtPtr>& stmts) {
@@ -1170,6 +1277,52 @@ std::vector<StmtPtr> hoist_common_branch_tail(const std::vector<StmtPtr>& stmts)
     return out;
 }
 
+bool substitute_expr_or_root(ExprPtr& expr, const std::string& name, const ExprPtr& replacement) {
+    if (!expr) return false;
+    if (expr->kind == ExprKind::Local && static_cast<Local*>(expr.get())->name == name) {
+        expr = replacement;
+        return true;
+    }
+    return substitute_temp(expr, name, replacement);
+}
+
+bool substitute_temp_in_stmt(const StmtPtr& stmt, const std::string& name, const ExprPtr& replacement) {
+    if (!stmt) return false;
+    if (stmt->kind == StmtKind::ExprStmt) {
+        auto* es = static_cast<ExprStmtNode*>(stmt.get());
+        return substitute_expr_or_root(es->expr, name, replacement);
+    }
+    if (stmt->kind == StmtKind::ReturnStmt) {
+        auto* r = static_cast<ReturnStmt*>(stmt.get());
+        return substitute_expr_or_root(r->expr, name, replacement);
+    }
+    if (stmt->kind == StmtKind::ThrowStmt) {
+        auto* t = static_cast<ThrowStmt*>(stmt.get());
+        return substitute_expr_or_root(t->expr, name, replacement);
+    }
+    if (stmt->kind == StmtKind::IfStmt) {
+        auto* i = static_cast<IfStmt*>(stmt.get());
+        return substitute_expr_or_root(i->cond, name, replacement);
+    }
+    if (stmt->kind == StmtKind::WhileStmt) {
+        auto* w = static_cast<WhileStmt*>(stmt.get());
+        return substitute_expr_or_root(w->cond, name, replacement);
+    }
+    if (stmt->kind == StmtKind::LocalDecl) {
+        auto* ld = static_cast<LocalDecl*>(stmt.get());
+        return substitute_expr_or_root(ld->init, name, replacement);
+    }
+    if (stmt->kind == StmtKind::SwitchStmt) {
+        auto* sw = static_cast<SwitchStmt*>(stmt.get());
+        return substitute_expr_or_root(sw->selector, name, replacement);
+    }
+    if (stmt->kind == StmtKind::SyncStmt) {
+        auto* sy = static_cast<SyncStmt*>(stmt.get());
+        return substitute_expr_or_root(sy->expr, name, replacement);
+    }
+    return false;
+}
+
 std::vector<StmtPtr> inline_single_use_temps_anywhere(std::vector<StmtPtr> stmts) {
     bool changed = true;
     while (changed) {
@@ -1188,14 +1341,7 @@ std::vector<StmtPtr> inline_single_use_temps_anywhere(std::vector<StmtPtr> stmts
             if (uses.size() != 1) continue;
             size_t j = uses[0];
             StmtPtr target_stmt = stmts[j];
-            ExprPtr target_expr;
-            if (target_stmt->kind == StmtKind::ExprStmt) target_expr = static_cast<ExprStmtNode*>(target_stmt.get())->expr;
-            else if (target_stmt->kind == StmtKind::ReturnStmt) target_expr = static_cast<ReturnStmt*>(target_stmt.get())->expr;
-            else if (target_stmt->kind == StmtKind::ThrowStmt) target_expr = static_cast<ThrowStmt*>(target_stmt.get())->expr;
-            else continue;
-            if (!target_expr) continue;
-            if (target_expr->kind == ExprKind::Local && static_cast<Local*>(target_expr.get())->name == tgt_name) continue;
-            if (substitute_temp(target_expr, tgt_name, val)) {
+            if (substitute_temp_in_stmt(target_stmt, tgt_name, val)) {
                 std::vector<StmtPtr> new_stmts;
                 new_stmts.insert(new_stmts.end(), stmts.begin(), stmts.begin() + i);
                 new_stmts.insert(new_stmts.end(), stmts.begin() + i + 1, stmts.end());
@@ -1250,8 +1396,30 @@ StmtPtr simplify_while_true(const std::shared_ptr<WhileStmt>& s) {
 }
 
 StmtPtr simplify_stmt(StmtPtr s) {
+    if (!s) return s;
+    if (s->kind == StmtKind::ExprStmt) {
+        auto* es = static_cast<ExprStmtNode*>(s.get());
+        if (es->expr) es->expr = simplify_expr(es->expr);
+        return s;
+    }
+    if (s->kind == StmtKind::ReturnStmt) {
+        auto* r = static_cast<ReturnStmt*>(s.get());
+        if (r->expr) r->expr = simplify_expr(r->expr);
+        return s;
+    }
+    if (s->kind == StmtKind::ThrowStmt) {
+        auto* t = static_cast<ThrowStmt*>(s.get());
+        if (t->expr) t->expr = simplify_expr(t->expr);
+        return s;
+    }
+    if (s->kind == StmtKind::LocalDecl) {
+        auto* ld = static_cast<LocalDecl*>(s.get());
+        if (ld->init) ld->init = simplify_expr(ld->init);
+        return s;
+    }
     if (s->kind == StmtKind::WhileStmt) {
         auto w = std::static_pointer_cast<WhileStmt>(s);
+        if (w->cond) w->cond = simplify_expr(w->cond);
         w->body = simplify_stmts(w->body);
         if (w->cond->kind == ExprKind::Const && static_cast<Const*>(w->cond.get())->literal == "true") {
             return simplify_while_true(w);
@@ -1260,16 +1428,24 @@ StmtPtr simplify_stmt(StmtPtr s) {
     }
     if (s->kind == StmtKind::DoWhileStmt) {
         auto* w = static_cast<DoWhileStmt*>(s.get());
+        if (w->cond) w->cond = simplify_expr(w->cond);
         w->body = simplify_stmts(w->body);
         return s;
     }
     if (s->kind == StmtKind::ForStmt) {
         auto* f = static_cast<ForStmt*>(s.get());
+        if (f->init) f->init = simplify_expr(f->init);
+        if (f->cond) f->cond = simplify_expr(f->cond);
+        if (f->update && f->update->kind == StmtKind::ExprStmt) {
+            auto* es = static_cast<ExprStmtNode*>(f->update.get());
+            if (es->expr) es->expr = simplify_expr(es->expr);
+        }
         f->body = simplify_stmts(f->body);
         return s;
     }
     if (s->kind == StmtKind::IfStmt) {
         auto* i = static_cast<IfStmt*>(s.get());
+        if (i->cond) i->cond = simplify_expr(i->cond);
         if (!i->then_body.empty()) i->then_body = simplify_stmts(i->then_body);
         if (i->else_body.has_value() && !i->else_body->empty()) i->else_body = simplify_stmts(*i->else_body);
         if (i->then_body.empty() && i->else_body.has_value() && !i->else_body->empty()) {
@@ -1288,11 +1464,13 @@ StmtPtr simplify_stmt(StmtPtr s) {
     }
     if (s->kind == StmtKind::SwitchStmt) {
         auto* sw = static_cast<SwitchStmt*>(s.get());
+        if (sw->selector) sw->selector = simplify_expr(sw->selector);
         for (auto& c : sw->cases) c.body = simplify_stmts(c.body);
         return s;
     }
     if (s->kind == StmtKind::SyncStmt) {
         auto* sy = static_cast<SyncStmt*>(s.get());
+        if (sy->expr) sy->expr = simplify_expr(sy->expr);
         sy->body = simplify_stmts(sy->body);
         return s;
     }
@@ -1314,3 +1492,4 @@ std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
 }
 
 }  // namespace nd
+

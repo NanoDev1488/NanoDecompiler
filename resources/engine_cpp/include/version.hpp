@@ -105,5 +105,7 @@ namespace nd {
 // НОВОЕ v1.9.20: улучшение декомпилятора C++ — свёртка if-else в тернарный оператор (Ternary),
 // многопроходный hoisting escaping-переменных для глубоко вложенных блоков, поддержка break в default case
 // switch(String.hashCode()), очистка мёртвых локальных объявлений после схлопывания switch.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.20";
+// НОВОЕ v1.9.21: сквозной инлайнинг временных переменных __stk/__temp в выражения любой вложенности (if/while/return/throw/switch/decl),
+// рекурсивное упрощение булевых выражений (x == true/false, !!x, x ? true : false) для максимальной читаемости.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.21";
 }
