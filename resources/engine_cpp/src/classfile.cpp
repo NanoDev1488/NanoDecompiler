@@ -765,23 +765,32 @@ void ClassFile::parse(const std::vector<uint8_t>& data) {
             // того же имени, у которого Signature разбирается как для
             // любого метода) - для рендеринга `record Name(...) {}`
             // достаточно имени+дескриптора в исходном порядке объявления.
-            Reader ar(a_data);
-            uint16_t n = ar.u2();
-            for (uint16_t b = 0; b < n; ++b) {
-                uint16_t name_idx = ar.u2();
-                uint16_t desc_idx = ar.u2();
-                uint16_t attrs_n = ar.u2();
-                for (uint16_t k = 0; k < attrs_n; ++k) {
-                    ar.u2();  // attribute_name_index (пропускаем)
-                    uint32_t alen = ar.u4();
-                    ar.bytes(alen);  // пропускаем содержимое вложенного атрибута целиком
+            try {
+                Reader ar(a_data);
+                if (ar.remaining() >= 2) {
+                    uint16_t n = ar.u2();
+                    for (uint16_t b = 0; b < n; ++b) {
+                        if (ar.remaining() < 6) break;
+                        uint16_t name_idx = ar.u2();
+                        uint16_t desc_idx = ar.u2();
+                        uint16_t attrs_n = ar.u2();
+                        for (uint16_t k = 0; k < attrs_n; ++k) {
+                            if (ar.remaining() < 6) break;
+                            ar.u2();  // attribute_name_index (пропускаем)
+                            uint32_t alen = ar.u4();
+                            if (ar.remaining() < alen) break;
+                            ar.bytes(alen);  // пропускаем содержимое вложенного атрибута целиком
+                        }
+                        RecordComponent rc;
+                        const std::string* nm = utf8(name_idx);
+                        const std::string* ds = utf8(desc_idx);
+                        rc.name = nm ? *nm : "";
+                        rc.descriptor = ds ? *ds : "";
+                        if (!rc.name.empty()) record_components.push_back(std::move(rc));
+                    }
                 }
-                RecordComponent rc;
-                const std::string* nm = utf8(name_idx);
-                const std::string* ds = utf8(desc_idx);
-                rc.name = nm ? *nm : "";
-                rc.descriptor = ds ? *ds : "";
-                record_components.push_back(std::move(rc));
+            } catch (...) {
+                // Игнорируем повреждённый атрибут Record без падения парсера всего класса
             }
         }
     }
