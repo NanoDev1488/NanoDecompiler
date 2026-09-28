@@ -215,8 +215,23 @@ std::optional<std::string> format_annotation_value(const AnnotationValue& v) {
             return python_str_double(v.dbl_v);
         case AnnotationValue::Kind::Str:
             return java_string_literal(v.str_v);
+        case AnnotationValue::Kind::Array: {
+            std::vector<std::string> elem_strs;
+            for (const auto& elem : v.arr_v) {
+                if (!elem) return std::nullopt;
+                auto sub = format_annotation_value(*elem);
+                if (!sub.has_value()) return std::nullopt;
+                elem_strs.push_back(*sub);
+            }
+            std::string joined;
+            for (size_t i = 0; i < elem_strs.size(); ++i) {
+                if (i) joined += ", ";
+                joined += elem_strs[i];
+            }
+            return "{" + joined + "}";
+        }
         default:
-            return std::nullopt;  // enum-константа/аннотация/массив - сложно, не гадаем
+            return std::nullopt;  // enum-константа/аннотация - сложно, не гадаем
     }
 }
 
