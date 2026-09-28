@@ -62,8 +62,19 @@ void clear_shadow_context() { g_shadowed_names.clear(); }
 std::string emit_expr(const ExprPtr& e) {
     if (!e) return "/* ? NoneType */";
     switch (e->kind) {
-        case ExprKind::Const:
-            return static_cast<const Const*>(e.get())->literal;
+        case ExprKind::Const: {
+            const auto* c = static_cast<const Const*>(e.get());
+            if (c->type == "float") {
+                if (c->literal == "nanf" || c->literal == "nan" || c->literal == "NaNf") return "Float.NaN";
+                if (c->literal == "inff" || c->literal == "inf" || c->literal == "Infinityf") return "Float.POSITIVE_INFINITY";
+                if (c->literal == "-inff" || c->literal == "-inf" || c->literal == "-Infinityf") return "Float.NEGATIVE_INFINITY";
+            } else if (c->type == "double") {
+                if (c->literal == "nand" || c->literal == "nan" || c->literal == "NaNd") return "Double.NaN";
+                if (c->literal == "infd" || c->literal == "inf" || c->literal == "Infinityd") return "Double.POSITIVE_INFINITY";
+                if (c->literal == "-infd" || c->literal == "-inf" || c->literal == "-Infinityd") return "Double.NEGATIVE_INFINITY";
+            }
+            return c->literal;
+        }
         case ExprKind::Local:
             return static_cast<const Local*>(e.get())->name;
         case ExprKind::This:

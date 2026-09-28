@@ -150,5 +150,6 @@ namespace nd {
 // НОВОЕ v1.9.61: расширение детекции платформ (поддержка путей META-INF/velocity-plugin.json и META-INF/fabric.mod.json в теневых jar-архивах).
 // НОВОЕ v1.9.62: улучшение дерева файлов проекта (кнопка Свернуть/Развернуть все пакеты доступна при любой непустой структуре папок).
 // НОВОЕ v1.9.63: сквозной инлайнинг временных переменных __tempX наряду с __stkX в теле методов для чистоты декомпилированного кода.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.63";
+// НОВОЕ v1.9.64: форматирование специальных вещественных констант Float.NaN, Float.POSITIVE_INFINITY, Double.NaN и др. в генераторе кода.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.64";
 }
