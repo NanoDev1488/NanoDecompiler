@@ -3,7 +3,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEngine } from "../state/engine";
 import { JavaCode } from "../lib/javaHighlight";
 import { PlainCode, PropertiesCode, JsonCode, XmlCode, YamlCode } from "../lib/textHighlight";
-import { joinOutDir, type SourceFile } from "../lib/model";
+import { fmtNum, joinOutDir, type SourceFile } from "../lib/model";
 import { t } from "../lib/i18n";
 import { FindBar } from "./FindBar";
 import { OpenInMenu } from "./OpenInMenu";
@@ -265,8 +265,10 @@ export const CodeView = memo(function CodeView({
 
         <div className="flex-1" />
 
-        <span className="mono hidden text-[10.5px] text-faint md:inline">
-          {file.loc} {t(lang, "code.lines")}{canEdit ? "" : ` · ${t(lang, "code.readonly")}`}
+        <span className="mono hidden text-[10.5px] text-faint md:inline" title={lang === "ru" ? "Строк и символов в файле" : "Lines and characters in file"}>
+          {displayCode ? displayCode.split("\n").length : file.loc} {t(lang, "code.lines")}
+          {displayCode ? ` · ${fmtNum(displayCode.length)} ${lang === "ru" ? "симв." : "chars"}` : ""}
+          {canEdit ? "" : ` · ${t(lang, "code.readonly")}`}
         </span>
         {outDir && (
           <OpenInMenu filePath={joinOutDir(outDir, file.relPath)} projectDir={outDir} />
