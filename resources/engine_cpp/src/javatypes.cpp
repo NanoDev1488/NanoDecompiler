@@ -107,6 +107,14 @@ std::pair<std::string, size_t> parse_one_type(const std::string& desc, size_t i)
         auto [inner, ni] = parse_one_type(desc, i + 1);
         return {inner + "[]", ni};
     }
+    if (c == 'T') {
+        auto j = desc.find(';', i);
+        if (j != std::string::npos) {
+            std::string tname = desc.substr(i + 1, j - (i + 1));
+            return {tname, j + 1};
+        }
+    }
+    if (c == '*') return {"?", i + 1};
     throw std::invalid_argument("Плохой дескриптор типа: '" + desc + "' at " + std::to_string(i));
 }
 
