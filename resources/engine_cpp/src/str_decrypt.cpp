@@ -100,9 +100,50 @@ std::optional<std::array<uint8_t, 16>> str_decrypt_find_decryptor_in_class(const
             ints.push_back(static_cast<int32_t>(f.constant_value->int_value));
         }
     }
+    if (ints.size() < 2) {
+        // Fallback: если ConstantValue атрибуты срезаны обфускатором,
+        // извлекаем int-константы из статического инициализатора <clinit>.
+        for (const auto& m : cf.methods) {
+            if (m.name == "<clinit>" && m.has_code && !m.code.empty()) {
+                const auto& code = m.code;
+                size_t pc = 0, n = code.size();
+                while (pc < n && ints.size() < 2) {
+                    uint8_t op = code[pc];
+                    if (op >= 0x02 && op <= 0x08) {  // iconst_m1 .. iconst_5
+                        ints.push_back(static_cast<int32_t>(op - 0x03));
+                        pc += 1;
+                    } else if (op == 0x10 && pc + 1 < n) {  // bipush
+                        ints.push_back(static_cast<int8_t>(code[pc + 1]));
+                        pc += 2;
+                    } else if (op == 0x11 && pc + 2 < n) {  // sipush
+                        int16_t v = (static_cast<int16_t>(code[pc + 1]) << 8) | code[pc + 2];
+                        ints.push_back(v);
+                        pc += 3;
+                    } else if (op == 0x12 && pc + 1 < n) {  // ldc
+                        uint8_t cpidx = code[pc + 1];
+                        auto it = cf.pool.find(cpidx);
+                        if (it != cf.pool.end() && it->second.tag == CpTag::Integer) {
+                            ints.push_back(static_cast<int32_t>(it->second.int_value));
+                        }
+                        pc += 2;
+                    } else if (op == 0x13 && pc + 2 < n) {  // ldc_w
+                        uint16_t cpidx = (static_cast<uint16_t>(code[pc + 1]) << 8) | code[pc + 2];
+                        auto it = cf.pool.find(cpidx);
+                        if (it != cf.pool.end() && it->second.tag == CpTag::Integer) {
+                            ints.push_back(static_cast<int32_t>(it->second.int_value));
+                        }
+                        pc += 3;
+                    } else {
+                        pc += 1;
+                    }
+                }
+                break;
+            }
+        }
+    }
     if (ints.size() < 2) return std::nullopt;
-    // Первые два найденных int-поля с ConstantValue - соответствует порядку
-    // полей в оригинальном классе (h объявлено раньше l).
+    // Первые два найденных int-поля/значения - соответствует порядку
+    // инициализации ключа (h объявлено раньше l).
     return str_decrypt_build_key(ints[0], ints[1]);
 }
 
@@ -120,11 +161,6 @@ std::optional<ActiveDecryptor> find_active_decryptor_in_jar(
     for (auto& [internal, cf] : classes_in_order) {
         auto key = str_decrypt_find_decryptor_in_class(*cf);
         if (key.has_value()) {
-            // ВАЖНО: в оригинале `break` срабатывает здесь БЕЗУСЛОВНО (даже
-            // если ниже decrypt_method_name не найдёт подходящий метод) -
-            // предполагается, что класс с маркером - и есть искомый
-            // расшифровщик, дальше по jar не ищем, даже если ACTIVE в итоге
-            // останется не установлен.
             auto method = str_decrypt_method_name(*cf);
             if (method.has_value()) {
                 ActiveDecryptor a;
@@ -133,7 +169,6 @@ std::optional<ActiveDecryptor> find_active_decryptor_in_jar(
                 a.key = *key;
                 return a;
             }
-            return std::nullopt;
         }
     }
     return std::nullopt;
