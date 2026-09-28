@@ -98,5 +98,6 @@ namespace nd {
 // для слабых GPU (убран дорогостоящий backdrop-blur), ускорение CI-кэша.
 // НОВОЕ v1.9.17: расширение поддержки распознавания и сворачивания логгер-вызовов
 // (.log/.debug/.error/println/Bukkit.getLogger) в Java синтаксическом подсветчике.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.17";
+// НОВОЕ v1.9.18: стабилизация UI компонентов и обновление сборки.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.18";
 }
