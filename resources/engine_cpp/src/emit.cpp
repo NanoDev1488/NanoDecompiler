@@ -136,6 +136,18 @@ std::string emit_expr(const ExprPtr& e) {
         }
         case ExprKind::BinOp: {
             const auto* b = static_cast<const BinOp*>(e.get());
+            if ((b->op == "&" || b->op == "|" || b->op == "^") && b->right->kind == ExprKind::Const) {
+                const auto* c = static_cast<const Const*>(b->right.get());
+                if (c->type == "int" || c->type == "long") {
+                    if (c->value == "255") {
+                        return paren(b->left, b, 'l') + " " + b->op + " 0xFF" + (c->type == "long" ? "L" : "");
+                    } else if (c->value == "65535") {
+                        return paren(b->left, b, 'l') + " " + b->op + " 0xFFFF" + (c->type == "long" ? "L" : "");
+                    } else if (c->value == "16777215") {
+                        return paren(b->left, b, 'l') + " " + b->op + " 0xFFFFFF" + (c->type == "long" ? "L" : "");
+                    }
+                }
+            }
             return paren(b->left, b, 'l') + " " + b->op + " " + paren(b->right, b, 'r');
         }
         case ExprKind::UnOp: {
