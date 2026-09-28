@@ -89,7 +89,16 @@ std::vector<std::string> disassemble(const std::vector<uint8_t>& code, const Cla
             case OperandKind::LocalUByte: {
                 if (pc + 1 > n) { pc = n; operand_txt = "<truncated>"; break; }
                 uint8_t idx = code[pc]; pc += 1;
-                operand_txt = std::to_string(idx);
+                std::string var_name;
+                if (method != nullptr) {
+                    for (const auto& lv : method->local_var_table) {
+                        if (lv.slot == idx && start >= lv.start_pc && start < lv.start_pc + lv.length) {
+                            var_name = lv.name;
+                            break;
+                        }
+                    }
+                }
+                operand_txt = std::to_string(idx) + (var_name.empty() ? "" : (" // " + var_name));
                 break;
             }
             case OperandKind::IInc: {
@@ -228,6 +237,18 @@ std::vector<std::string> disassemble(const std::vector<uint8_t>& code, const Cla
             else if (mnemonic == "dup_x2") operand_txt = "// (v3, v2, v1 -> v1, v3, v2, v1)";
             else if (mnemonic == "dup2_x1") operand_txt = "// (v3, v2, v1 -> v2, v1, v3, v2, v1)";
             else if (mnemonic == "dup2_x2") operand_txt = "// (v4, v3, v2, v1 -> v2, v1, v4, v3, v2, v1)";
+            else if (method != nullptr && mnemonic.size() >= 7 && mnemonic[mnemonic.size() - 2] == '_') {
+                char d = mnemonic.back();
+                if (d >= '0' && d <= '3') {
+                    uint16_t slot = d - '0';
+                    for (const auto& lv : method->local_var_table) {
+                        if (lv.slot == slot && start >= lv.start_pc && start < lv.start_pc + lv.length) {
+                            operand_txt = "// " + lv.name;
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         char head[32];
