@@ -98,9 +98,9 @@ export function UpdateModal() {
                   {guiVersion ?? "?"} → {updateInfo.latestVersion}
                 </p>
               </div>
-              <button className="btn btn-acid h-9 w-full text-[12.5px]" onClick={openClientDownload}>
-                <Download size={13} />
-                Скачать
+              <button className={cn("btn btn-acid h-9 w-full text-[12.5px]", updateInfo.applying && "pointer-events-none opacity-70")} onClick={applyClientUpdate}>
+                {updateInfo.applying ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                {updateInfo.applying ? "Скачивание..." : "Скачать и обновить"}
               </button>
             </>
           ) : updateInfo.kind === "closed_beta" ? (

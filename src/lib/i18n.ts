@@ -1,4 +1,4 @@
-// i18n.ts — локализация интерфейса NanoDecompiler (ru / en)
+﻿// i18n.ts — локализация интерфейса NanoDecompiler (ru / en)
 export type Lang = "ru" | "en";
 
 export const DICT = {
@@ -73,7 +73,8 @@ export const DICT = {
     "toast.malware_warn": "Обнаружен подозрительный код",
     "toast.file_select_canceled": "Ни один файл не выбран",
     "toast.read_failed": "Не удалось прочитать файл",
-    "toast.file_too_big": "Нет доступа или слишком большой файл - используйте "Открыть в ОС"",
+    "toast.file_too_big": "Нет доступа или слишком большой файл - используйте 'Открыть в ОС'",
+
     "toast.auto_report": "Автоматическая отправка (telemetryEnabled)",
     "phase.validating": "Проверка файла:",
     "phase.scanning": "сканирование вредоносного содержимого:",
@@ -207,7 +208,8 @@ export const DICT = {
     "toast.malware_warn": "Suspicious code detected",
     "toast.file_select_canceled": "No file selected",
     "toast.read_failed": "Failed to read file",
-    "toast.file_too_big": "No access or file too big - use "Open in OS"",
+    "toast.file_too_big": "Нет доступа или слишком большой файл - используйте 'Открыть в ОС'",
+
     "toast.auto_report": "Automatic report (telemetryEnabled)",
     "phase.validating": "Validating file:",
     "phase.scanning": "scanning malicious content:",

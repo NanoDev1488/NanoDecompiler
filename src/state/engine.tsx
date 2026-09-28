@@ -1,3 +1,4 @@
+﻿import { t } from "../lib/i18n";
 import {
   createContext,
   useCallback,
@@ -86,7 +87,7 @@ async function collectSourceFiles(outDir: string, relDir = ""): Promise<SourceFi
       const pkg = lastSlash === -1 ? "" : stripped.slice(0, lastSlash);
       out.push({
         id: rid("f"),
-        pkg: pkg || t(lang(), "toast.root_pkg"),
+        pkg: pkg || t(settings.language, "toast.root_pkg"),
         name: item.name,
         relPath: rel,
         loc: 0,
@@ -170,6 +171,7 @@ interface EngineApi {
   checkForUpdates(silent?: boolean): void;
   applyEngineUpdate(): void;
   openClientDownload(): void;
+  applyClientUpdate(): void;
   checkEnv(): void;
   installTool(which: "java" | "maven"): void;
   toast(msg: string, kind?: ToastKind): void;
@@ -319,10 +321,10 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       try {
         const report = await buildTelemetryReport(job, comment, detailsOverride);
         const res = await window.nano.sendTelemetryReport(report);
-        if (res.ok) toast(t(lang(), "toast.report_sent"), "ok");
-        else toast(`${t(lang(), "toast.report_failed")}: ${res.error ?? t(lang(), "toast.unknown_error")}`, "err");
+        if (res.ok) toast(t(settings.language, "toast.report_sent"), "ok");
+        else toast(`${t(settings.language, "toast.report_failed")}: ${res.error ?? t(settings.language, "toast.unknown_error")}`, "err");
       } catch (e) {
-        toast(`${t(lang(), "toast.report_failed")}: ${String(e)}`, "err");
+        toast(`${t(settings.language, "toast.report_failed")}: ${String(e)}`, "err");
       }
     },
     [toast],
@@ -338,12 +340,12 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     try {
       const report = await buildFreeformBugReport(comment);
       const res = await window.nano.sendTelemetryReport(report);
-      if (res.ok) toast(t(lang(), "toast.report_sent"), "ok");
-      else toast(`${t(lang(), "toast.report_failed")}: ${res.error ?? t(lang(), "toast.unknown_error")}`, "err");
+      if (res.ok) toast(t(settings.language, "toast.report_sent"), "ok");
+      else toast(`${t(settings.language, "toast.report_failed")}: ${res.error ?? t(settings.language, "toast.unknown_error")}`, "err");
       return res;
     } catch (e) {
       const error = String(e);
-      toast(`${t(lang(), "toast.report_failed")}: ${error}`, "err");
+      toast(`${t(settings.language, "toast.report_failed")}: ${error}`, "err");
       return { ok: false, error };
     }
   }, [toast]);
@@ -404,8 +406,8 @@ export function EngineProvider({ children }: { children: ReactNode }) {
         .installTools(which)
         .then(r => {
           const ok = which === "java" ? !!r.java : !!r.maven;
-          if (ok) toast(`${which === "java" ? "Java" : "Maven"} ${t(lang(), "toast.installed")}`, "ok");
-          else toast(r.errors?.[0] ?? r.error ?? `${t(lang(), "toast.install_failed")} ${which === "java" ? "Java" : "Maven"}`, "err");
+          if (ok) toast(`${which === "java" ? "Java" : "Maven"} ${t(settings.language, "toast.installed")}`, "ok");
+          else toast(r.errors?.[0] ?? r.error ?? `${t(settings.language, "toast.install_failed")} ${which === "java" ? "Java" : "Maven"}`, "err");
         })
         .catch(err => toast(String(err?.message ?? err), "err"))
         .finally(() => {
@@ -442,7 +444,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       .then(r => {
         if (!r.ok) {
           setUpdateInfo(u => ({ ...u, checking: false, error: r.error }));
-          if (!silent) toast(r.error ?? t(lang(), "toast.check_update_failed"), "err");
+          if (!silent) toast(r.error ?? t(settings.language, "toast.check_update_failed"), "err");
           return;
         }
         setUpdateInfo({
@@ -457,15 +459,37 @@ export function EngineProvider({ children }: { children: ReactNode }) {
         });
         if (!silent) {
           if (r.updateKind === "none") toast("У вас последняя версия", "ok");
-          else if (r.updateKind === "engine") toast(`${t(lang(), "toast.update_engine")}: ${r.latestVersion}`, "info");
+          else if (r.updateKind === "engine") toast(`${t(settings.language, "toast.update_engine")}: ${r.latestVersion}`, "info");
           else if (r.updateKind === "client") toast(`Доступно обновление приложения: ${r.latestVersion}`, "info");
         }
       })
       .catch(e => {
         setUpdateInfo(u => ({ ...u, checking: false, error: String(e) }));
-        if (!silent) toast(t(lang(), "toast.check_update_failed"), "err");
+        if (!silent) toast(t(settings.language, "toast.check_update_failed"), "err");
       });
   }, [toast]);
+
+  const applyClientUpdate = useCallback(() => {
+    const url = updateInfo.clientDownloadUrl ?? updateInfo.releaseUrl;
+    if (!url) return;
+    setUpdateInfo(u => ({ ...u, applying: true }));
+    window.nano
+      .installClientAndRestart(url)
+      .then(res => {
+        if (!res.ok) {
+          setUpdateInfo(u => ({ ...u, applying: false, error: res.error }));
+          if (res.manual) {
+            window.nano.openExternal(url).catch(() => toast(t(settings.language, "toast.link_failed"), "err"));
+          } else {
+            toast(res.error ?? t(settings.language, "toast.update_failed"), "err");
+          }
+        }
+      })
+      .catch(e => {
+        setUpdateInfo(u => ({ ...u, applying: false, error: String(e) }));
+        toast(t(settings.language, "toast.update_failed"), "err");
+      });
+  }, [updateInfo.clientDownloadUrl, updateInfo.releaseUrl, toast]);
 
   const applyEngineUpdate = useCallback(() => {
     if (!updateInfo.downloadUrl) return;
@@ -489,7 +513,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
   const openClientDownload = useCallback(() => {
     const url = updateInfo.clientDownloadUrl ?? updateInfo.releaseUrl;
-    if (url) window.nano.openExternal(url).catch(() => toast(t(lang(), "toast.link_failed"), "err"));
+    if (url) window.nano.openExternal(url).catch(() => toast(t(settings.language, "toast.link_failed"), "err"));
   }, [toast, updateInfo.clientDownloadUrl, updateInfo.releaseUrl]);
 
 
@@ -741,7 +765,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
       if (job) {
         if (ok) {
-          toast(`${t(lang(), "toast.done")}: ${job.fileName} — ${fmtSeconds(elapsed)}`, "ok");
+          toast(`${t(settings.language, "toast.done")}: ${job.fileName} — ${fmtSeconds(elapsed)}`, "ok");
           if (settings.openFolderOnDone) window.nano.openPath(job.outDir).catch(() => {});
           // НОВОЕ v1.9.5 (прямая просьба пользователя - "если телеметрия
           // включена, ОБЯЗАТЕЛЬНО отправлять всё, все байткоды ошибок, что
@@ -773,7 +797,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
             void sendErrorReport(jobId, autoComment, liveDetails);
           }
         } else {
-          toast(`${t(lang(), "toast.error")}: ${job.fileName}${error ? ` — ${error}` : ""}`, "err");
+          toast(`${t(settings.language, "toast.error")}: ${job.fileName}${error ? ` — ${error}` : ""}`, "err");
         }
       }
 
@@ -978,7 +1002,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     const wasRunning = runningIdRef.current !== null;
     stopRunning();
     setJobs(prev => prev.map(j => (j.status === "queued" ? { ...j, status: "canceled" } : j)));
-    if (!wasRunning) toast(t(lang(), "toast.stopped"), "warn");
+    if (!wasRunning) toast(t(settings.language, "toast.stopped"), "warn");
   }, [stopRunning, toast]);
 
   // Добавление через реальный системный диалог (Electron) - единственный
@@ -1262,10 +1286,10 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       window.nano
         .setSettings(next)
         .then(r => {
-          if (r.ok) toast(t(lang(), "toast.settings_saved"), "ok");
+          if (r.ok) toast(t(settings.language, "toast.settings_saved"), "ok");
           else toast(`Не удалось сохранить настройки: ${r.error ?? "неизвестная ошибка"}`, "err");
         })
-        .catch(e => toast(`${t(lang(), "toast.settings_failed")}: ${String(e)}`, "err"));
+        .catch(e => toast(`${t(settings.language, "toast.settings_failed")}: ${String(e)}`, "err"));
     },
     [toast],
   );
@@ -1363,7 +1387,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     addFiles, addJarPaths, openFileDialog, startQueue, stopRunning, stopAll, cancelJob, removeJob, clearQueue,
     selectJob, selectFile, updateFileCode, setLogFilter, toggleTerminal, clearLog, copyLog, copyText,
     openOutput, setSettingsOpen, setUpdateModalOpen, setSidebarWidth, setFileTreeWidth, setTerminalHeight, saveSettings, completeSetup, setPaletteOpen, setProjectSearchOpen, setBugReportOpen,
-    resolveEnvIssue, checkForUpdates, applyEngineUpdate, openClientDownload, checkEnv, installTool, toast, dismissToast,
+    resolveEnvIssue, checkForUpdates, applyEngineUpdate, applyClientUpdate, openClientDownload, checkEnv, installTool, toast, dismissToast,
     sendErrorReport, sendBugReport,
   };
 
