@@ -379,10 +379,10 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect, totalS
             <TriangleAlert size={13} />
           )}
         </button>
-        {!filtering && allKeys.length > 1 && (
+        {!filtering && allKeys.length > 0 && (
           <button
             className="icon-btn h-6 w-6"
-            title={allCollapsed ? "Развернуть всё" : "Свернуть всё"}
+            title={allCollapsed ? "Развернуть все пакеты" : "Свернуть все пакеты"}
             onClick={toggleAll}
           >
             {allCollapsed ? <ChevronsUpDown size={13} /> : <ChevronsDownUp size={13} />}
