@@ -321,7 +321,9 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect, totalS
             <FolderOpen size={12} className="flex-none opacity-70" />
           )}
           <span className="flex-1 truncate">{node.label}</span>
-          <span className="text-faint">{totalCount}</span>
+          <span className="mono rounded bg-raised/80 px-1 py-0.5 text-[10px] text-faint group-hover:text-ink/80 flex-none" title={`${totalCount} файл(ов)`}>
+            {totalCount}
+          </span>
         </button>
         {!isCollapsed && (
           <>
@@ -343,7 +345,12 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect, totalS
       </div>
       <div className="flex h-9 flex-none items-center gap-2 border-b border-line px-3">
         <span className="kicker">Исходники</span>
-        <span className="chip h-[18px] px-1.5 text-[10px]">{files.length} файл(ов)</span>
+        <span
+          className="chip h-[18px] px-1.5 text-[10px] cursor-default"
+          title={`${files.filter(f => /\.java$/i.test(f.name)).length} Java-классов, ${files.filter(f => !/\.java$/i.test(f.name)).length} ресурсов`}
+        >
+          {files.length} файл(ов)
+        </span>
         <div className="flex-1" />
         {/* НОВОЕ v1.7.5 (реальная жалоба - "поиск вообще не работает",
             причина - не было видимой кнопки, только Ctrl+Shift+F). */}
