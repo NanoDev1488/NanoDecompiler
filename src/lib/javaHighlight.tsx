@@ -161,17 +161,10 @@ function tokenizeLine(line: string): Token[] {
   return out;
 }
 
-// НОВОЕ 1.9.6 (HANDOFF п.9 - "сворачивать логгер-вызовы Bukkit так же, как
-// цветовые цепочки"): распознаём ТОЛЬКО .warning(/.severe(/.info(/.config(/
-// .fine(/.finer(/.finest( - это реальные уровни java.util.logging.Level,
-// которым пользуется Bukkit Logger (plugin.getLogger()...). Чтобы не ловить
-// случайный несвязанный метод с тем же именем на произвольном объекте (у
-// плагина может быть свой класс со методом .info(), не имеющим отношения к
-// логгеру) - требуем, чтобы ПЕРЕД точкой стояло что-то похожее на логгер:
-// вызов ...getLogger() ИЛИ идентификатор, оканчивающийся на log/logger
-// (любым регистром - LOGGER, logger, pluginLog и т.п.).
-const LOG_METHOD_RE = /\.(warning|severe|info|config|fine|finer|finest)\s*\(/g;
-const LOG_RECEIVER_RE = /(?:getLogger\(\)|\blog(?:ger)?)\s*$/i;
+// НОВОЕ 1.9.6 + v1.9.17: распознаём уровни java.util.logging.Level, Bukkit Logger,
+// SLF4J, Log4j и System.out/err (warning/severe/error/info/config/fine/finer/finest/debug/log).
+const LOG_METHOD_RE = /\.(warning|severe|error|info|config|fine|finer|finest|debug|log|println|print)\s*\(/g;
+const LOG_RECEIVER_RE = /(?:getLogger\(\)|\blog(?:ger)?|Bukkit\.getLogger\(\)|System\.(?:out|err))\s*$/i;
 
 interface Region {
   start: number;
@@ -335,7 +328,7 @@ function renderToken(t: Token, i: number | string, textOverride?: string): React
   return <span key={i}>{text}</span>;
 }
 
-const LOG_LEVEL_SEVERITY = new Set(["severe", "warning"]);
+const LOG_LEVEL_SEVERITY = new Set(["severe", "warning", "error"]);
 
 /** Содержимое СВЁРНУТОГО чипа. Для color-региона - раскрашенные строковые
  * куски (нестроковые токены туда физически попасть не могут - любое

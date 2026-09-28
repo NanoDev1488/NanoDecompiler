@@ -96,5 +96,7 @@ namespace nd {
 // BugReportModal, SetupWizard).
 // НОВОЕ v1.9.16: оптимизация производительности оверлеев модальных окон
 // для слабых GPU (убран дорогостоящий backdrop-blur), ускорение CI-кэша.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.16";
+// НОВОЕ v1.9.17: расширение поддержки распознавания и сворачивания логгер-вызовов
+// (.log/.debug/.error/println/Bukkit.getLogger) в Java синтаксическом подсветчике.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.17";
 }
