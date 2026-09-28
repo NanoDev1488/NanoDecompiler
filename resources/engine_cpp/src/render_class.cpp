@@ -818,6 +818,13 @@ std::pair<std::string, OrderedImports> render_class(
 
     for (auto& m : cf.methods) {
         if (skip_methods.count(&m)) continue;
+        // Пропускаем синтетические методы реализации lambda (lambda$...),
+        // сгенерированные компилятором javac при desugaring invokedynamic.
+        if ((m.access & 0x1000) && m.name.rfind("lambda$", 0) == 0) {
+            stats.total_methods += 1;
+            stats.decompiled_methods += 1;
+            continue;
+        }
         // HANDOFF_50: для record'ов - пропустить компилятором сгенерированные
         // accessor'ы (`Type comp() { return this.comp; }`, точное совпадение
         // байткода) и equals/hashCode/toString, если они делегируют В
