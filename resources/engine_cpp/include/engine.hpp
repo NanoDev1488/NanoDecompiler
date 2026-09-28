@@ -58,6 +58,7 @@ MethodDecompileResult decompile_method_body(
 // вызывается ВНУТРИ decompile_method_body - но render_class.cpp/process_jar.cpp
 // тоже вызывают это напрямую в некоторых местах - напр. для <clinit>,
 // поэтому экспортируется).
-std::vector<std::string> fallback_bytecode_listing(const ClassFile& cf, const Method& method, int indent = 2);
+std::vector<std::string> fallback_bytecode_listing(const ClassFile& cf, const Method& method, int indent = 2,
+                                                   const std::optional<std::string>& reason = std::nullopt);
 
 }  // namespace nd

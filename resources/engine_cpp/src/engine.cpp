@@ -2265,9 +2265,13 @@ void refresh_crossing_temp_types(const std::vector<StmtPtr>& stmts, MethodCtx& c
 
 // ==================== fallback_bytecode_listing / decompile_method_body ====================
 
-std::vector<std::string> fallback_bytecode_listing(const ClassFile& cf, const Method& method, int indent) {
+std::vector<std::string> fallback_bytecode_listing(const ClassFile& cf, const Method& method, int indent,
+                                                   const std::optional<std::string>& reason) {
     std::string pad(4 * static_cast<size_t>(indent), ' ');
     std::vector<std::string> lines = {pad + "// -- не удалось безопасно декомпилировать тело метода, показан байткод --"};
+    if (reason.has_value() && !reason->empty()) {
+        lines.push_back(pad + "// Причина: " + *reason);
+    }
     if (method.has_code) {
         auto disasm = disassemble(method.code, cf, &method);
         for (auto& dl : disasm) lines.push_back(pad + "// " + dl);

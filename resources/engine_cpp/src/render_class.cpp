@@ -798,7 +798,7 @@ std::pair<std::string, OrderedImports> render_class(
                         }
                     if (!found) stats.fallback_reasons.emplace_back(reason, 1);
                     body_lines.push_back("    static {");
-                    for (auto& l : fallback_bytecode_listing(cf, *clinit_m, 2)) body_lines.push_back(l);
+                    for (auto& l : fallback_bytecode_listing(cf, *clinit_m, 2, reason)) body_lines.push_back(l);
                     body_lines.push_back("    }");
                     body_lines.push_back("");
                 }
@@ -1055,7 +1055,7 @@ std::pair<std::string, OrderedImports> render_class(
                     }
                 }
                 if (!found) stats.fallback_reasons.emplace_back(result->reason, 1);
-                for (auto& l : fallback_bytecode_listing(cf, m, 2)) body_lines.push_back(l);
+                for (auto& l : fallback_bytecode_listing(cf, m, 2, result->reason)) body_lines.push_back(l);
             }
             body_lines.push_back("    }");
         }
