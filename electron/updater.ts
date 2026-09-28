@@ -384,44 +384,47 @@ export function registerUpdateHandlers(
   ipcMain.handle("update:consumeSuccessFlag", async () => consumeUpdateSuccessFlag());
 
   ipcMain.handle("update:installClientAndRestart", async (event, downloadUrl: string) => {
-    // HANDOFF_51: тихая "скачать инсталлятор -> запустить его -> выйти,
-    // инсталлятор сам перезапустит приложение" схема - специфична для
-    // Windows NSIS (silent-install + автозапуск по завершении, см. комментарий
-    // ниже). Для macOS (.dmg - нужно смонтировать образ и вручную
-    // перетащить .app, автоматизировать без доп. библиотек - отдельная
-    // большая задача) и Linux (.AppImage - НЕТ единого "инсталлятора" в
-    // принципе, самообновление AppImage обычно означает подмену файла на
-    // диске и требует знать, ГДЕ пользователь его хранит - не гарантировано)
-    // - вместо притворства, что тут работает то же самое, ЧЕСТНО открываем
-    // страницу скачивания в браузере и просим пользователя обновиться
-    // вручную. НЕ проверялось живьём ни на одной из трёх платформ.
-    if (process.platform !== "win32") {
-      try {
-        await shell.openExternal(downloadUrl);
-        return { ok: true, manual: true };
-      } catch (e) {
-        return { ok: false, error: String(e) };
-      }
-    }
     try {
       const tmpDir = app.getPath("temp");
-      const installerPath = path.join(tmpDir, "NanoDecompiler-Client-Setup.exe");
-      await httpsDownloadFile(downloadUrl, installerPath, (downloaded, total) => {
+      let downloadPath = "";
+      if (process.platform === "win32") downloadPath = path.join(tmpDir, "NanoDecompiler-Client-Setup.exe");
+      else if (process.platform === "darwin") downloadPath = path.join(tmpDir, "NanoDecompiler-Client.dmg");
+      else downloadPath = path.join(tmpDir, "NanoDecompiler-Client.AppImage");
+
+      await httpsDownloadFile(downloadUrl, downloadPath, (downloaded, total) => {
         event.sender.send("update:downloadProgress", { downloaded, total, kind: "client" });
       });
       writeUpdateSuccessMarker();
-      // detached + unref - инсталлятор должен пережить закрытие текущего
-      // процесса (не быть его child'ом с точки зрения жизненного цикла).
-      // spawn уже статически импортирован в шапке файла - раньше здесь был
-      // отдельный динамический import(), излишний и лишь маскировавший
-      // обычный статический импорт тем же именем.
-      const child = spawn(installerPath, [], { detached: true, stdio: "ignore" });
-      child.unref();
-      // Небольшая задержка перед выходом - даём инсталлятору реально
-      // стартовать (открыть свой файл) ДО того, как текущий .exe
-      // попытается завершиться (иначе на медленной машине можно словить
-      // гонку, где Windows ещё не успела дать installerPath файловый
-      // хэндл на чтение).
+
+      let scriptPath = "";
+      let scriptContent = "";
+
+      if (process.platform === "win32") {
+        scriptPath = path.join(tmpDir, "NewVerSetup.bat");
+        scriptContent = `@echo off\r\ntimeout /t 2 /nobreak >nul\r\nstart "" "${downloadPath}" /S --force-run\r\n`;
+      } else if (process.platform === "darwin") {
+        scriptPath = path.join(tmpDir, "NewVerSetup.sh");
+        const appPath = app.getPath("exe").split(".app/")[0] + ".app";
+        scriptContent = `#!/bin/bash\nsleep 2\nhdiutil attach "${downloadPath}" -mountpoint /Volumes/NanoDecompilerUpdate -nobrowse\ncp -a /Volumes/NanoDecompilerUpdate/NanoDecompiler.app/ "${appPath}/"\nhdiutil detach /Volumes/NanoDecompilerUpdate -force\nopen "${appPath}"\n`;
+      } else {
+        scriptPath = path.join(tmpDir, "NewVerSetup.sh");
+        const currentAppImage = process.env.APPIMAGE;
+        if (!currentAppImage) {
+          throw new Error("Не удалось определить путь к текущему AppImage (переменная APPIMAGE пуста)");
+        }
+        scriptContent = `#!/bin/bash\nsleep 2\nmv -f "${downloadPath}" "${currentAppImage}"\nchmod +x "${currentAppImage}"\n"${currentAppImage}" &\n`;
+      }
+
+      fs.writeFileSync(scriptPath, scriptContent, { encoding: "utf8", mode: 0o755 });
+
+      if (process.platform === "win32") {
+        const child = spawn("cmd.exe", ["/c", scriptPath], { detached: true, stdio: "ignore", windowsHide: true });
+        child.unref();
+      } else {
+        const child = spawn("bash", [scriptPath], { detached: true, stdio: "ignore" });
+        child.unref();
+      }
+
       setTimeout(() => app.quit(), 700);
       return { ok: true };
     } catch (e) {
