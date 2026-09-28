@@ -289,7 +289,8 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     (msg: string, kind: ToastKind = "info") => {
       const id = ++logIdRef.current;
       setToasts(prev => [...prev.slice(-3), { id, kind, msg }]);
-      window.setTimeout(() => dismissToast(id), 3600);
+      const timeoutMs = kind === "err" ? 8000 : kind === "warn" ? 5500 : 3600;
+      window.setTimeout(() => dismissToast(id), timeoutMs);
       // НОВОЕ v1.9.8 (окно логов разработчика, HANDOFF п.16): каждый
       // toast заодно уходит в персистентный лог-буфер main-процесса
       // (виден и после того, как сам toast исчезнет через 3.6с) -
