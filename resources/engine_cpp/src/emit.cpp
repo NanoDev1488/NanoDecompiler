@@ -336,7 +336,19 @@ std::vector<std::string> emit_stmt(const StmtPtr& s, int indent) {
             auto body_lines = emit_stmts(t->body, indent + 1);
             out.insert(out.end(), body_lines.begin(), body_lines.end());
             for (auto& c : t->catches) {
-                out.push_back(pad + "} catch (" + simple(c.type) + " " + c.var_name + ") {");
+                std::string catch_type_disp;
+                if (c.type.find('|') != std::string::npos) {
+                    std::stringstream ss(c.type);
+                    std::string item;
+                    std::vector<std::string> parts;
+                    while (std::getline(ss, item, '|')) {
+                        if (!item.empty()) parts.push_back(simple(item));
+                    }
+                    catch_type_disp = join(parts, " | ");
+                } else {
+                    catch_type_disp = simple(c.type);
+                }
+                out.push_back(pad + "} catch (" + catch_type_disp + " " + c.var_name + ") {");
                 auto cb = emit_stmts(c.body, indent + 1);
                 out.insert(out.end(), cb.begin(), cb.end());
             }

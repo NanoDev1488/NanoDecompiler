@@ -158,5 +158,6 @@ namespace nd {
 // НОВОЕ v1.9.69: поддержка sealed-классов Java 17+ (парсинг атрибута PermittedSubclasses, рендеринг модификатора sealed и секции permits).
 // НОВОЕ v1.9.70: извлечение контрольных сумм CRC32 и безопасная обработка пустых (0 байт) файлов при распаковке ZIP/JAR.
 // НОВОЕ v1.9.71: переключение режима переноса строк (word wrap) в редакторе кода по горячей клавише Alt+Z.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.71";
+// НОВОЕ v1.9.72: чистое форматирование multi-catch блоков catch (IOException | SQLException e) в генераторе Java-кода.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.72";
 }
