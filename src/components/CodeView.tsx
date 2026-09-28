@@ -91,6 +91,13 @@ export const CodeView = memo(function CodeView({
     };
   });
 
+  // Автоматический flush несохранённых данных при смене файла или закрытии
+  useEffect(() => {
+    return () => {
+      saveNowRef.current();
+    };
+  }, [file?.id]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
@@ -151,6 +158,21 @@ export const CodeView = memo(function CodeView({
             </span>
           ))}
         </nav>
+
+        {canEdit && (draft !== lastSavedRef.current || saveState !== null) && (
+          <span className="mono flex items-center gap-1.5 text-[10.5px]">
+            {saveState === "saving" ? (
+              <span className="text-acid">{lang === "ru" ? "сохранение…" : "saving…"}</span>
+            ) : saveState === "err" ? (
+              <span className="text-err">{lang === "ru" ? "ошибка сохранения" : "save error"}</span>
+            ) : (
+              <span className="flex items-center gap-1 text-warn">
+                <span className="h-1.5 w-1.5 rounded-full bg-warn" />
+                {lang === "ru" ? "не сохранено" : "unsaved"}
+              </span>
+            )}
+          </span>
+        )}
 
         {file.note && (
           <span className="chip hidden border-warn/35 text-warn lg:inline-flex" title={file.note}>
@@ -250,6 +272,20 @@ export const CodeView = memo(function CodeView({
               value={draft}
               spellCheck={false}
               onChange={e => setDraft(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Tab") {
+                  e.preventDefault();
+                  const target = e.currentTarget;
+                  const start = target.selectionStart;
+                  const end = target.selectionEnd;
+                  const val = target.value;
+                  const next = val.substring(0, start) + "    " + val.substring(end);
+                  setDraft(next);
+                  requestAnimationFrame(() => {
+                    target.selectionStart = target.selectionEnd = start + 4;
+                  });
+                }
+              }}
             />
           </div>
         ) : (
