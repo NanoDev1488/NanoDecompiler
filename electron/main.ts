@@ -583,6 +583,7 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
   // умолчанию включена (см. DEFAULT_SETTINGS) - флаг добавляется, ТОЛЬКО
   // когда пользователь явно выключил.
   if (!loadSettings().legitimacyCheck) scriptArgs.push("--no-legitimacy-check");
+  if (loadSettings().disableVsCodeLogs) scriptArgs.push("--disable-vscode-logs");
   let cmd: string, args: string[];
   try {
     ({ cmd, args } = engineInvocation(scriptArgs));

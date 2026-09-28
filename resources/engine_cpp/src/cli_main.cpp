@@ -315,7 +315,7 @@ int run_cli(int argc, char** argv) {
       if (args[0] == "--check-update" || args[0] == "--update") {
 #ifdef _WIN32
           std::string script =
-              "$url = 'https://api.github.com/repos/WaveDevelopment/NanoDecompiler/releases/latest'\n"
+              "$url = 'https://api.github.com/repos/NanoDev1488/NanoDecompiler/releases/latest'\n"
               "$json = Invoke-RestMethod -Uri $url -Headers @{'User-Agent'='NanoDecompiler-CLI'}\n"
               "Write-Host '��������� ������:' $json.tag_name\n"
               "if ('" + args[0] + "' -eq '--update') {\n"
@@ -335,13 +335,13 @@ int run_cli(int argc, char** argv) {
           return rc;
 #else
           std::string script =
-              "LATEST=$(curl -s https://api.github.com/repos/WaveDevelopment/NanoDecompiler/releases/latest | grep '\"tag_name\":' | cut -d '\"' -f 4)\n"
+              "LATEST=$(curl -s https://api.github.com/repos/NanoDev1488/NanoDecompiler/releases/latest | grep '\"tag_name\":' | cut -d '\"' -f 4)\n"
               "echo \"��������� ������: $LATEST\"\n"
               "if [ '" + args[0] + "' = '--update' ]; then\n"
               "  echo '����������...'\n"
               "  TARGET=\"$0\"\n"
               "  if [ -L \"/proc/self/exe\" ]; then TARGET=$(readlink -f /proc/self/exe); fi\n"
-              "  curl -fsSL -o \"${TARGET}.new\" \"https://github.com/WaveDevelopment/NanoDecompiler/releases/latest/download/NanoDecompilerClApi-$(uname | tr 'A-Z' 'a-z')\"\n"
+              "  curl -fsSL -o \"${TARGET}.new\" \"https://github.com/NanoDev1488/NanoDecompiler/releases/latest/download/NanoDecompilerClApi-$(uname | tr 'A-Z' 'a-z')\"\n"
               "  chmod +x \"${TARGET}.new\"\n"
               "  mv \"${TARGET}.new\" \"$TARGET\"\n"
               "  echo '���������!'\n"

@@ -317,7 +317,7 @@ export const CodeView = memo(function CodeView({
 
       <div
         ref={codeContainerRef}
-        className="min-h-0 flex-1 overflow-auto py-3"
+        className="min-h-0 flex-1 overflow-auto py-3 outline-none"
         style={zoom !== 100 ? { fontSize: `${zoom}%` } : undefined}
       >
         {file.note && (
