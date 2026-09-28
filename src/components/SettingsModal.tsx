@@ -64,6 +64,22 @@ export function SettingsModal() {
   const [tab, setTab] = useState<Tab>("general");
   // НОВОЕ v1.7.6: под-вкладки внутри "О сервисе" - см. рендер ниже.
   const [aboutSubTab, setAboutSubTab] = useState<"overview" | "features" | "team">("overview");
+  const [editorZoom, setEditorZoom] = useState(() => {
+    try {
+      const s = localStorage.getItem("nano:editor_zoom");
+      return s ? Number(s) || 100 : 100;
+    } catch {
+      return 100;
+    }
+  });
+
+  const updateEditorZoom = (z: number) => {
+    const val = Math.max(70, Math.min(160, z));
+    setEditorZoom(val);
+    try {
+      localStorage.setItem("nano:editor_zoom", String(val));
+    } catch {}
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -330,6 +346,41 @@ export function SettingsModal() {
                 Меняет логотип в шапке приложения и иконку окна сразу. Иконку .exe/.app в проводнике/панели задач при
                 установке это не затрагивает — она задаётся при сборке приложения.
               </p>
+            </div>
+
+            <p className="kicker pt-4 pb-2">{draft.language === "ru" ? "Редактор кода" : "Code Editor"}</p>
+            <div className="rounded-xl border border-line bg-bg px-3">
+              <Row
+                label={draft.language === "ru" ? "Масштаб шрифта" : "Font zoom"}
+                hint={draft.language === "ru" ? "Базовый размер текста в окне просмотра исходного кода (Ctrl + / Ctrl -)" : "Base text size in code viewer (Ctrl + / Ctrl -)"}
+                control={
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      className="icon-btn h-7 w-7 border border-line"
+                      title={draft.language === "ru" ? "Уменьшить" : "Decrease"}
+                      onClick={() => updateEditorZoom(editorZoom - 10)}
+                    >
+                      <Minus size={13} />
+                    </button>
+                    <span className="mono w-12 text-center text-[12px] text-ink">{editorZoom}%</span>
+                    <button
+                      className="icon-btn h-7 w-7 border border-line"
+                      title={draft.language === "ru" ? "Увеличить" : "Increase"}
+                      onClick={() => updateEditorZoom(editorZoom + 10)}
+                    >
+                      <Plus size={13} />
+                    </button>
+                    {editorZoom !== 100 && (
+                      <button
+                        className="btn btn-tonal h-7 px-2 text-[10.5px]"
+                        onClick={() => updateEditorZoom(100)}
+                      >
+                        {draft.language === "ru" ? "Сброс" : "Reset"}
+                      </button>
+                    )}
+                  </div>
+                }
+              />
             </div>
 
             <p className="kicker pt-4 pb-2">Пути</p>
