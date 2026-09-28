@@ -175,7 +175,8 @@ namespace nd {
 // НОВОЕ v1.9.86: защита выведенных имён параметров методов от коллизий с зарезервированными ключевыми словами Java (class -> clazz, default и др.) при отсутствии LVT.
 // НОВОЕ v1.9.87: комплексное устранение ошибок сборки движка C++ в CI (Reader::remaining, CpEntry::long_value, Const::value, сигнатура MethodCall в invokedynamic, include sstream, Clang/macOS -fno-var-tracking флаги).
 // НОВОЕ v1.9.88: закрытие файла по Alt+W, обновление описания релизов в CI.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.88";
+// НОВОЕ v1.9.89: кроссплатформенный автоматический установщик обновлений через отдельный скрипт NewVerSetup (Windows/Linux/macOS).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.89";
 }
 
 
