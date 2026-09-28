@@ -96,21 +96,30 @@ jobs:
       # рядом нет бинарника). Собираем движок ЗДЕСЬ, кладём ПРЯМО в
       # resources/engine/ (плоско, не в dist/) ДО того, как electron-builder
       # упакует extraResources.
+      - name: Кэш ccache (Windows)
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ${{ runner.os }}-msys2-ccache-${{ hashFiles('resources/engine_cpp/include/**', 'resources/engine_cpp/src/**') }}
+          restore-keys: |
+            ${{ runner.os }}-msys2-ccache-
+
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
-          update: true
+          update: false
           install: >-
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-zlib
             mingw-w64-x86_64-make
+            mingw-w64-x86_64-ccache
 
       - name: Собрать NanoDecompilerCLI.exe
         shell: msys2 {0}
         working-directory: resources/engine_cpp
         run: |
-          cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
           cmake --build build --parallel
           cp build/NanoDecompilerCLI.exe ../engine/NanoDecompilerCLI.exe
 
@@ -154,11 +163,16 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Подготовить хэш зависимостей
+        shell: bash
+        run: |
+          node -e 'const p = require("./package.json"); console.log(JSON.stringify({d: p.dependencies, dd: p.devDependencies}))' > .deps-hash.json
+
       - name: Кэш node_modules (ускоряет CI - см. HANDOFF)
         uses: actions/cache@v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node20-${{ hashFiles('package.json') }}
+          key: ${{ runner.os }}-node20-${{ hashFiles('.deps-hash.json') }}
           restore-keys: |
             ${{ runner.os }}-node20-
 
@@ -190,13 +204,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Установить zlib dev-заголовки
-        run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
+      - name: Кэш ccache (Linux)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ${{ runner.os }}-ccache-${{ hashFiles('resources/engine_cpp/include/**', 'resources/engine_cpp/src/**') }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
+
+      - name: Установить zlib dev-заголовки и ccache
+        run: sudo apt-get update && sudo apt-get install -y zlib1g-dev ccache
 
       - name: Собрать NanoDecompilerCLI
         working-directory: resources/engine_cpp
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
           cmake --build build --parallel
           cp build/NanoDecompilerCLI ../engine/NanoDecompilerCLI
           chmod +x ../engine/NanoDecompilerCLI
@@ -217,11 +239,16 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Подготовить хэш зависимостей
+        shell: bash
+        run: |
+          node -e 'const p = require("./package.json"); console.log(JSON.stringify({d: p.dependencies, dd: p.devDependencies}))' > .deps-hash.json
+
       - name: Кэш node_modules (ускоряет CI - см. HANDOFF)
         uses: actions/cache@v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node20-${{ hashFiles('package.json') }}
+          key: ${{ runner.os }}-node20-${{ hashFiles('.deps-hash.json') }}
           restore-keys: |
             ${{ runner.os }}-node20-
 
@@ -251,15 +278,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Убедиться, что cmake есть (обычно уже стоит на macos-latest,
-          но не гарантированно на каждом образе раннера - не фатально, если
-          brew скажет "уже установлено")
-        run: brew install cmake --quiet || true
+      - name: Кэш ccache (macOS)
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ccache
+          key: ${{ runner.os }}-ccache-${{ hashFiles('resources/engine_cpp/include/**', 'resources/engine_cpp/src/**') }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
+
+      - name: Убедиться, что cmake и ccache есть
+        run: brew install cmake ccache --quiet || true
 
       - name: Собрать NanoDecompilerCLI
         working-directory: resources/engine_cpp
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
           cmake --build build --parallel
           cp build/NanoDecompilerCLI ../engine/NanoDecompilerCLI
           chmod +x ../engine/NanoDecompilerCLI
@@ -280,11 +313,16 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Подготовить хэш зависимостей
+        shell: bash
+        run: |
+          node -e 'const p = require("./package.json"); console.log(JSON.stringify({d: p.dependencies, dd: p.devDependencies}))' > .deps-hash.json
+
       - name: Кэш node_modules (ускоряет CI - см. HANDOFF)
         uses: actions/cache@v4
         with:
           path: node_modules
-          key: ${{ runner.os }}-node20-${{ hashFiles('package.json') }}
+          key: ${{ runner.os }}-node20-${{ hashFiles('.deps-hash.json') }}
           restore-keys: |
             ${{ runner.os }}-node20-
 
@@ -321,21 +359,31 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Кэш ccache (Windows)
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ${{ runner.os }}-msys2-ccache-${{ hashFiles('resources/engine_cpp/include/**', 'resources/engine_cpp/src/**') }}
+          restore-keys: |
+            ${{ runner.os }}-msys2-ccache-
+
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
-          update: true
+          update: false
           install: >-
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-zlib
             mingw-w64-x86_64-make
+            mingw-w64-x86_64-ccache
 
       - name: Собрать движок (Windows)
         shell: msys2 {0}
         working-directory: resources/engine_cpp
         run: |
-          cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
           cmake --build build --parallel
           cp build/NanoDecompilerCLI.exe ../../NanoDecompilerClApi.exe
 
@@ -368,12 +416,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Кэш ccache (Linux)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ${{ runner.os }}-ccache-${{ hashFiles('resources/engine_cpp/include/**', 'resources/engine_cpp/src/**') }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
+
       - name: Установить зависимости сборки
-        run: sudo apt-get update && sudo apt-get install -y build-essential zlib1g-dev
+        run: sudo apt-get update && sudo apt-get install -y build-essential zlib1g-dev ccache
 
       - name: Собрать движок (Linux)
         working-directory: resources/engine_cpp
-        run: g++ -std=c++17 -O2 -Iinclude src/*.cpp -lz -o ../../NanoDecompilerClApi
+        run: ccache g++ -std=c++17 -O2 -Iinclude src/*.cpp -lz -o ../../NanoDecompilerClApi
 
       - name: Проверка - бинарник реально работает
         run: |
@@ -394,9 +451,21 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Кэш ccache (macOS)
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ccache
+          key: ${{ runner.os }}-ccache-${{ hashFiles('resources/engine_cpp/include/**', 'resources/engine_cpp/src/**') }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
+
+      - name: Установить ccache
+        run: brew install ccache --quiet || true
+
       - name: Собрать движок (macOS)
         working-directory: resources/engine_cpp
-        run: g++ -std=c++17 -O2 -Iinclude src/*.cpp -lz -o ../../NanoDecompilerClApi
+        run: ccache g++ -std=c++17 -O2 -Iinclude src/*.cpp -lz -o ../../NanoDecompilerClApi
 
       - name: Проверка - бинарник реально работает
         run: |
