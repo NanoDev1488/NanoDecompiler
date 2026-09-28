@@ -503,9 +503,28 @@ void Structurer::check_full_coverage(int64_t entry_pc) {
     std::set<int64_t> real_missing;
     for (int64_t pc : missing) {
         const Block& b = cfg_.blocks.at(pc);
-        bool trampoline = b.instrs.size() == 1 && (b.instrs[0].mnemonic == "goto" || b.instrs[0].mnemonic == "goto_w") &&
-                          (!results_.count(pc) || results_.at(pc).stmts.empty());
-        if (!trampoline) real_missing.insert(pc);
+        bool empty_or_pure_jump = false;
+        if (b.instrs.empty()) {
+            empty_or_pure_jump = true;
+        } else if (b.instrs.size() == 1) {
+            const std::string& mn = b.instrs[0].mnemonic;
+            if (mn == "goto" || mn == "goto_w" || mn == "nop" || mn == "return") {
+                empty_or_pure_jump = true;
+            }
+        } else {
+            bool all_nops_or_goto = true;
+            for (const auto& ins : b.instrs) {
+                if (ins.mnemonic != "nop" && ins.mnemonic != "goto" && ins.mnemonic != "goto_w") {
+                    all_nops_or_goto = false;
+                    break;
+                }
+            }
+            if (all_nops_or_goto) empty_or_pure_jump = true;
+        }
+        bool has_stmts = results_.count(pc) && !results_.at(pc).stmts.empty();
+        if (!empty_or_pure_jump || has_stmts) {
+            real_missing.insert(pc);
+        }
     }
     if (!real_missing.empty()) {
         std::string msg = "после структуризации остались недостижимые из AST, но живые по CFG блоки: [";
