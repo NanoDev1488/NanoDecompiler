@@ -12,7 +12,12 @@ export function BugReportModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     textareaRef.current?.focus();
-  }, []);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const canSend = settings.telemetryEnabled && text.trim().length > 0 && !sending;
 

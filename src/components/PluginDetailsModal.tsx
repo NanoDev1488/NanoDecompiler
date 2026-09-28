@@ -27,6 +27,15 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
   const [ghResults, setGhResults] = useState<
     { name: string; fullName: string; url: string; description: string | null; stars: number }[] | null
   >(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const searchGithub = () => {
     setGhLoading(true);
     window.nano
