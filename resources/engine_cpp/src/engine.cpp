@@ -522,7 +522,15 @@ std::vector<StmtPtr> collapse_string_switch(const std::vector<StmtPtr>& stmts) {
             bool ok = true;
             for (auto& c : hsw->cases) {
                 if (c.is_default) {
-                    if (!c.body.empty()) { ok = false; break; }
+                    // default case может содержать только break; или быть пустым
+                    bool default_ok = c.body.empty();
+                    if (!default_ok) {
+                        default_ok = true;
+                        for (auto& ds : c.body) {
+                            if (ds->kind != StmtKind::BreakStmt) { default_ok = false; break; }
+                        }
+                    }
+                    if (!default_ok) { ok = false; break; }
                     continue;
                 }
                 auto m = match_hash_case(c.body, x_name, idx_name);
@@ -566,6 +574,236 @@ std::vector<StmtPtr> collapse_string_switch(const std::vector<StmtPtr>& stmts) {
         out.push_back(s);
         ++i;
     matched:;
+    }
+    return out;
+}
+
+// ---------------- _fold_if_else_ternary ----------------
+// Преобразует паттерн:
+//   if (cond) { x = A; } else { x = B; }
+// в:
+//   x = cond ? A : B;
+// Безопасно: обе ветки состоят ровно из одного присваивания в ОДНУ и ту
+// же переменную. Это один из основных источников "escaping local" -
+// переменная x объявлена внутри if/else, используется после.
+
+namespace {
+
+// Пытается извлечь из одноэлементного блока единственное присваивание
+// вида `target = value` (или LocalDecl target = value). Возвращает
+// {имя, значение}, или nullopt если не совпало.
+std::optional<std::pair<std::string, ExprPtr>> single_assign_stmt(const std::vector<StmtPtr>& body) {
+    if (body.size() != 1) return std::nullopt;
+    if (body[0]->kind == StmtKind::ExprStmt) {
+        auto* es = static_cast<ExprStmtNode*>(body[0].get());
+        if (es->expr->kind == ExprKind::Assign) {
+            auto* a = static_cast<Assign*>(es->expr.get());
+            if (a->target->kind == ExprKind::Local && a->op == "=") {
+                return std::make_pair(static_cast<Local*>(a->target.get())->name, a->value);
+            }
+        }
+    } else if (body[0]->kind == StmtKind::LocalDecl) {
+        auto* ld = static_cast<LocalDecl*>(body[0].get());
+        if (ld->init) {
+            return std::make_pair(ld->name, ld->init);
+        }
+    }
+    return std::nullopt;
+}
+
+}  // namespace
+
+std::vector<StmtPtr> fold_if_else_ternary(const std::vector<StmtPtr>& stmts) {
+    std::vector<StmtPtr> out;
+    for (auto s : stmts) {
+        // Рекурсия вглубь
+        if (s->kind == StmtKind::IfStmt) {
+            auto* i = static_cast<IfStmt*>(s.get());
+            i->then_body = fold_if_else_ternary(i->then_body);
+            if (i->else_body.has_value()) i->else_body = fold_if_else_ternary(*i->else_body);
+        } else if (s->kind == StmtKind::WhileStmt) {
+            static_cast<WhileStmt*>(s.get())->body = fold_if_else_ternary(static_cast<WhileStmt*>(s.get())->body);
+        } else if (s->kind == StmtKind::DoWhileStmt) {
+            static_cast<DoWhileStmt*>(s.get())->body = fold_if_else_ternary(static_cast<DoWhileStmt*>(s.get())->body);
+        } else if (s->kind == StmtKind::ForStmt) {
+            static_cast<ForStmt*>(s.get())->body = fold_if_else_ternary(static_cast<ForStmt*>(s.get())->body);
+        } else if (s->kind == StmtKind::SyncStmt) {
+            static_cast<SyncStmt*>(s.get())->body = fold_if_else_ternary(static_cast<SyncStmt*>(s.get())->body);
+        } else if (s->kind == StmtKind::BlockStmt) {
+            static_cast<BlockStmt*>(s.get())->stmts = fold_if_else_ternary(static_cast<BlockStmt*>(s.get())->stmts);
+        } else if (s->kind == StmtKind::SwitchStmt) {
+            for (auto& c : static_cast<SwitchStmt*>(s.get())->cases) c.body = fold_if_else_ternary(c.body);
+        } else if (s->kind == StmtKind::TryStmt) {
+            auto* t = static_cast<TryStmt*>(s.get());
+            t->body = fold_if_else_ternary(t->body);
+            for (auto& c : t->catches) c.body = fold_if_else_ternary(c.body);
+            if (t->finally_body.has_value()) t->finally_body = fold_if_else_ternary(*t->finally_body);
+        }
+
+        // Проверяем: if (cond) { x = A; } else { x = B; } → x = cond ? A : B
+        if (s->kind == StmtKind::IfStmt) {
+            auto* i = static_cast<IfStmt*>(s.get());
+            if (i->else_body.has_value()) {
+                auto thn = single_assign_stmt(i->then_body);
+                auto els = single_assign_stmt(*i->else_body);
+                if (thn.has_value() && els.has_value() && thn->first == els->first) {
+                    // Совпадают имена целевой переменной - можно свернуть в ternary
+                    std::string rtype = thn->second->type;
+                    if (rtype.empty()) rtype = els->second->type;
+                    if (rtype.empty()) rtype = "Object";
+                    auto ternary = std::make_shared<Ternary>(i->cond, thn->second, els->second, rtype);
+                    out.push_back(std::make_shared<ExprStmtNode>(
+                        std::make_shared<Assign>(std::make_shared<Local>(thn->first, rtype), ternary)));
+                    continue;
+                }
+            }
+        }
+        out.push_back(s);
+    }
+    return out;
+}
+
+// ---------------- _eliminate_dead_locals ----------------
+// Удаляет LocalDecl x = ..., если x больше НИГДЕ не используется ниже
+// по списку (и не внутри вложенных блоков). Типичный случай: после
+// collapse_string_switch осталось `int var8 = -1;` - больше нигде не
+// используется (сам switch на var8 уже удалён/слит).
+
+bool uses_name_in_expr(const ExprPtr& e, const std::string& name);
+
+bool uses_name_in_stmts(const std::vector<StmtPtr>& stmts, const std::string& name) {
+    for (auto& s : stmts) {
+        if (s->kind == StmtKind::ExprStmt) {
+            if (uses_name_in_expr(static_cast<ExprStmtNode*>(s.get())->expr, name)) return true;
+        } else if (s->kind == StmtKind::LocalDecl) {
+            auto* ld = static_cast<LocalDecl*>(s.get());
+            if (ld->name == name) return true;
+            if (ld->init && uses_name_in_expr(ld->init, name)) return true;
+        } else if (s->kind == StmtKind::ReturnStmt) {
+            auto* r = static_cast<ReturnStmt*>(s.get());
+            if (r->expr && uses_name_in_expr(r->expr, name)) return true;
+        } else if (s->kind == StmtKind::ThrowStmt) {
+            if (uses_name_in_expr(static_cast<ThrowStmt*>(s.get())->expr, name)) return true;
+        } else if (s->kind == StmtKind::IfStmt) {
+            auto* i = static_cast<IfStmt*>(s.get());
+            if (uses_name_in_expr(i->cond, name)) return true;
+            if (uses_name_in_stmts(i->then_body, name)) return true;
+            if (i->else_body.has_value() && uses_name_in_stmts(*i->else_body, name)) return true;
+        } else if (s->kind == StmtKind::WhileStmt) {
+            auto* w = static_cast<WhileStmt*>(s.get());
+            if (uses_name_in_expr(w->cond, name)) return true;
+            if (uses_name_in_stmts(w->body, name)) return true;
+        } else if (s->kind == StmtKind::DoWhileStmt) {
+            auto* w = static_cast<DoWhileStmt*>(s.get());
+            if (uses_name_in_expr(w->cond, name)) return true;
+            if (uses_name_in_stmts(w->body, name)) return true;
+        } else if (s->kind == StmtKind::ForStmt) {
+            auto* f = static_cast<ForStmt*>(s.get());
+            if (f->init && uses_name_in_expr(static_cast<ExprStmtNode*>(f->init.get())->expr, name)) return true;
+            if (f->cond && uses_name_in_expr(f->cond, name)) return true;
+            if (uses_name_in_stmts(f->body, name)) return true;
+        } else if (s->kind == StmtKind::SwitchStmt) {
+            auto* sw = static_cast<SwitchStmt*>(s.get());
+            if (uses_name_in_expr(sw->selector, name)) return true;
+            for (auto& c : sw->cases) {
+                if (uses_name_in_stmts(c.body, name)) return true;
+            }
+        } else if (s->kind == StmtKind::SyncStmt) {
+            auto* sy = static_cast<SyncStmt*>(s.get());
+            if (uses_name_in_expr(sy->expr, name)) return true;
+            if (uses_name_in_stmts(sy->body, name)) return true;
+        } else if (s->kind == StmtKind::BlockStmt) {
+            if (uses_name_in_stmts(static_cast<BlockStmt*>(s.get())->stmts, name)) return true;
+        } else if (s->kind == StmtKind::TryStmt) {
+            auto* t = static_cast<TryStmt*>(s.get());
+            if (uses_name_in_stmts(t->body, name)) return true;
+            for (auto& c : t->catches) {
+                if (uses_name_in_stmts(c.body, name)) return true;
+            }
+            if (t->finally_body.has_value() && uses_name_in_stmts(*t->finally_body, name)) return true;
+        }
+    }
+    return false;
+}
+
+bool uses_name_in_expr(const ExprPtr& e, const std::string& name) {
+    if (!e) return false;
+    if (e->kind == ExprKind::Local) return static_cast<Local*>(e.get())->name == name;
+    if (e->kind == ExprKind::Assign) {
+        auto* a = static_cast<Assign*>(e.get());
+        return uses_name_in_expr(a->target, name) || uses_name_in_expr(a->value, name);
+    }
+    if (e->kind == ExprKind::MethodCall) {
+        auto* mc = static_cast<MethodCall*>(e.get());
+        if (uses_name_in_expr(mc->target, name)) return true;
+        for (auto& arg : mc->args) {
+            if (uses_name_in_expr(arg, name)) return true;
+        }
+        return false;
+    }
+    if (e->kind == ExprKind::BinOp) {
+        auto* b = static_cast<BinOp*>(e.get());
+        return uses_name_in_expr(b->left, name) || uses_name_in_expr(b->right, name);
+    }
+    if (e->kind == ExprKind::UnOp) {
+        return uses_name_in_expr(static_cast<UnOp*>(e.get())->expr, name);
+    }
+    if (e->kind == ExprKind::Ternary) {
+        auto* t = static_cast<Ternary*>(e.get());
+        return uses_name_in_expr(t->cond, name) || uses_name_in_expr(t->tval, name) || uses_name_in_expr(t->fval, name);
+    }
+    if (e->kind == ExprKind::Cast) {
+        return uses_name_in_expr(static_cast<CastExpr*>(e.get())->expr, name);
+    }
+    if (e->kind == ExprKind::InstanceOf) {
+        return uses_name_in_expr(static_cast<InstanceOf*>(e.get())->expr, name);
+    }
+    if (e->kind == ExprKind::FieldAccess) {
+        return uses_name_in_expr(static_cast<FieldAccess*>(e.get())->target, name);
+    }
+    if (e->kind == ExprKind::ArrayAccess) {
+        auto* aa = static_cast<ArrayAccess*>(e.get());
+        return uses_name_in_expr(aa->array, name) || uses_name_in_expr(aa->index, name);
+    }
+    if (e->kind == ExprKind::NewArray) {
+        auto* na = static_cast<NewArray*>(e.get());
+        for (auto& d : na->dims) {
+            if (uses_name_in_expr(d, name)) return true;
+        }
+        if (na->initializer.has_value()) {
+            for (auto& v : *na->initializer) {
+                if (uses_name_in_expr(v, name)) return true;
+            }
+        }
+        return false;
+    }
+    if (e->kind == ExprKind::NewObject) {
+        auto* no = static_cast<NewObject*>(e.get());
+        for (auto& arg : no->args) {
+            if (uses_name_in_expr(arg, name)) return true;
+        }
+        return false;
+    }
+    return false;
+}
+
+std::vector<StmtPtr> eliminate_dead_locals(const std::vector<StmtPtr>& stmts) {
+    std::vector<StmtPtr> out;
+    for (size_t i = 0; i < stmts.size(); ++i) {
+        if (stmts[i]->kind == StmtKind::LocalDecl) {
+            auto* ld = static_cast<LocalDecl*>(stmts[i].get());
+            // Если init - чистое выражение (const/literal) без побочных эффектов,
+            // и имя НЕ используется нигде дальше - пропускаем объявление
+            bool init_pure = !ld->init || ld->init->kind == ExprKind::Const ||
+                             (ld->init->kind == ExprKind::UnOp && static_cast<UnOp*>(ld->init.get())->expr->kind == ExprKind::Const);
+            if (init_pure) {
+                std::vector<StmtPtr> rest(stmts.begin() + static_cast<long>(i) + 1, stmts.end());
+                if (!uses_name_in_stmts(rest, ld->name)) {
+                    continue;  // мёртвый код - пропускаем
+                }
+            }
+        }
+        out.push_back(stmts[i]);
     }
     return out;
 }
@@ -2169,9 +2407,12 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
         }
         for (auto& [name, t] : ctx.crossing_temp_types) declared_seed[name] = t;
         stmts = ensure_local_declarations(stmts, declared_seed);
+        stmts = fold_if_else_ternary(stmts);
         {
             std::set<std::string> declared_so_far;
-            stmts = hoist_escaping_locals(stmts, declared_so_far);
+            for (int pass = 0; pass < 3; ++pass) {
+                stmts = hoist_escaping_locals(stmts, declared_so_far);
+            }
         }
         // НОВОЕ: схлопываем javac-паттерн switch(x.hashCode())+.equals() обратно
         // в нормальный switch(String) - см. collapse_string_switch выше. ДО
@@ -2180,6 +2421,7 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
         // и часть методов, раньше падавших в fallback именно из-за неё,
         // теперь пройдут структуризацию успешно.
         stmts = collapse_string_switch(stmts);
+        stmts = eliminate_dead_locals(stmts);
         collapse_sb_in_stmts(stmts);
         prune_unused_imports(stmts, ctx);
         if (contains_unfolded_monitor(stmts)) throw DecompileAbort("synchronized-блок не свёрнут (monitorenter/monitorexit)");

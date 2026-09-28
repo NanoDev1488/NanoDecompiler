@@ -102,5 +102,8 @@ namespace nd {
 // НОВОЕ v1.9.19: оптимизация декомпиляции выражений в движке (агрессивный инлайнинг
 // single-use временных переменных __stkX / stack crossing temps), автоматическое удаление
 // неиспользуемых заголовочных объявлений, расширение распознавания Quilt mod манифестов.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.19";
+// НОВОЕ v1.9.20: улучшение декомпилятора C++ — свёртка if-else в тернарный оператор (Ternary),
+// многопроходный hoisting escaping-переменных для глубоко вложенных блоков, поддержка break в default case
+// switch(String.hashCode()), очистка мёртвых локальных объявлений после схлопывания switch.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.20";
 }
