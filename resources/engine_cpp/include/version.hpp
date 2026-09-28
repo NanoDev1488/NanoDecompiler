@@ -156,5 +156,6 @@ namespace nd {
 // НОВОЕ v1.9.67: точный рендеринг модификаторов доступа (static, private, protected) для внутренних и вложенных классов из таблицы InnerClasses.
 // НОВОЕ v1.9.68: расширенный нечёткий (fuzzy) и мультитокенный поиск команд в командной палитре (Ctrl+K).
 // НОВОЕ v1.9.69: поддержка sealed-классов Java 17+ (парсинг атрибута PermittedSubclasses, рендеринг модификатора sealed и секции permits).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.69";
+// НОВОЕ v1.9.70: извлечение контрольных сумм CRC32 и безопасная обработка пустых (0 байт) файлов при распаковке ZIP/JAR.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.70";
 }

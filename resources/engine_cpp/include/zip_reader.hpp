@@ -17,6 +17,7 @@ struct ZipEntryInfo {
     std::string name;
     uint64_t uncompressed_size = 0;
     uint64_t compressed_size = 0;
+    uint32_t crc32 = 0;
     uint16_t compression_method = 0;  // 0 = STORED, 8 = DEFLATE (два практически всегда встречающихся в jar)
 };
 

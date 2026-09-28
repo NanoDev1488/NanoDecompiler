@@ -90,6 +90,7 @@ ZipReader::ZipReader(const std::string& path) : path_(path) {
         if (pos + 46 > cd.size()) break;
         if (!(cd[pos] == 0x50 && cd[pos + 1] == 0x4b && cd[pos + 2] == 0x01 && cd[pos + 3] == 0x02)) break;
         uint16_t method = rd_u16(&cd[pos + 10]);
+        uint32_t crc32_val = rd_u32(&cd[pos + 16]);
         uint32_t compressed_size_cd = rd_u32(&cd[pos + 20]);
         uint32_t uncompressed_size = rd_u32(&cd[pos + 24]);
         uint16_t name_len = rd_u16(&cd[pos + 28]);
@@ -120,6 +121,7 @@ ZipReader::ZipReader(const std::string& path) : path_(path) {
         info.name = clean_name;
         info.uncompressed_size = uncompressed_size;
         info.compressed_size = compressed_size_cd;
+        info.crc32 = crc32_val;
         info.compression_method = method;
         entries_[clean_name] = info;
         order_.push_back(clean_name);
@@ -153,6 +155,10 @@ std::vector<uint8_t> ZipReader::read(const std::string& name) const {
     f.seekg(local_offset + 30 + name_len + extra_len);
 
     const ZipEntryInfo& info = it->second;
+    if (info.uncompressed_size == 0) {
+        return {};
+    }
+
     // Размер сжатых данных берём ИЗ ЦЕНТРАЛЬНОГО КАТАЛОГА (info.compressed_size),
     // а НЕ из локального заголовка - когда архиватор писал запись потоково
     // (general purpose flag bit 3, "data descriptor"), поля crc32/размеров
