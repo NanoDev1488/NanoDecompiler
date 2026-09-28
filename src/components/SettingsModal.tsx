@@ -1,5 +1,5 @@
 import { Check, FolderOpen, Loader2, Minus, Plus, Send, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useEngine } from "../state/engine";
 import { Toggle, Kbd } from "./ui";
 import { cn } from "../utils/cn";
@@ -64,6 +64,14 @@ export function SettingsModal() {
   const [tab, setTab] = useState<Tab>("general");
   // НОВОЕ v1.7.6: под-вкладки внутри "О сервисе" - см. рендер ниже.
   const [aboutSubTab, setAboutSubTab] = useState<"overview" | "features" | "team">("overview");
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSettingsOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [setSettingsOpen]);
 
   const checkEngine = () => {
     setChecking("busy");

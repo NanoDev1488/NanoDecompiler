@@ -1320,7 +1320,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
         openFileDialog();
       } else if (mod && e.key === ",") {
         e.preventDefault();
-        setSettingsOpen(true);
+        setSettingsOpen(v => !v);
       } else if (mod && e.key.toLowerCase() === "l") {
         e.preventDefault();
         setLog([]);
