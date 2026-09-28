@@ -853,6 +853,23 @@ std::pair<StmtPtr, std::optional<int64_t>> Structurer::build_if_inner(int64_t pc
     } else {
         else_body = std::nullopt;
     }
+    if (then_body.size() == 1 && else_body.has_value() && else_body->size() == 1) {
+        auto* ret_then = dynamic_cast<ReturnStmt*>(then_body[0].get());
+        auto* ret_else = dynamic_cast<ReturnStmt*>((*else_body)[0].get());
+        if (ret_then != nullptr && ret_then->expr != nullptr &&
+            ret_else != nullptr && ret_else->expr != nullptr) {
+            auto* const_then = dynamic_cast<Const*>(ret_then->expr.get());
+            auto* const_else = dynamic_cast<Const*>(ret_else->expr.get());
+            if (const_then != nullptr && const_else != nullptr &&
+                const_then->type == "boolean" && const_else->type == "boolean") {
+                if (const_then->value == "true" && const_else->value == "false") {
+                    return {std::make_shared<ReturnStmt>(cond), merge};
+                } else if (const_then->value == "false" && const_else->value == "true") {
+                    return {std::make_shared<ReturnStmt>(negate(cond)), merge};
+                }
+            }
+        }
+    }
     auto stmt = std::make_shared<IfStmt>(cond, then_body, else_body);
     return {stmt, merge};
 }
