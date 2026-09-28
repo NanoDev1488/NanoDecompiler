@@ -4,6 +4,7 @@ import { useEngine } from "../state/engine";
 import { FileTree } from "./FileTree";
 import { CodeView } from "./CodeView";
 import { fmtBytes } from "../lib/model";
+import { t } from "../lib/i18n";
 
 function Centered({ children }: { children: ReactNode }) {
   return (
@@ -20,28 +21,32 @@ function Centered({ children }: { children: ReactNode }) {
 // чистом C++, Java для декомпиляции не нужна вообще, это никогда не
 // блокирует работу - баннер занижен по тревожности и текст честный.
 function EnvBanner() {
-  const { resolveEnvIssue, setSettingsOpen } = useEngine();
+  const { resolveEnvIssue, setSettingsOpen, settings } = useEngine();
+  const lang = settings.language;
   return (
     <div className="flex flex-none items-center gap-3 border-b border-line bg-raised/40 px-4 py-2">
       <TriangleAlert size={14} className="flex-none text-warn/70" />
       <div className="min-w-0 flex-1">
         <p className="text-[12px] text-dim">
-          Java не найдена — это не мешает декомпиляции, нужна только для ручной сборки (mvn compile) результата.
+          {lang === "ru"
+            ? "Java не найдена — это не мешает декомпиляции, нужна только для ручной сборки (mvn compile) результата."
+            : "Java not found — this does not prevent decompilation, only needed for manual build (mvn compile)."}
         </p>
       </div>
       <button className="btn btn-ghost h-6 text-[11px]" onClick={resolveEnvIssue}>
-        Проверить снова
+        {t(lang, "settings.recheck")}
       </button>
       <button className="btn btn-ghost h-6 text-[11px]" onClick={() => setSettingsOpen(true)}>
-        Настройки
+        {t(lang, "app.settings")}
       </button>
     </div>
   );
 }
 
 export function Workspace() {
-  const { jobs, selectedJob, openFileByJob, selectFile, startQueue, openFileDialog, log, envIssue } =
+  const { jobs, selectedJob, openFileByJob, selectFile, startQueue, openFileDialog, log, envIssue, settings } =
     useEngine();
+  const lang = settings.language;
 
   const lastPhase = useMemo(() => {
     if (!selectedJob) return null;
@@ -84,7 +89,7 @@ export function Workspace() {
         {envIssue && <EnvBanner />}
         <Centered>
           <div className="flex items-baseline justify-between gap-4">
-            <span className="kicker">Декомпиляция</span>
+            <span className="kicker">{lang === "ru" ? "Декомпиляция" : "Decompilation"}</span>
             <span className="mono text-[34px] leading-none font-semibold text-acid tabular-nums">
               {pct}
               <span className="text-[16px] text-dim">%</span>
@@ -96,10 +101,12 @@ export function Workspace() {
           </div>
           <p className="mono mt-3 flex min-h-[18px] items-center gap-2 text-[11px] text-faint">
             <span className="dot bg-acid animate-pulse-dot" />
-            <span className="truncate">{selectedJob.phase ?? lastPhase ?? "подготовка…"}</span>
+            <span className="truncate">{selectedJob.phase ?? lastPhase ?? (lang === "ru" ? "подготовка…" : "preparing…")}</span>
           </p>
           <p className="mono mt-1 text-[11px] text-faint">
-            прошло {(selectedJob.elapsedMs / 1000).toFixed(1)} s · детали — в терминале ниже
+            {lang === "ru"
+              ? `прошло ${(selectedJob.elapsedMs / 1000).toFixed(1)} s · детали — в терминале ниже`
+              : `elapsed ${(selectedJob.elapsedMs / 1000).toFixed(1)} s · details in terminal below`}
           </p>
         </Centered>
       </div>
@@ -116,25 +123,27 @@ export function Workspace() {
         <Centered>
           <span className="kicker">
             {selectedJob.status === "failed"
-              ? "Ошибка"
+              ? (lang === "ru" ? "Ошибка" : "Error")
               : selectedJob.status === "canceled"
-                ? "Остановлено"
-                : "В очереди"}
+                ? (lang === "ru" ? "Остановлено" : "Stopped")
+                : (lang === "ru" ? "В очереди" : "In Queue")}
           </span>
           <p className="mono mt-3 text-[15px] font-semibold text-ink">{selectedJob.fileName}</p>
           <p className="mono mt-1.5 text-[11.5px] text-faint">
             {fmtBytes(selectedJob.sizeBytes)}
-            {selectedJob.status === "queued" && position > 0 && ` · позиция ${position}`}
-            {selectedJob.status === "canceled" && " · прогресс не сохранён"}
+            {selectedJob.status === "queued" && position > 0 && ` · ${lang === "ru" ? `позиция ${position}` : `position ${position}`}`}
+            {selectedJob.status === "canceled" && (lang === "ru" ? " · прогресс не сохранён" : " · progress not saved")}
             {selectedJob.status === "failed" && (selectedJob.error ? ` · ${selectedJob.error}` : "")}
           </p>
           <div className="mt-5 flex items-center gap-2">
             <button className="btn btn-acid" onClick={startQueue}>
               <Play size={14} />
-              {isNext ? "Запустить" : pendingIds.length > 1 ? "Запустить очередь" : "Запустить"}
+              {isNext ? t(lang, "app.start") : pendingIds.length > 1 ? (lang === "ru" ? "Запустить очередь" : "Start queue") : t(lang, "app.start")}
             </button>
             {selectedJob.classCount === null && (
-              <span className="mono text-[10.5px] text-faint">архив будет просканирован при запуске</span>
+              <span className="mono text-[10.5px] text-faint">
+                {lang === "ru" ? "архив будет просканирован при запуске" : "archive will be scanned on start"}
+              </span>
             )}
           </div>
         </Centered>
@@ -151,16 +160,19 @@ export function Workspace() {
           <FileArchive size={18} className="text-dim" />
         </div>
         <p className="mt-4 text-[15px] font-semibold text-ink">
-          {jobs.length === 0 ? "Пока нечего декомпилировать." : "Задача не выбрана."}
+          {jobs.length === 0
+            ? (lang === "ru" ? "Пока нечего декомпилировать." : "Nothing to decompile yet.")
+            : (lang === "ru" ? "Задача не выбрана." : "No job selected.")}
         </p>
         <p className="mt-2 max-w-[420px] text-[12.5px] leading-relaxed text-dim">
-          Добавьте .jar слева. Движок распакует архив, восстановит .java и покажет дерево классов
-          на этом месте.
+          {lang === "ru"
+            ? "Добавьте .jar слева. Движок распакует архив, восстановит .java и покажет дерево классов на этом месте."
+            : "Add a .jar on the left. The engine will unpack the archive, restore .java, and show class tree here."}
         </p>
         <div className="mt-5">
           <button className="btn btn-tonal" onClick={openFileDialog}>
             <FileArchive size={14} />
-            Выбрать .jar
+            {t(lang, "workspace.select_jar")}
           </button>
         </div>
       </Centered>

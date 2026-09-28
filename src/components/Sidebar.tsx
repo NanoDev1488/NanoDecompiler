@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useEngine } from "../state/engine";
 import { useResizeDrag } from "../lib/useResize";
 import { fmtBytes, fmtNum, fmtSeconds, type Job } from "../lib/model";
+import { t, type Lang } from "../lib/i18n";
 import { cn } from "../utils/cn";
 import { PluginDetailsModal } from "./PluginDetailsModal";
 
@@ -13,45 +14,26 @@ function StatusDot({ job }: { job: Job }) {
   return <span className="dot dot-hollow" />;
 }
 
-function statusLine(job: Job): string {
+function statusLine(job: Job, lang: Lang): string {
   switch (job.status) {
     case "queued":
-      return job.classCount === null ? "в очереди · архив не сканирован" : "в очереди";
+      return job.classCount === null
+        ? (lang === "ru" ? "в очереди · архив не сканирован" : "in queue · archive not scanned")
+        : t(lang, "sidebar.status.queued");
     case "running":
-      return "декомпиляция…";
+      return t(lang, "sidebar.status.running");
     case "done":
-      // БАГ-ФИКС v1.7.2 (HANDOFF_NEXT_AGENT_HANDOVER п.15/18): classCount -
-      // это СЫРОЙ подсчёт .class-записей в архиве (jarSummary.ts/
-      // jar_summary.cpp читают ZIP-листинг напрямую, ДО декомпиляции - без
-      // фильтра известных библиотек, который применяет сам движок). На
-      // jar с забандленными библиотеками (h2/protobuf/gson и т.п.) это
-      // число может СИЛЬНО отличаться от терминального "X из Y методов" -
-      // не потому что где-то баг, а потому что это принципиально разные
-      // подсчёты (весь архив vs код именно плагина). Явно называем это
-      // "в архиве", чтобы не выглядело как нестыковка/баг статистики.
-      return `${fmtNum(job.classCount ?? 0)} классов в архиве · ${fmtSeconds(job.elapsedMs)}`;
+      return `${fmtNum(job.classCount ?? 0)} ${lang === "ru" ? "классов в архиве" : "classes in archive"} · ${fmtSeconds(job.elapsedMs)}`;
     case "canceled":
-      return "остановлено — запустите снова";
+      return lang === "ru" ? "остановлено — запустите снова" : "stopped — run again";
     case "failed":
-      return job.error ?? "ошибка движка";
+      return job.error ?? (lang === "ru" ? "ошибка движка" : "engine error");
   }
 }
 
-// БАГ-ФИКС v1.9.13 (tsc TS2322 "'key' does not exist in type"):
-// React's `key` - зарезервированный проп React, он НИКОГДА не входит в
-// пользовательские пропсы компонента по дизайну React/TS. tsc до v5.1
-// некорректно (false-positive) флагировал `key={...}` на inline-объявленных
-// пропсах как ошибку - именованный тип через `type` решает это без
-// изменения логики.
-type JobCardProps = { job: Job; selected: boolean };
-function JobCard({ job, selected }: JobCardProps) {
+type JobCardProps = { job: Job; selected: boolean; lang: Lang };
+function JobCard({ job, selected, lang }: JobCardProps) {
   const { selectJob, cancelJob, removeJob, openOutput } = useEngine();
-  // НОВОЕ v1.8.0 (реальный запрос - мини-карточка плагина с "..."-меню:
-  // "открыть папку результата" + "детальнейшая информация"). Меню - свой
-  // минимальный попап (в проекте нет кастомного dropdown-компонента,
-  // строить полноценный только ради этого - лишний риск непроверенной
-  // визуально фичи), закрывается кликом по фону (тот же паттерн, что и
-  // модалки настроек) или повторным кликом по кнопке.
   const [menuOpen, setMenuOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
@@ -76,7 +58,7 @@ function JobCard({ job, selected }: JobCardProps) {
 
         <button
           className="icon-btn h-6 w-6 rounded-md"
-          title="Ещё"
+          title={lang === "ru" ? "Ещё" : "More"}
           onClick={e => {
             e.stopPropagation();
             setMenuOpen(v => !v);
@@ -88,10 +70,10 @@ function JobCard({ job, selected }: JobCardProps) {
           className="icon-btn h-6 w-6 rounded-md"
           title={
             job.status === "running"
-              ? "Остановить"
+              ? t(lang, "app.stop")
               : job.status === "queued"
-                ? "Убрать из очереди"
-                : "Удалить из списка"
+                ? (lang === "ru" ? "Убрать из очереди" : "Remove from queue")
+                : t(lang, "sidebar.remove")
           }
           onClick={e => {
             e.stopPropagation();
@@ -120,7 +102,7 @@ function JobCard({ job, selected }: JobCardProps) {
               }}
             >
               <FolderOpen size={12} />
-              Открыть папку результата
+              {t(lang, "sidebar.open_output")}
             </button>
             <button
               className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-ink/90 hover:bg-raised"
@@ -130,7 +112,7 @@ function JobCard({ job, selected }: JobCardProps) {
               }}
             >
               <MoreVertical size={12} className="rotate-90" />
-              Подробная информация
+              {t(lang, "sidebar.details")}
             </button>
           </div>
         </>
@@ -139,7 +121,7 @@ function JobCard({ job, selected }: JobCardProps) {
 
       <div className="mono mt-1.5 pl-[15px] text-[11px] text-faint">
         {fmtBytes(job.sizeBytes)}
-        {job.classCount !== null && ` · ${fmtNum(job.classCount)} классов`}
+        {job.classCount !== null && ` · ${fmtNum(job.classCount)} ${lang === "ru" ? "классов" : "classes"}`}
       </div>
       <div
         className={cn(
@@ -147,7 +129,7 @@ function JobCard({ job, selected }: JobCardProps) {
           job.status === "failed" ? "text-err" : job.status === "done" ? "text-dim" : "text-faint",
         )}
       >
-        {statusLine(job)}
+        {statusLine(job, lang)}
       </div>
 
       {job.status === "running" && (
@@ -166,7 +148,8 @@ function JobCard({ job, selected }: JobCardProps) {
 }
 
 export function Sidebar() {
-  const { jobs, selectedJobId, addFiles, openFileDialog, clearQueue, sidebarWidth, setSidebarWidth } = useEngine();
+  const { jobs, selectedJobId, settings, addFiles, openFileDialog, clearQueue, sidebarWidth, setSidebarWidth } = useEngine();
+  const lang = settings.language;
   const [dragActive, setDragActive] = useState(false);
   const onResizeDown = useResizeDrag("x", sidebarWidth, setSidebarWidth, 220, 480);
 
@@ -179,12 +162,12 @@ export function Sidebar() {
         <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-line-strong opacity-0 transition-opacity group-hover:opacity-100 group-active:bg-acid group-active:opacity-100" />
       </div>
       <div className="flex h-9 flex-none items-center gap-2 border-b border-line px-3">
-        <span className="kicker">Входные архивы</span>
+        <span className="kicker">{lang === "ru" ? "Входные архивы" : "Input archives"}</span>
         <span className="chip h-[18px] px-1.5 text-[10px]">{jobs.length}</span>
         <div className="flex-1" />
         <button
           className="icon-btn h-6 w-6 rounded-md"
-          title="Очистить список"
+          title={lang === "ru" ? "Очистить список" : "Clear list"}
           onClick={clearQueue}
           disabled={jobs.length === 0}
         >
@@ -217,22 +200,36 @@ export function Sidebar() {
         >
           <FileArchive size={18} className={dragActive ? "text-acid" : "text-faint"} />
           <p className="text-[12.5px] font-medium text-ink/90">
-            {dragActive ? "Отпускайте — добавлю в очередь" : "Перетащите .jar сюда"}
+            {dragActive
+              ? (lang === "ru" ? "Отпускайте — добавлю в очередь" : "Drop to add to queue")
+              : (lang === "ru" ? "Перетащите .jar сюда" : "Drag .jar here")}
           </p>
-          <p className="mono text-[10.5px] text-faint">или нажмите, чтобы выбрать · только .jar</p>
+          <p className="mono text-[10.5px] text-faint">
+            {lang === "ru" ? "или нажмите, чтобы выбрать · только .jar" : "or click to select · .jar only"}
+          </p>
         </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2.5 pb-2.5">
         {jobs.length === 0 && (
           <p className="mono px-1 pt-2 text-[11px] leading-relaxed text-faint">
-            // очередь пуста.
-            <br />
-            // добавьте архив — движок разберёт его на .java
+            {lang === "ru" ? (
+              <>
+                // очередь пуста.
+                <br />
+                // добавьте архив — движок разберёт его на .java
+              </>
+            ) : (
+              <>
+                // queue is empty.
+                <br />
+                // add an archive — engine will decompile to .java
+              </>
+            )}
           </p>
         )}
         {jobs.map(j => (
-          <JobCard key={j.id} job={j} selected={selectedJobId === j.id} />
+          <JobCard key={j.id} job={j} selected={selectedJobId === j.id} lang={lang} />
         ))}
       </div>
     </aside>

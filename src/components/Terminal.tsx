@@ -2,6 +2,7 @@ import { ArrowDownToLine, ChevronDown, ChevronUp, Copy, Trash2 } from "lucide-re
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useEngine } from "../state/engine";
 import { fmtClock, type LogFilter, type LogLevel } from "../lib/model";
+import { t } from "../lib/i18n";
 import { cn } from "../utils/cn";
 import { useResizeDrag } from "../lib/useResize";
 
@@ -12,17 +13,10 @@ const TAG_COLOR: Record<LogLevel, string> = {
   err: "text-err",
 };
 
-const FILTERS: Array<{ id: LogFilter; label: string }> = [
-  { id: "all", label: "все" },
-  { id: "info", label: "info" },
-  { id: "ok", label: "ok" },
-  { id: "warn", label: "warn" },
-  { id: "err", label: "err" },
-];
-
 export function Terminal() {
-  const { log, logFilter, setLogFilter, terminalOpen, toggleTerminal, clearLog, copyLog, runningJob, terminalHeight, setTerminalHeight } =
+  const { log, logFilter, setLogFilter, terminalOpen, toggleTerminal, clearLog, copyLog, runningJob, terminalHeight, setTerminalHeight, settings } =
     useEngine();
+  const lang = settings.language;
   const [stick, setStick] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   // БАГ-ФИКС v1.7.3 (найдено сторонним ревью - реальная регрессия из
@@ -99,6 +93,17 @@ export function Terminal() {
     setStick(true);
   };
 
+  const filters: Array<{ id: LogFilter; label: string }> = useMemo(
+    () => [
+      { id: "all", label: t(lang, "term.filter_all") },
+      { id: "info", label: "info" },
+      { id: "ok", label: "ok" },
+      { id: "warn", label: t(lang, "term.filter_warn") },
+      { id: "err", label: t(lang, "term.filter_err") },
+    ],
+    [lang],
+  );
+
   return (
     <div
       className={cn(
@@ -119,9 +124,9 @@ export function Terminal() {
         <button
           onClick={toggleTerminal}
           className="flex items-center gap-1.5"
-          title={terminalOpen ? "Свернуть терминал" : "Развернуть терминал"}
+          title={terminalOpen ? (lang === "ru" ? "Свернуть терминал" : "Collapse terminal") : (lang === "ru" ? "Развернуть терминал" : "Expand terminal")}
         >
-          <span className="kicker hover:text-dim">Терминал</span>
+          <span className="kicker hover:text-dim">{lang === "ru" ? "Терминал" : "Terminal"}</span>
           {terminalOpen ? (
             <ChevronDown size={12} className="text-faint" />
           ) : (
@@ -134,7 +139,7 @@ export function Terminal() {
 
         {terminalOpen && (
           <div className="ml-2 flex items-center gap-1">
-            {FILTERS.map(f => (
+            {filters.map(f => (
               <button
                 key={f.id}
                 onClick={() => setLogFilter(f.id)}
@@ -159,7 +164,7 @@ export function Terminal() {
             <button
               className="icon-btn h-7 w-7"
               data-active={stick}
-              title="Автопрокрутка"
+              title={lang === "ru" ? "Автопрокрутка" : "Autoscroll"}
               onClick={() => {
                 const next = !stick;
                 setStick(next);
@@ -168,10 +173,10 @@ export function Terminal() {
             >
               <ArrowDownToLine size={13} />
             </button>
-            <button className="icon-btn h-7 w-7" title="Скопировать лог" onClick={copyLog}>
+            <button className="icon-btn h-7 w-7" title={t(lang, "term.copy")} onClick={copyLog}>
               <Copy size={13} />
             </button>
-            <button className="icon-btn h-7 w-7" title="Очистить (Ctrl L)" onClick={clearLog}>
+            <button className="icon-btn h-7 w-7" title={`${t(lang, "term.clear")} (Ctrl L)`} onClick={clearLog}>
               <Trash2 size={13} />
             </button>
           </>
@@ -186,7 +191,9 @@ export function Terminal() {
             className="mono h-full overflow-y-auto px-3 py-2 text-[11.5px]"
           >
             {visible.length === 0 && (
-              <p className="text-faint">// движок молчит — запустите декомпиляцию</p>
+              <p className="text-faint">
+                {lang === "ru" ? "// движок молчит — запустите декомпиляцию" : "// engine is idle — start decompilation"}
+              </p>
             )}
             {visible.map(l => (
               <div
@@ -216,7 +223,8 @@ export function Terminal() {
               onClick={jumpToEnd}
               className="btn btn-tonal absolute right-3 bottom-2 h-7 px-2.5 text-[11px]"
             >
-              <ArrowDownToLine size={12} />к концу
+              <ArrowDownToLine size={12} />
+              {lang === "ru" ? "к концу" : "to bottom"}
             </button>
           )}
         </div>

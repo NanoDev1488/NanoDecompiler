@@ -1,18 +1,9 @@
 import { ExternalLink, X, FolderOpen, Star, TriangleAlert } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { fmtBytes, fmtNum, fmtSeconds, joinOutDir, type Job } from "../lib/model";
+import { t } from "../lib/i18n";
 import { useEngine } from "../state/engine";
 
-// БАГ-ФИКС v1.8.0 «срочный CI-фикс» (реальный сбой сборки на macOS/Linux/
-// Windows-раннерах - "Github" is not exported by lucide-react): брендовые
-// иконки логотипов (в отличие от обычных UI-иконок вроде X/Star) - именно
-// то, что чаще всего переименовывают или убирают между мажорными версиями
-// icon-библиотек, а `lucide-react` запинен диапазоном "^1.34.0" (caret -
-// любая 1.x), так что CI мог подтянуть версию, где `Github` уже нет.
-// Чтобы больше не зависеть от того, есть ли конкретная брендовая иконка в
-// конкретной версии lucide-react, рисуем её сами - маленький инлайн-SVG с
-// тем же API (`size`/`className`), что и у lucide-иконок, так что менять
-// остальной JSX ниже не пришлось.
 function GithubIcon({ size = 16, className }: { size?: number; className?: string }) {
   return (
     <svg
@@ -28,24 +19,11 @@ function GithubIcon({ size = 16, className }: { size?: number; className?: strin
   );
 }
 
-// НОВОЕ v1.8.0 (реальный запрос - "мини-карточка к каждому плагину слева
-// с троеточием, а по клику - открыть папку результата и детальнейшая
-// информация о плагине"). Данные приходят из "##ND_RESULT:{...}##" -
-// служебной строки, которую движок печатает в конце ОБЫЧНОГО (не только
-// --json-output) прогона - см. cli_main.cpp/parseEngineResult в engine.tsx.
-// Если job ещё не завершён (или завершился с ошибкой ДО печати этой
-// строки) - details будет null, показываем честное "недоступно" вместо
-// пустых нулей.
 export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => void }) {
-  const { openOutput, toast, addJarPaths } = useEngine();
+  const { openOutput, toast, addJarPaths, settings } = useEngine();
+  const lang = settings.language;
   const d = job.details;
-  // НОВОЕ v1.7.6: поиск похожих репозиториев на GitHub по имени плагина
-  // и автору из plugin.yml (см. jarSummary.ts/main.ts::github:searchSimilar).
   const [ghLoading, setGhLoading] = useState(false);
-  // НОВОЕ v1.8.4 - было: локальный стейт для кнопки "Отправить отчёт".
-  // Кнопка убрана в блоке 1.9.6 (см. HANDOFF, п.15) - с v1.9.5 отправка
-  // fallback_contexts уходит АВТОМАТИЧЕСКИ при telemetryEnabled, ручная
-  // кнопка стала избыточной и путала пользователя.
   const [ghResults, setGhResults] = useState<
     { name: string; fullName: string; url: string; description: string | null; stars: number }[] | null
   >(null);
@@ -88,52 +66,50 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {!d ? (
             <p className="mono text-[12px] text-faint">
-              // подробная информация появляется после завершения декомпиляции.
-              {job.status === "failed" && " этот запуск завершился с ошибкой до сбора статистики."}
+              {lang === "ru"
+                ? "// подробная информация появляется после завершения декомпиляции."
+                : "// detailed information appears after decompilation completes."}
+              {job.status === "failed" && (lang === "ru" ? " этот запуск завершился с ошибкой до сбора статистики." : " this run failed before stats collection.")}
             </p>
           ) : (
             <div className="flex flex-col gap-3 text-[12.5px]">
-              <Row label="Платформа" value={d.stats.platform ?? "не определена"} />
-              <Row label="Размер архива" value={fmtBytes(job.sizeBytes)} />
-              <Row label="Классов в архиве" value={fmtNum(d.stats.classes_total)} />
+              <Row label={lang === "ru" ? "Платформа" : "Platform"} value={d.stats.platform ?? (lang === "ru" ? "не определена" : "unknown")} />
+              <Row label={lang === "ru" ? "Размер архива" : "Archive size"} value={fmtBytes(job.sizeBytes)} />
+              <Row label={lang === "ru" ? "Классов в архиве" : "Classes in archive"} value={fmtNum(d.stats.classes_total)} />
               <Row
-                label="Классов библиотек пропущено"
+                label={lang === "ru" ? "Классов библиотек пропущено" : "Library classes skipped"}
                 value={
                   d.stats.library_classes_skipped > 0
                     ? (
                         <LibraryNamesValue
                           count={d.stats.library_classes_skipped}
                           names={d.stats.library_names_hit}
+                          lang={lang}
                         />
                       )
                     : "0"
                 }
               />
               <Row
-                label="Методов декомпилировано"
+                label={lang === "ru" ? "Методов декомпилировано" : "Methods decompiled"}
                 value={`${fmtNum(d.stats.decompiled_methods)} / ${fmtNum(d.stats.total_methods)} (${d.stats.decompiled_pct.toFixed(1)}%)`}
               />
               {d.stats.fallback_methods > 0 && (
-                <Row label="Откат на байткод" value={`${fmtNum(d.stats.fallback_methods)} метод(ов) - см. .java с комментарием`} />
+                <Row
+                  label={lang === "ru" ? "Откат на байткод" : "Bytecode fallback"}
+                  value={`${fmtNum(d.stats.fallback_methods)} ${lang === "ru" ? "метод(ов) - см. .java с комментарием" : "method(s) - see commented .java"}`}
+                />
               )}
-              {/* БАГ-ФИКС v1.8.2 - см. комментарий у полей в model.ts. */}
               {d.stats.synthetic_switchmap_classes_hidden > 0 && (
                 <Row
-                  label="Синтетических switchmap-классов скрыто"
-                  value={`${fmtNum(d.stats.synthetic_switchmap_classes_hidden)} (компиляторные helper-классы для switch по enum)`}
+                  label={lang === "ru" ? "Синтетических switchmap-классов скрыто" : "Synthetic switchmap classes hidden"}
+                  value={`${fmtNum(d.stats.synthetic_switchmap_classes_hidden)} (${lang === "ru" ? "компиляторные helper-классы для switch по enum" : "compiler helper classes for enum switches"})`}
                 />
               )}
               {d.stats.junk_catches_removed > 0 && (
-                <Row label="Пустых catch-блоков вычищено" value={fmtNum(d.stats.junk_catches_removed)} />
+                <Row label={lang === "ru" ? "Пустых catch-блоков вычищено" : "Empty catch blocks cleaned"} value={fmtNum(d.stats.junk_catches_removed)} />
               )}
-              {/* БАГ-ФИКС v1.8.4 (реальная жалоба - "время декомпиляции
-                  врёт, всегда меньше секунды"): fmtSeconds(ms) САМА делит
-                  на 1000 внутри (см. model.ts) - тут ЕЩЁ РАЗ делили ДО
-                  вызова, двойное деление на 1000 схлопывало любое реальное
-                  время (несколько тысяч мс) в тысячные доли секунды,
-                  округлявшиеся до "0.00 s". Sidebar.tsx рядом вызывал
-                  fmtSeconds(job.elapsedMs) без лишнего деления - и был прав. */}
-              {job.status === "done" && <Row label="Время декомпиляции" value={fmtSeconds(job.elapsedMs)} />}
+              {job.status === "done" && <Row label={lang === "ru" ? "Время декомпиляции" : "Decompilation time"} value={fmtSeconds(job.elapsedMs)} />}
               {Object.keys(d.stats.import_conflicts).length > 0 && (
                 <div className="flex flex-col gap-1.5 rounded-lg border border-line bg-bg px-3 py-2">
                   <p className="kicker">
@@ -320,12 +296,12 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
             onClick={() => openOutput(job)}
           >
             <FolderOpen size={12} />
-            Открыть папку результата
+            {t(lang, "sidebar.open_output")}
           </button>
           {d && (
             <button className="btn btn-tonal h-7 flex-1 text-[11.5px]" disabled={ghLoading} onClick={searchGithub}>
               <GithubIcon size={12} />
-              {ghLoading ? "Ищу…" : "Найти на GitHub"}
+              {ghLoading ? (lang === "ru" ? "Ищу…" : "Searching…") : (lang === "ru" ? "Найти на GitHub" : "Find on GitHub")}
             </button>
           )}
         </div>
@@ -343,11 +319,7 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-// НОВОЕ (HANDOFF_URGENT п.2): при 10+ библиотеках голый join(", ") превращался
-// в нечитаемую простыню на всю ширину модалки. Показываем первые 3 + счётчик
-// остальных, разворачиваем по клику. Модалка пересоздаётся при смене job -
-// лишнего стейта между открытиями не копится, локального useState достаточно.
-function LibraryNamesValue({ count, names }: { count: number; names: string[] }) {
+function LibraryNamesValue({ count, names, lang }: { count: number; names: string[]; lang: "ru" | "en" }) {
   const [expanded, setExpanded] = useState(false);
   const VISIBLE = 3;
   if (names.length <= VISIBLE) {
@@ -365,7 +337,7 @@ function LibraryNamesValue({ count, names }: { count: number; names: string[] })
           className="mono underline decoration-dotted underline-offset-2 hover:text-ink"
           onClick={() => setExpanded(v => !v)}
         >
-          {expanded ? "свернуть" : `ещё ${names.length - VISIBLE}`}
+          {expanded ? (lang === "ru" ? "свернуть" : "collapse") : (lang === "ru" ? `ещё ${names.length - VISIBLE}` : `${names.length - VISIBLE} more`)}
         </button>
         )
       </span>

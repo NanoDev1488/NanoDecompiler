@@ -1,15 +1,7 @@
 import { useState } from "react";
 import { Check, ChevronRight, Sparkles } from "lucide-react";
 import { useEngine } from "../state/engine";
-
-/* Мастер первого запуска (по прямой просьбе пользователя) - показывается
-   один раз при первом старте клиента, до основного интерфейса. EULA -
-   полный текст на английском (см. LICENSE_EULA.txt в корне проекта -
-   этот текст здесь ПРОДУБЛИРОВАН как константа, а не читается через IPC,
-   чтобы не зависеть от файловой системы/гонок при самом первом экране
-   приложения). Картинки - чистый SVG в палитре приложения (акцентный
-   зелёный/тёмный фон), не растровые изображения - генератора картинок у
-   агента нет, а нарисованный от руки SVG хотя бы РЕАЛЬНО отрисуется. */
+import { t } from "../lib/i18n";
 
 const EULA_TEXT = `NANODECOMPILER — END-USER LICENSE AGREEMENT (EULA)
 
@@ -145,6 +137,7 @@ type Step = "welcome" | "eula" | "options" | "done";
 
 export function SetupWizard() {
   const { completeSetup, settings, saveSettings } = useEngine();
+  const lang = settings.language;
   const [step, setStep] = useState<Step>("welcome");
   const [accepted, setAccepted] = useState(false);
   const [autoUpdateCheck, setAutoUpdateCheck] = useState(settings.autoUpdateCheck);
@@ -158,32 +151,20 @@ export function SetupWizard() {
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center bg-black/70 p-4 backdrop-blur-[2px]">
       <div className="animate-rise flex w-[400px] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl shadow-black/50">
-        {/* БАГ-ФИКС 1.9.6 (HANDOFF п.8, "сделать окно маленьким ~160×160,
-            не на весь экран"): раньше фон был СПЛОШНЫМ (`bg-bg`, тот же
-            цвет, что и основное приложение) на весь `fixed inset-0` -
-            визуально выглядело так, будто окно занимает весь экран, хотя
-            сама карточка и так была 480px. Буквально 160×160px нечитаемо
-            для текста EULA - взял тот же визуальный язык, что и у
-            остальных модалок приложения (SettingsModal и т.д.):
-            полупрозрачный тёмный фон + blur вместо сплошной заливки, плюс
-            карточка сузилась 480 -> 400px и внутренние отступы/шрифты
-            чуть компактнее. Если пользователь ждал буквально маленькое
-            окно ~160×160 - такой размер физически не вмещает читаемый
-            текст лицензии, поэтому выбран компромисс "компактный диалог,
-            не на весь экран", а не точное число из сообщения. */}
         <div className="flex flex-col items-center gap-4 px-6 py-7 text-center">
           {step === "welcome" && (
             <>
               <WelcomeArt />
               <div>
-                <p className="text-[16px] font-semibold text-ink">Добро пожаловать в NanoDecompiler</p>
+                <p className="text-[16px] font-semibold text-ink">{t(lang, "setup.welcome")}</p>
                 <p className="mt-2 text-[12.5px] leading-relaxed text-dim">
-                  Декомпилятор и деобфускатор для Bukkit/Spigot/Paper/BungeeCord/Velocity-плагинов. Разработка —
-                  NanoDev.
+                  {lang === "ru"
+                    ? "Декомпилятор и деобфускатор для Bukkit/Spigot/Paper/BungeeCord/Velocity-плагинов. Разработка — NanoDev."
+                    : "Decompiler and deobfuscator for Bukkit/Spigot/Paper/BungeeCord/Velocity plugins. By NanoDev."}
                 </p>
               </div>
               <button className="btn btn-acid h-9 w-full text-[12.5px]" onClick={() => setStep("eula")}>
-                Далее
+                {lang === "ru" ? "Далее" : "Next"}
                 <ChevronRight size={14} />
               </button>
             </>
@@ -192,7 +173,9 @@ export function SetupWizard() {
           {step === "eula" && (
             <>
               <ShieldArt />
-              <p className="text-[14.5px] font-semibold text-ink">Лицензионное соглашение</p>
+              <p className="text-[14.5px] font-semibold text-ink">
+                {lang === "ru" ? "Лицензионное соглашение" : "License Agreement"}
+              </p>
               <div className="mono h-[170px] w-full overflow-y-auto rounded-lg border border-line bg-bg p-3 text-left text-[10.5px] leading-relaxed whitespace-pre-wrap text-dim">
                 {EULA_TEXT}
               </div>
@@ -203,14 +186,16 @@ export function SetupWizard() {
                   onChange={e => setAccepted(e.target.checked)}
                   className="size-4 accent-acid"
                 />
-                Я прочитал(а) и принимаю условия лицензионного соглашения
+                {lang === "ru"
+                  ? "Я прочитал(а) и принимаю условия лицензионного соглашения"
+                  : "I have read and accept the license agreement terms"}
               </label>
               <button
                 className={"btn btn-acid h-9 w-full text-[12.5px] " + (!accepted ? "pointer-events-none opacity-40" : "")}
                 onClick={() => setStep("options")}
                 disabled={!accepted}
               >
-                Принять и продолжить
+                {t(lang, "setup.accept")}
                 <ChevronRight size={14} />
               </button>
             </>
@@ -219,10 +204,14 @@ export function SetupWizard() {
           {step === "options" && (
             <>
               <Sparkles size={44} className="text-acid" />
-              <p className="text-[14.5px] font-semibold text-ink">Пара настроек напоследок</p>
+              <p className="text-[14.5px] font-semibold text-ink">
+                {lang === "ru" ? "Пара настроек напоследок" : "A few final settings"}
+              </p>
               <div className="w-full space-y-2 text-left">
                 <label className="flex items-center justify-between rounded-lg border border-line bg-bg px-3.5 py-2.5">
-                  <span className="text-[12px] text-ink/90">Проверять обновления автоматически</span>
+                  <span className="text-[12px] text-ink/90">
+                    {lang === "ru" ? "Проверять обновления автоматически" : "Check for updates automatically"}
+                  </span>
                   <input
                     type="checkbox"
                     checked={autoUpdateCheck}
@@ -231,7 +220,9 @@ export function SetupWizard() {
                   />
                 </label>
                 <label className="flex items-center justify-between rounded-lg border border-line bg-bg px-3.5 py-2.5">
-                  <span className="text-[12px] text-ink/90">Проверка легитимности плагинов</span>
+                  <span className="text-[12px] text-ink/90">
+                    {lang === "ru" ? "Проверка легитимности плагинов" : "Plugin legitimacy check"}
+                  </span>
                   <input
                     type="checkbox"
                     checked={legitimacyCheck}
@@ -240,9 +231,11 @@ export function SetupWizard() {
                   />
                 </label>
               </div>
-              <p className="text-[10.5px] text-faint">Всё это можно изменить позже в настройках.</p>
+              <p className="text-[10.5px] text-faint">
+                {lang === "ru" ? "Всё это можно изменить позже в настройках." : "You can change these anytime in Settings."}
+              </p>
               <button className="btn btn-acid h-9 w-full text-[12.5px]" onClick={() => setStep("done")}>
-                Далее
+                {lang === "ru" ? "Далее" : "Next"}
                 <ChevronRight size={14} />
               </button>
             </>
@@ -251,13 +244,16 @@ export function SetupWizard() {
           {step === "done" && (
             <>
               <DoneArt />
-              <p className="text-[14.5px] font-semibold text-ink">Всё готово</p>
+              <p className="text-[14.5px] font-semibold text-ink">
+                {lang === "ru" ? "Всё готово" : "All Set"}
+              </p>
               <p className="text-[12px] text-dim">
-                Обновления и поддержка — <span className="text-acid">t.me/NanoDev_mc</span>
+                {lang === "ru" ? "Обновления и поддержка — " : "Updates and support — "}
+                <span className="text-acid">t.me/NanoDev_mc</span>
               </p>
               <button className="btn btn-acid h-9 w-full text-[12.5px]" onClick={finish}>
                 <Check size={14} />
-                Начать работу
+                {lang === "ru" ? "Начать работу" : "Get Started"}
               </button>
             </>
           )}

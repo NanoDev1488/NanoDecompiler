@@ -91,5 +91,8 @@ namespace nd {
 // (ChatColor.RED и др. теперь входят в чип целиком без висящего префикса),
 // полная внешняя локализация i18n (ru/en JSON словари в resources/langs),
 // поддержка флага --lang в CLI движка.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.14";
+// НОВОЕ v1.9.15: сквозная интеграция i18n переводов во все UI-компоненты
+// (AppHeader, Sidebar, Workspace, Terminal, CodeView, PluginDetailsModal,
+// BugReportModal, SetupWizard).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.15";
 }

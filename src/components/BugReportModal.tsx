@@ -1,16 +1,11 @@
 import { Send, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useEngine } from "../state/engine";
+import { t } from "../lib/i18n";
 
-// НОВОЕ v1.9.5 (прямая просьба пользователя - "отдельная кнопка для
-// багрепорта, не от декомпиляции, а просто лично от пользователя"):
-// свободный текст -> тот же транспорт телеметрии (см. sendBugReport в
-// state/engine.tsx), но без привязки к какому-либо job'у. Требует
-// telemetryEnabled - та же логика, что и у отчётов об ошибках декомпиляции
-// (одно понятное "приложение шлёт данные на сервер" в настройках, а не
-// два независимых переключателя с похожим смыслом).
 export function BugReportModal({ onClose }: { onClose: () => void }) {
   const { sendBugReport, settings, setSettingsOpen } = useEngine();
+  const lang = settings.language;
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -36,7 +31,7 @@ export function BugReportModal({ onClose }: { onClose: () => void }) {
     >
       <div className="animate-rise flex w-[520px] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl shadow-black/50">
         <div className="flex h-11 flex-none items-center gap-2 border-b border-line px-3.5">
-          <span className="text-[13px] font-medium text-ink/90">Сообщить о проблеме</span>
+          <span className="text-[13px] font-medium text-ink/90">{t(lang, "bug.title")}</span>
           <div className="flex-1" />
           <button className="icon-btn h-6 w-6" onClick={onClose}>
             <X size={13} />
@@ -45,7 +40,7 @@ export function BugReportModal({ onClose }: { onClose: () => void }) {
         <div className="flex flex-col gap-3 p-4">
           {!settings.telemetryEnabled ? (
             <p className="text-[12px] text-dim">
-              Отправка отчётов выключена в настройках -{" "}
+              {lang === "ru" ? "Отправка отчётов выключена в настройках - " : "Error reporting is disabled in settings - "}
               <button
                 className="text-ink underline decoration-dotted underline-offset-2 hover:text-accent"
                 onClick={() => {
@@ -53,14 +48,13 @@ export function BugReportModal({ onClose }: { onClose: () => void }) {
                   setSettingsOpen(true);
                 }}
               >
-                включить
+                {lang === "ru" ? "включить" : "enable"}
               </button>
               .
             </p>
           ) : (
             <p className="text-[12px] text-dim">
-              Что угодно - баг, идея, вопрос. Не привязано к конкретному плагину, версия приложения и ОС уйдут
-              вместе с текстом для контекста.
+              {t(lang, "bug.desc")}
             </p>
           )}
           <textarea
@@ -72,18 +66,18 @@ export function BugReportModal({ onClose }: { onClose: () => void }) {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send();
             }}
             disabled={!settings.telemetryEnabled}
-            placeholder="Опишите проблему или мысль…"
+            placeholder={t(lang, "bug.placeholder")}
             rows={14}
             className="field mono min-h-[220px] resize-y text-[12.5px]"
             spellCheck
           />
           <div className="flex items-center justify-end gap-2">
             <button className="btn btn-ghost h-8 text-[12px]" onClick={onClose}>
-              Отмена
+              {t(lang, "bug.cancel")}
             </button>
             <button className="btn btn-tonal h-8 gap-1.5 text-[12px]" disabled={!canSend} onClick={send}>
               <Send size={13} />
-              {sending ? "Отправка…" : "Отправить"}
+              {sending ? t(lang, "bug.sending") : t(lang, "bug.submit")}
             </button>
           </div>
         </div>

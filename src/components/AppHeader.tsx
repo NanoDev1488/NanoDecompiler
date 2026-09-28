@@ -1,5 +1,6 @@
 import { Bell, ChevronDown, FolderOpen, MessageSquare, Play, Settings2, Square } from "lucide-react";
 import { useState } from "react";
+import { t } from "../lib/i18n";
 import { useEngine } from "../state/engine";
 import { cn } from "../utils/cn";
 
@@ -11,6 +12,7 @@ export function AppHeader() {
     envIssue,
     engineVersion,
     updateInfo,
+    settings,
     startQueue,
     stopRunning,
     stopAll,
@@ -21,6 +23,7 @@ export function AppHeader() {
     setPaletteOpen,
   } = useEngine();
 
+  const lang = settings.language;
   const running = runningJob !== null;
   const engineLabel = engineVersion?.replace(/^NanoDecompiler /, "") ?? "engine";
   const hasUpdate = updateInfo.kind === "engine" || updateInfo.kind === "client";
@@ -44,17 +47,17 @@ export function AppHeader() {
         />
         <span className="truncate">
           {envIssue
-            ? "окружение: нет Java"
+            ? t(lang, "app.env_error")
             : running
-              ? `${engineLabel} — занят${runningElapsed !== null ? ` · ${(runningElapsed / 1000).toFixed(1)} s` : ""}`
-              : `${engineLabel} — готов`}
+              ? `${engineLabel} — ${t(lang, "app.busy")}${runningElapsed !== null ? ` · ${(runningElapsed / 1000).toFixed(1)} s` : ""}`
+              : `${engineLabel} — ${t(lang, "app.ready")}`}
         </span>
         {envIssue && (
           <button
             className="mono -mr-1 rounded px-1 text-[10px] underline decoration-dotted underline-offset-2 hover:text-ink"
             onClick={() => setSettingsOpen(true)}
           >
-            починить
+            {t(lang, "app.fix")}
           </button>
         )}
       </div>
@@ -63,7 +66,7 @@ export function AppHeader() {
 
       <button className="btn btn-tonal flex-none" onClick={openFileDialog}>
         <FolderOpen size={14} />
-        Открыть .jar
+        {t(lang, "app.open_jar")}
         <span className="kbd ml-1 hidden lg:inline">Ctrl O</span>
       </button>
 
@@ -76,7 +79,7 @@ export function AppHeader() {
           <div className="flex flex-none items-center gap-1">
             <button className="btn btn-err flex-none" onClick={stopAll}>
               <Square size={13} />
-              Остановить всё
+              {t(lang, "app.stop_all")}
             </button>
             <button
               className="icon-btn h-8 w-8 flex-none border border-line"
@@ -89,13 +92,13 @@ export function AppHeader() {
         ) : (
           <button className="btn btn-err flex-none" onClick={stopRunning}>
             <Square size={13} />
-            Остановить
+            {t(lang, "app.stop")}
           </button>
         )
       ) : (
         <button className="btn btn-acid flex-none" onClick={startQueue} disabled={queuedCount === 0}>
           <Play size={14} />
-          Запустить
+          {t(lang, "app.start")}
           {queuedCount > 0 && (
             <span className="mono grid h-[18px] min-w-[18px] place-items-center rounded-full bg-black/25 px-1 text-[10px] font-semibold">
               {queuedCount}
@@ -128,13 +131,13 @@ export function AppHeader() {
           используется слишком часто, чтобы прятать за клик. Паттерн
           dropdown скопирован с OpenInMenu.tsx (open-state + оверлей +
           absolute-меню), лидер повторяется первым пунктом списка. */}
-      <ToolbarMenu hasUpdate={hasUpdate} setUpdateModalOpen={setUpdateModalOpen} setBugReportOpen={setBugReportOpen} />
+      <ToolbarMenu lang={lang} hasUpdate={hasUpdate} setUpdateModalOpen={setUpdateModalOpen} setBugReportOpen={setBugReportOpen} />
 
       <button
         className="icon-btn flex-none"
         onClick={() => setSettingsOpen(true)}
-        aria-label="Настройки"
-        title="Настройки (Ctrl ,)"
+        aria-label={t(lang, "app.settings")}
+        title={`${t(lang, "app.settings")} (Ctrl ,)`}
       >
         <Settings2 size={16} />
       </button>
@@ -143,10 +146,12 @@ export function AppHeader() {
 }
 
 function ToolbarMenu({
+  lang,
   hasUpdate,
   setUpdateModalOpen,
   setBugReportOpen,
 }: {
+  lang: "ru" | "en";
   hasUpdate: boolean;
   setUpdateModalOpen: (v: boolean) => void;
   setBugReportOpen: (v: boolean) => void;
@@ -157,11 +162,11 @@ function ToolbarMenu({
       <button
         className={cn("btn btn-ghost relative flex-none", hasUpdate && "border-acid/40 text-acid")}
         onClick={() => setOpen(v => !v)}
-        aria-label="Обновления и обратная связь"
-        title="Обновления и обратная связь"
+        aria-label={t(lang, "app.updates")}
+        title={t(lang, "app.updates")}
       >
         <Bell size={14} />
-        <span className="hidden lg:inline">Обновления</span>
+        <span className="hidden lg:inline">{t(lang, "app.updates")}</span>
         <ChevronDown size={11} />
         {hasUpdate && <span className="absolute top-1 right-1.5 size-[7px] rounded-full bg-acid" />}
       </button>
@@ -182,7 +187,7 @@ function ToolbarMenu({
               }}
             >
               <span className="flex items-center gap-2">
-                <Bell size={13} /> Обновления
+                <Bell size={13} /> {t(lang, "app.updates")}
               </span>
               {hasUpdate && <span className="size-[7px] rounded-full bg-acid" />}
             </button>
@@ -193,7 +198,7 @@ function ToolbarMenu({
                 setBugReportOpen(true);
               }}
             >
-              <MessageSquare size={13} /> Сообщить о проблеме
+              <MessageSquare size={13} /> {t(lang, "app.bug_report")}
             </button>
           </div>
         </>
