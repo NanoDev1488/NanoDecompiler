@@ -149,14 +149,10 @@ class Cast : public Expr {
 public:
     ExprPtr expr;
     Cast(std::string type_, ExprPtr expr_) : Expr(ExprKind::Cast), expr(std::move(expr_)) { type = std::move(type_); }
-    // HANDOFF_49: 100, а не "естественный" приоритет каста (был 85) - emit.cpp
-    // печатает Cast ВСЕГДА уже полностью самообёрнутым в скобки
-    // ("((Type) expr)", см. case ExprKind::Cast в emit.cpp) - если оставить
-    // тут заниженный приоритет, вызывающий код (paren() в emit.cpp) добавит
-    // ЕЩЁ одну пару скобок поверх уже готового результата - двойные скобки
-    // портили читаемость почти в каждом декомпилированном каст-выражении
-    // (напр. record-equals из ObjectMethods.bootstrap - см. HANDOFF_49).
-    int prec() const override { return 100; }
+    // Приоритет унарного приведения типов в Java - 85.
+    // При вызове методов или полей ((Type) expr).call() приоритет родителя (95)
+    // автоматически оборачивает Cast в скобки через paren().
+    int prec() const override { return 85; }
 };
 
 class InstanceOf : public Expr {

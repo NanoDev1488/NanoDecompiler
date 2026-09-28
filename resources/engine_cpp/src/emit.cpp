@@ -35,11 +35,7 @@ std::string paren(const ExprPtr& sub, const Expr* parent, char side = 0) {
     return txt;
 }
 
-// Как paren(), но сравнивает не с parent->prec() (у Cast это теперь 100 -
-// см. HANDOFF_49/ast_nodes.hpp, чтобы САМ Cast не оборачивался в лишние
-// скобки вызывающим кодом), а с явным порогом - нужен для внутренней
-// проверки "нужны ли скобки ОПЕРАНДУ каста" (`(Type) expr`), где порог
-// исторически другой (85 - как было у Cast::prec() до этой правки).
+// paren_at() проверяет приоритет операнда sub относительно порогового значения threshold.
 std::string paren_at(const ExprPtr& sub, int threshold) {
     std::string txt = emit_expr(sub);
     return sub->prec() < threshold ? ("(" + txt + ")") : txt;
@@ -130,7 +126,7 @@ std::string emit_expr(const ExprPtr& e) {
         }
         case ExprKind::Cast: {
             const auto* c = static_cast<const Cast*>(e.get());
-            return "((" + simple(c->type) + ") " + paren_at(c->expr, 85) + ")";
+            return "(" + simple(c->type) + ") " + paren_at(c->expr, 85);
         }
         case ExprKind::InstanceOf: {
             const auto* io = static_cast<const InstanceOf*>(e.get());
