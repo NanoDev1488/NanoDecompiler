@@ -377,7 +377,7 @@ GroupArtifactVersion guess_group_artifact(const std::string& jar_basename, const
                                            const std::optional<std::map<std::string, std::string>>& pom_props,
                                            const std::optional<std::string>& platform_name) {
     if (pom_props.has_value() && pom_props->count("groupId") && pom_props->count("artifactId")) {
-        std::string ver = pom_props->count("version") ? pom_props->at("version") : "1.0";
+        std::string ver = pom_props->count("version") ? pom_props->at("version") : "1.0.0";
         return {pom_props->at("groupId"), pom_props->at("artifactId"), ver};
     }
     std::string name;
@@ -393,7 +393,18 @@ GroupArtifactVersion guess_group_artifact(const std::string& jar_basename, const
         static const std::regex trail_re(R"([-_][\d.]+$)");
         name = std::regex_replace(jar_basename, trail_re, "");
     }
-    std::string version = plugin_info.version.value_or("1.0");
+    std::string version;
+    if (plugin_info.version.has_value() && !plugin_info.version->empty()) {
+        version = *plugin_info.version;
+    } else {
+        static const std::regex ver_re(R"([-_](v?[\d]+(?:\.[\d]+)*(?:-SNAPSHOT|-RELEASE|[a-zA-Z\d\.\-]+)?)$)");
+        std::smatch vm;
+        if (std::regex_search(jar_basename, vm, ver_re)) {
+            version = vm[1].str();
+        } else {
+            version = "1.0.0";
+        }
+    }
     std::string group_suffix;
     for (char c : name) {
         if (std::isalnum(static_cast<unsigned char>(c))) group_suffix += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
