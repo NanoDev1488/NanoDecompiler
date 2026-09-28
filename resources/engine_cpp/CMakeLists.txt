@@ -19,7 +19,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Оптимизация потребления памяти при сборке движка (гарантирует прохождение в 512 МБ RAM / 1 ядро)
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   add_compile_options(-fno-var-tracking -fno-var-tracking-assignments)
 endif()
 

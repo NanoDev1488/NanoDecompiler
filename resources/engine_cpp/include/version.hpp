@@ -173,9 +173,10 @@ namespace nd {
 // НОВОЕ v1.9.84: автоматическое извлечение версии артефакта из имени JAR-файла при отсутствии в манифесте для генератора pom.xml.
 // НОВОЕ v1.9.85: настройка масштаба шрифта редактора кода в окне общих настроек (SettingsModal) с кнопками шага и сброса.
 // НОВОЕ v1.9.86: защита выведенных имён параметров методов от коллизий с зарезервированными ключевыми словами Java (class -> clazz, default и др.) при отсутствии LVT.
-// НОВОЕ v1.9.87: комплексное устранение ошибок компиляции движка C++ в CI (Reader::remaining, CpEntry::long_value, Const::value, сигнатура MethodCall в invokedynamic, include sstream).
+// НОВОЕ v1.9.87: комплексное устранение ошибок сборки движка C++ в CI (Reader::remaining, CpEntry::long_value, Const::value, сигнатура MethodCall в invokedynamic, include sstream, Clang/macOS -fno-var-tracking флаги).
 constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.87";
 }
+
 
 
 
