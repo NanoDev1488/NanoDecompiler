@@ -71,6 +71,8 @@ std::string json_escape(const std::string& s) {
 // число КОДОВЫХ ТОЧЕК = видимых колонок для нашего алфавита (ASCII +
 // кириллица, оба однодиапазонные - без учёта экзотики вроде emoji/CJK
 // широких символов, которые тут не встречаются).
+static std::string g_lang = "ru";
+
 size_t utf8_display_width(const std::string& s) {
     size_t n = 0;
     for (unsigned char c : s)
@@ -80,7 +82,9 @@ size_t utf8_display_width(const std::string& s) {
 
 std::string banner_text() {
     std::string line1 = std::string("\u273B ") + NANO_DECOMPILER_VERSION;
-    std::string line2 = "   Java-декомпилятор/деобфускатор для Bukkit-плагинов";
+    std::string line2 = (g_lang == "en")
+        ? "   Java decompiler/deobfuscator for Bukkit plugins"
+        : "   Java-декомпилятор/деобфускатор для Bukkit-плагинов";
     size_t w1 = utf8_display_width(line1);
     size_t w2 = utf8_display_width(line2);
     size_t width = w2 > w1 ? w2 : w1;
@@ -99,13 +103,23 @@ std::string banner_text() {
 }
 
 void print_usage() {
-    std::cout << "Использование: NanoDecompilerCLI plugin.jar [output_dir]\n";
-    std::cout << "       NanoDecompilerCLI plugin.jar [out_dir] --no-legitimacy-check\n";
-    std::cout << "       NanoDecompilerCLI plugin.jar [out_dir] --json-output   (разовый вызов, JSON в stdout)\n";
-    std::cout << "       NanoDecompilerCLI --api-server [--host H] [--port 8791]   (HTTP-сервер)\n";
-    std::cout << "       NanoDecompilerCLI --jar-summary plugin.jar   (JSON-сводка для GUI)\n";
-    std::cout << "       NanoDecompilerCLI --version   (JSON с версией движка, для GUI - см. settings:checkEngine)\n";
-    std::cout << "       NanoDecompilerCLI --install-tools[=jdk|maven]   (portable JDK/Maven по требованию)\n";
+    if (g_lang == "en") {
+        std::cout << "Usage: NanoDecompilerCLI plugin.jar [output_dir] [--lang=en|ru]\n";
+        std::cout << "       NanoDecompilerCLI plugin.jar [out_dir] --no-legitimacy-check\n";
+        std::cout << "       NanoDecompilerCLI plugin.jar [out_dir] --json-output   (one-shot run, JSON to stdout)\n";
+        std::cout << "       NanoDecompilerCLI --api-server [--host H] [--port 8791]   (HTTP server)\n";
+        std::cout << "       NanoDecompilerCLI --jar-summary plugin.jar   (JSON summary for GUI)\n";
+        std::cout << "       NanoDecompilerCLI --version   (JSON with engine version, for GUI)\n";
+        std::cout << "       NanoDecompilerCLI --install-tools[=jdk|maven]   (portable JDK/Maven on demand)\n";
+    } else {
+        std::cout << "Использование: NanoDecompilerCLI plugin.jar [output_dir] [--lang=ru|en]\n";
+        std::cout << "       NanoDecompilerCLI plugin.jar [out_dir] --no-legitimacy-check\n";
+        std::cout << "       NanoDecompilerCLI plugin.jar [out_dir] --json-output   (разовый вызов, JSON в stdout)\n";
+        std::cout << "       NanoDecompilerCLI --api-server [--host H] [--port 8791]   (HTTP-сервер)\n";
+        std::cout << "       NanoDecompilerCLI --jar-summary plugin.jar   (JSON-сводка для GUI)\n";
+        std::cout << "       NanoDecompilerCLI --version   (JSON с версией движка, для GUI - см. settings:checkEngine)\n";
+        std::cout << "       NanoDecompilerCLI --install-tools[=jdk|maven]   (portable JDK/Maven по требованию)\n";
+    }
 }
 
 int run_decompile_console(const std::string& jar_path, const std::string& out_dir, bool skip_legitimacy) {
@@ -269,7 +283,18 @@ int run_install_tools_json(const std::optional<std::string>& only) {
 }  // namespace
 
 int run_cli(int argc, char** argv) {
-    std::vector<std::string> args(argv + 1, argv + argc);
+    std::vector<std::string> raw_args(argv + 1, argv + argc);
+    std::vector<std::string> args;
+    for (size_t i = 0; i < raw_args.size(); ++i) {
+        if (raw_args[i].rfind("--lang=", 0) == 0) {
+            g_lang = raw_args[i].substr(7);
+        } else if (raw_args[i] == "--lang" && i + 1 < raw_args.size()) {
+            g_lang = raw_args[++i];
+        } else {
+            args.push_back(raw_args[i]);
+        }
+    }
+
     if (args.empty()) {
         print_usage();
         return 1;

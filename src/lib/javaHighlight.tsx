@@ -66,6 +66,10 @@ interface Token {
   // же строке) - используется ТОЛЬКО для isGenericColorCall/
   // isChainedColorCall (там, где сам формат неизвестен, но контекст ясен).
   inheritedColor?: string | null;
+  // НОВОЕ v1.9.14: помечаем enum-константы цветов (ChatColor.RED и т.п.)
+  // чтобы сворачивать их ВМЕСТЕ со следующей цветной строкой в один чип
+  isColorEnum?: boolean;
+  colorEnumStart?: number;
 }
 
 function tokenizeLine(line: string): Token[] {
@@ -97,16 +101,19 @@ function tokenizeLine(line: string): Token[] {
     let isGenericColorCall = false;
     let isChainedColorCall = false;
     let inheritedColor: string | null = null;
-    // НОВОЕ v1.9.5: `ChatColor.RED`/`NamedTextColor.RED` как ГОЛАЯ
+    let isColorEnum = false;
+    let colorEnumStart: number | undefined;
+    // НОВОЕ v1.9.5 + v1.9.14: `ChatColor.RED`/`NamedTextColor.RED` как ГОЛАЯ
     // enum-константа (не вызов метода, не конкатенация со строкой сразу
-    // после) - update currentColorHex, чтобы дальнейшие method1()-подобные
-    // цепочки уже знали актуальный цвет, даже если constant используется
-    // отдельно (например, присвоен переменной чуть раньше по коду).
+    // после) - update currentColorHex, плюс запоминаем начало префикса для чипов.
     if (word && word === word.toUpperCase() && MC_COLOR_NAME_HEX[word.toLowerCase()]) {
       const before = line.slice(0, m.index);
-      if (/\.\s*$/.test(before) && /\b(?:ChatColor|NamedTextColor|TextColor)\.\s*$/.test(before)) {
+      const prefixMatch = /\b(?:ChatColor|NamedTextColor|TextColor)\.\s*$/.exec(before);
+      if (prefixMatch) {
         currentColorHex = MC_COLOR_NAME_HEX[word.toLowerCase()];
         sawColorSignal = true;
+        isColorEnum = true;
+        colorEnumStart = m.index - prefixMatch[0].length;
       }
     }
     if (str) {
@@ -145,6 +152,8 @@ function tokenizeLine(line: string): Token[] {
       isGenericColorCall,
       isChainedColorCall,
       inheritedColor,
+      isColorEnum,
+      colorEnumStart,
     });
     last = m.index + m[0].length;
   }
@@ -218,15 +227,14 @@ function findLogRegions(line: string): Region[] {
   return regions;
 }
 
-/** Ищет цепочки конкатенации цветного текста (2+ цветовых строк подряд,
- * например `"§a" + method1("текст") + "§c!"`) и возвращает их символьные
- * диапазоны. Токены, уже накрытые логгер-регионом (excludeRanges), в расчёт
- * не берутся - логгер-вызов сворачивается ЦЕЛИКОМ отдельным регионом, а не
- * пересекается с цветовым. */
+/** Ищет цепочки конкатенации цветного текста (2+ цветовых элементов подряд,
+ * например `ChatColor.RED + "текст"` или `"§a" + method1("текст") + "§c!"`)
+ * и возвращает их символьные диапазоны. */
 function findColorChainRegions(tokens: Token[], excludeRanges: Region[]): Region[] {
   const isExcluded = (t: Token) => excludeRanges.some(r => t.start >= r.start && t.start < r.end);
   const isColorStr = (t: Token) =>
     !!t.isStr && !!(t.colorMethod || t.isGenericColorCall || t.isChainedColorCall || MC_CODE_RE.test(t.text));
+  const isColorToken = (t: Token) => isColorStr(t) || !!t.isColorEnum;
   const isBreaker = (t: Token) => (t.isStr && !isColorStr(t)) || t.text.includes(";") || t.cls === "tok-k";
 
   const regions: Region[] = [];
@@ -242,7 +250,11 @@ function findColorChainRegions(tokens: Token[], excludeRanges: Region[]): Region
       continue;
     }
     if (currentStart === null) {
-      if (isColorStr(t)) {
+      if (t.isColorEnum) {
+        currentStart = t.colorEnumStart ?? t.start;
+        prevEnd = t.end;
+        colorCount = 1;
+      } else if (isColorStr(t)) {
         currentStart = t.start;
         prevEnd = t.end;
         colorCount = 1;
@@ -250,7 +262,7 @@ function findColorChainRegions(tokens: Token[], excludeRanges: Region[]): Region
       continue;
     }
     prevEnd = t.end;
-    if (isColorStr(t)) colorCount++;
+    if (isColorToken(t)) colorCount++;
   }
   if (currentStart !== null && colorCount >= 2) regions.push({ start: currentStart, end: prevEnd, kind: "color" });
   return regions;
