@@ -570,21 +570,21 @@ jobs:
           name: "NanoDecompiler ${{ env.RELEASE_TAG }}"
           files: release-files/*
           body: |
-            ## NanoDecompiler ${{ env.RELEASE_TAG }}
+            ## 🚀 NanoDecompiler ${{ env.RELEASE_TAG }}
 
-            Сборка от коммита `${{ github.sha }}`.
+            Сборка от коммита `${{ github.sha }}`. Включает последние фиксы и улучшения GUI и C++ движка.
 
-            ### Что внутри
+            ### 📦 Загрузки
 
-            | Файл | Что это | Версия |
-            |------|---------|--------|
-            | `NanoDecompiler-Client-Setup.exe` | Клиент для Windows (Electron+React, GUI) - обычный инсталлятор | ${{ env.CLIENT_VERSION }} |
-            | `NanoDecompiler-Client.AppImage` | Клиент для Linux - скачать, `chmod +x`, запустить | ${{ env.CLIENT_VERSION }} |
-            | `NanoDecompiler-Client.dmg` | Клиент для macOS - образ диска. Сборка НЕ подписана сертификатом Apple Developer (нет в секретах репозитория) - при первом запуске может понадобиться правый клик -> Открыть, либо `xattr -cr` на распакованное приложение, чтобы обойти Gatekeeper | ${{ env.CLIENT_VERSION }} |
-            | `NanoDecompilerClApi-windows.exe` | Голый движок для Windows - CLI и API-сервер в одном бинарнике (см. HANDOFF_44/46): `NanoDecompilerClApi-windows.exe plugin.jar [out_dir] [--json-output]`, есть также `--api-server` (HTTP) и `--jar-summary` | ${{ env.API_VERSION }} |
-            | `NanoDecompilerClApi-linux` | То же самое для Linux | ${{ env.API_VERSION }} |
-            | `NanoDecompilerClApi-macos` | То же самое для macOS | ${{ env.API_VERSION }} |
-            | `versions.json` | Машиночитаемые версии client/api - для автообновления клиента, не для ручного использования | - |
+            | Файл | Описание | Версия |
+            |------|----------|--------|
+            | `NanoDecompiler-Client-Setup.exe` | Клиент Windows (GUI, инсталлятор) | ${{ env.CLIENT_VERSION }} |
+            | `NanoDecompiler-Client.AppImage` | Клиент Linux (GUI, AppImage) | ${{ env.CLIENT_VERSION }} |
+            | `NanoDecompiler-Client.dmg` | Клиент macOS (GUI, DMG) | ${{ env.CLIENT_VERSION }} |
+            | `NanoDecompilerClApi-windows.exe` | Движок Windows (CLI + API) | ${{ env.API_VERSION }} |
+            | `NanoDecompilerClApi-linux` | Движок Linux (CLI + API) | ${{ env.API_VERSION }} |
+            | `NanoDecompilerClApi-macos` | Движок macOS (CLI + API) | ${{ env.API_VERSION }} |
+            | `versions.json` | Технический файл автообновления | - |
 
             ### Как проверялось
 

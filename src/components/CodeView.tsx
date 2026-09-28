@@ -194,6 +194,9 @@ export const CodeView = memo(function CodeView({
       } else if ((e.ctrlKey || e.metaKey) && e.key === "0") {
         e.preventDefault();
         resetZoom();
+      } else if (e.altKey && e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        if (jobId) selectFile(jobId, null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -202,7 +205,7 @@ export const CodeView = memo(function CodeView({
       window.removeEventListener("keydown", onKey);
       window.clearInterval(timer);
     };
-  }, []);
+  }, [jobId, selectFile]);
 
   const [findOpen, setFindOpen] = useState(false);
   const [gotoOpen, setGotoOpen] = useState(false);
