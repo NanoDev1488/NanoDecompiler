@@ -303,7 +303,17 @@ std::vector<std::string> emit_stmt(const StmtPtr& s, int indent) {
             for (auto& c : sw->cases) {
                 if (c.is_default) out.push_back(pad + IND + "default:");
                 for (auto& v : c.values) out.push_back(pad + IND + "case " + v + ":");
-                auto case_lines = emit_stmts(c.body, indent + 2);
+                std::vector<StmtPtr> clean_body = c.body;
+                if (clean_body.size() >= 2) {
+                    auto* last_break = dynamic_cast<BreakStmt*>(clean_body.back().get());
+                    if (last_break != nullptr) {
+                        auto* prev_term = clean_body[clean_body.size() - 2].get();
+                        if (prev_term->kind == StmtKind::ReturnStmt || prev_term->kind == StmtKind::ThrowStmt) {
+                            clean_body.pop_back();
+                        }
+                    }
+                }
+                auto case_lines = emit_stmts(clean_body, indent + 2);
                 out.insert(out.end(), case_lines.begin(), case_lines.end());
             }
             out.push_back(pad + "}");

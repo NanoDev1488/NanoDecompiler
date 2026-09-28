@@ -144,5 +144,6 @@ namespace nd {
 // НОВОЕ v1.9.55: безопасный парсинг атрибута Record в парсере ClassFile (валидация границ буфера и защита от повреждённых/обфусцированных классов).
 // НОВОЕ v1.9.56: улучшение терминала логов (визуальный статус-индикатор паузы автопрокрутки и удобная плавающая кнопка перехода к новым сообщениям).
 // НОВОЕ v1.9.57: поддержка и корректная свёртка пустых synchronized-блоков (monitorenter/monitorexit) без ложного сброса метода в байткод.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.57";
+// НОВОЕ v1.9.58: устранение недостижимых операторов break после return/throw внутри блоков switch-case в генераторе Java-кода.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.58";
 }
