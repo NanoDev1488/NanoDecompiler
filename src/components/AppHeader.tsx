@@ -1,6 +1,7 @@
-import { Bell, ChevronDown, FolderOpen, MessageSquare, Play, Settings2, Square } from "lucide-react";
+import { Bell, ChevronDown, FileArchive, FolderOpen, MessageSquare, Play, Settings2, Square } from "lucide-react";
 import { useState } from "react";
 import { t } from "../lib/i18n";
+import { fmtBytes } from "../lib/model";
 import { useEngine } from "../state/engine";
 import { cn } from "../utils/cn";
 
@@ -9,6 +10,7 @@ export function AppHeader() {
     runningJob,
     runningElapsed,
     queuedCount,
+    selectedJob,
     envIssue,
     engineVersion,
     updateInfo,
@@ -61,6 +63,17 @@ export function AppHeader() {
           </button>
         )}
       </div>
+
+      {selectedJob && (
+        <div
+          className="chip max-w-[28vw] flex-none truncate text-[11px] text-ink/75 border-line bg-raised/40 hover:text-ink transition-colors cursor-default hidden sm:flex items-center gap-1.5"
+          title={`${selectedJob.jarPath}\n${fmtBytes(selectedJob.sizeBytes)}${selectedJob.classCount ? ` · ${selectedJob.classCount} классов` : ""}`}
+        >
+          <FileArchive size={12} className="text-acid flex-none opacity-80" />
+          <span className="font-mono truncate">{selectedJob.fileName}</span>
+          <span className="text-faint text-[10px] flex-none">({fmtBytes(selectedJob.sizeBytes)})</span>
+        </div>
+      )}
 
       <div className="flex-1" />
 
