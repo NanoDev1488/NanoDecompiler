@@ -132,9 +132,22 @@ export function CommandPalette() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return actions;
-    return actions.filter(
-      a => a.label.toLowerCase().includes(q) || (a.hint && a.hint.toLowerCase().includes(q)),
-    );
+    const tokens = q.split(/\s+/).filter(Boolean);
+    return actions.filter(a => {
+      const text = `${a.label} ${a.hint ?? ""}`.toLowerCase();
+      // Все введённые токены присутствуют в названии или подсказке
+      if (tokens.every(t => text.includes(t))) return true;
+      // Нечёткий поиск подпоследовательности (fuzzy subsequence match)
+      if (tokens.length === 1 && tokens[0].length >= 2) {
+        const pattern = tokens[0];
+        let pi = 0;
+        for (let i = 0; i < text.length && pi < pattern.length; i++) {
+          if (text[i] === pattern[pi]) pi++;
+        }
+        if (pi === pattern.length) return true;
+      }
+      return false;
+    });
   }, [actions, query]);
 
   useEffect(() => setIndex(0), [query]);

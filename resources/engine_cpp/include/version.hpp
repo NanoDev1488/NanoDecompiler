@@ -154,5 +154,6 @@ namespace nd {
 // НОВОЕ v1.9.65: отображение активного jar-файла, его размера и пути во всплывающей подсказке в шапке GUI.
 // НОВОЕ v1.9.66: устранение избыточных блоков else после безусловного return/throw внутри then-ветки в структуризаторе CFG.
 // НОВОЕ v1.9.67: точный рендеринг модификаторов доступа (static, private, protected) для внутренних и вложенных классов из таблицы InnerClasses.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.67";
+// НОВОЕ v1.9.68: расширенный нечёткий (fuzzy) и мультитокенный поиск команд в командной палитре (Ctrl+K).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.68";
 }
