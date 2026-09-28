@@ -489,7 +489,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
         setUpdateInfo(u => ({ ...u, applying: false, error: String(e) }));
         toast(t(settings.language, "toast.update_failed"), "err");
       });
-  }, [updateInfo.clientDownloadUrl, updateInfo.releaseUrl, toast]);
+  }, [updateInfo.clientDownloadUrl, updateInfo.releaseUrl, toast, settings.language]);
 
   const applyEngineUpdate = useCallback(() => {
     if (!updateInfo.downloadUrl) return;
@@ -514,7 +514,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const openClientDownload = useCallback(() => {
     const url = updateInfo.clientDownloadUrl ?? updateInfo.releaseUrl;
     if (url) window.nano.openExternal(url).catch(() => toast(t(settings.language, "toast.link_failed"), "err"));
-  }, [toast, updateInfo.clientDownloadUrl, updateInfo.releaseUrl]);
+  }, [toast, updateInfo.clientDownloadUrl, updateInfo.releaseUrl, settings.language]);
 
 
   // Из main-процесса персистится ТОЛЬКО legitimacyCheck/autoUpdateCheck
