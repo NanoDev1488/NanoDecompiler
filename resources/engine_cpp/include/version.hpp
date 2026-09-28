@@ -128,5 +128,6 @@ namespace nd {
 // НОВОЕ v1.9.39: исправление компиляции C++ движка в CI (устранение ошибки типов CastExpr -> Cast и приведения f->init в uses_name_in_expr).
 // НОВОЕ v1.9.40: исправление свёртки StringBuilder (корректный пропуск int capacity конструктора new StringBuilder(N) без попадания в текст конкатенации).
 // НОВОЕ v1.9.41: быстрый переход к строке кода в редакторе (Ctrl+G, диалог ввода номера строки с валидацией границ).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.41";
+// НОВОЕ v1.9.42: улучшение дерева файлов (кнопка быстрой очистки фильтра поиска по Esc/клику, отображение счётчика отфильтрованных файлов в строке состояния).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.42";
 }

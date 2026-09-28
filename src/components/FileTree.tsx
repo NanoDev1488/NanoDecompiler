@@ -396,10 +396,23 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect, totalS
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Escape") setQuery("");
+            }}
             placeholder="Фильтр по имени или пакету…"
-            className="field mono h-[30px] pl-7 text-[11.5px]"
+            className="field mono h-[30px] pr-6 pl-7 text-[11.5px]"
             spellCheck={false}
           />
+          {query.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="absolute top-1/2 right-2 -translate-y-1/2 text-[11px] text-faint hover:text-ink"
+              title="Очистить фильтр (Esc)"
+            >
+              ✕
+            </button>
+          )}
         </div>
       </div>
 
@@ -431,7 +444,11 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect, totalS
       </div>
 
       <div className="mono flex-none border-t border-line px-3 py-2 text-[10.5px] text-faint">
-        {files.length} файл(ов) · {totalLoc} строк
+        {filtering ? (
+          <span>Найдено {visible.length} из {files.length} файл(ов)</span>
+        ) : (
+          <span>{files.length} файл(ов) · {totalLoc} строк</span>
+        )}
       </div>
     </div>
   );
