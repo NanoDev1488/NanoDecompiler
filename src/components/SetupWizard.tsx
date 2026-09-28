@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Check, ChevronRight, Sparkles } from "lucide-react";
+import { Check, ChevronRight, RefreshCw, Sparkles } from "lucide-react";
 import { useEngine } from "../state/engine";
 import { t } from "../lib/i18n";
+import { cn } from "../utils/cn";
 
 const EULA_TEXT = `NANODECOMPILER — END-USER LICENSE AGREEMENT (EULA)
 
@@ -136,7 +137,7 @@ function DoneArt() {
 type Step = "welcome" | "eula" | "options" | "done";
 
 export function SetupWizard() {
-  const { completeSetup, settings, saveSettings } = useEngine();
+  const { completeSetup, settings, saveSettings, javaEnv, checkEnv, envIssue } = useEngine();
   const lang = settings.language;
   const [step, setStep] = useState<Step>("welcome");
   const [accepted, setAccepted] = useState(false);
@@ -208,6 +209,24 @@ export function SetupWizard() {
                 {lang === "ru" ? "Пара настроек напоследок" : "A few final settings"}
               </p>
               <div className="w-full space-y-2 text-left">
+                <div className="flex items-center justify-between rounded-lg border border-line bg-bg px-3.5 py-2">
+                  <div className="text-left text-[11.5px] truncate mr-2">
+                    <span className="text-ink/90 block font-mono truncate">
+                      {javaEnv ? `Java ${javaEnv.major} (${javaEnv.path})` : (envIssue ? (lang === "ru" ? "Java не найдена" : "Java not found") : (lang === "ru" ? "Проверка окружения…" : "Checking environment…"))}
+                    </span>
+                    <span className={cn("text-[10px]", javaEnv ? "text-acid" : "text-err")}>
+                      {javaEnv ? (lang === "ru" ? "Среда выполнения готова" : "Runtime ready") : (lang === "ru" ? "Требуется для декомпиляции" : "Required for decompilation")}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-ghost h-7 px-2 text-[11px] flex-none"
+                    onClick={checkEnv}
+                    title={lang === "ru" ? "Проверить снова" : "Check again"}
+                  >
+                    <RefreshCw size={12} />
+                  </button>
+                </div>
                 <label className="flex items-center justify-between rounded-lg border border-line bg-bg px-3.5 py-2.5">
                   <span className="text-[12px] text-ink/90">
                     {lang === "ru" ? "Проверять обновления автоматически" : "Check for updates automatically"}
