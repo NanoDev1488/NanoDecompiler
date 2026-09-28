@@ -839,6 +839,19 @@ std::pair<std::string, OrderedImports> render_class(
             if (is_generated_object_method) continue;
         }
         std::string mmods = access_str(m.access, "method");
+        if (is_interface) {
+            if (m.has_code && !(m.access & 0x0008) && !(m.access & 0x0002) && m.name != "<clinit>") {
+                size_t apos = mmods.find("abstract");
+                if (apos != std::string::npos) mmods.erase(apos, 8);
+                if (mmods.find("default") == std::string::npos) {
+                    if (!mmods.empty() && mmods.back() != ' ') mmods += " ";
+                    mmods += "default";
+                }
+            } else if (!m.has_code) {
+                size_t apos = mmods.find("abstract");
+                if (apos != std::string::npos) mmods.erase(apos, 8);
+            }
+        }
         std::string ret_disp;
         std::vector<std::string> params_disp;
         try {
