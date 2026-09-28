@@ -1,4 +1,4 @@
-import { Copy, Hash, Search, WrapText } from "lucide-react";
+import { Copy, Hash, Search, WrapText, ZoomIn, ZoomOut } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEngine } from "../state/engine";
 import { JavaCode } from "../lib/javaHighlight";
@@ -115,6 +115,27 @@ export const CodeView = memo(function CodeView({
   const lastSavedRef = useRef<string>("");
   const [saveState, setSaveState] = useState<"saving" | "err" | null>(null);
   const codeContainerRef = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(() => {
+    try {
+      const saved = localStorage.getItem("nano:editor_zoom");
+      return saved ? Number(saved) || 100 : 100;
+    } catch {
+      return 100;
+    }
+  });
+
+  const changeZoom = (delta: number) => {
+    setZoom(z => {
+      const next = Math.max(70, Math.min(160, z + delta));
+      try { localStorage.setItem("nano:editor_zoom", String(next)); } catch {}
+      return next;
+    });
+  };
+
+  const resetZoom = () => {
+    setZoom(100);
+    try { localStorage.setItem("nano:editor_zoom", "100"); } catch {}
+  };
 
   useEffect(() => {
     if (!file) return;
@@ -164,6 +185,15 @@ export const CodeView = memo(function CodeView({
       } else if (e.altKey && e.key.toLowerCase() === "z") {
         e.preventDefault();
         setWrap(v => !v);
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === "=" || e.key === "+")) {
+        e.preventDefault();
+        changeZoom(10);
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === "-" || e.key === "_")) {
+        e.preventDefault();
+        changeZoom(-10);
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "0") {
+        e.preventDefault();
+        resetZoom();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -307,6 +337,29 @@ export const CodeView = memo(function CodeView({
         >
           <Copy size={14} />
         </button>
+        <div className="flex items-center gap-0.5 border-l border-line pl-1.5 ml-0.5">
+          <button
+            className="icon-btn h-7 w-7"
+            title={lang === "ru" ? "Уменьшить масштаб (Ctrl+-)" : "Zoom out (Ctrl+-)"}
+            onClick={() => changeZoom(-10)}
+          >
+            <ZoomOut size={13} />
+          </button>
+          <button
+            className="mono px-1.5 h-6 rounded text-[10.5px] hover:bg-surface-elevated text-dim hover:text-ink transition-colors cursor-pointer"
+            title={lang === "ru" ? "Сбросить масштаб (Ctrl+0)" : "Reset zoom (Ctrl+0)"}
+            onClick={resetZoom}
+          >
+            {zoom}%
+          </button>
+          <button
+            className="icon-btn h-7 w-7"
+            title={lang === "ru" ? "Увеличить масштаб (Ctrl++)" : "Zoom in (Ctrl++)"}
+            onClick={() => changeZoom(10)}
+          >
+            <ZoomIn size={13} />
+          </button>
+        </div>
         {canEdit && (
           <span
             className="mono flex items-center gap-1 text-[10.5px] text-faint"
@@ -325,7 +378,11 @@ export const CodeView = memo(function CodeView({
         )}
       </div>
 
-      <div ref={codeContainerRef} className="min-h-0 flex-1 overflow-auto py-3">
+      <div
+        ref={codeContainerRef}
+        className="min-h-0 flex-1 overflow-auto py-3"
+        style={zoom !== 100 ? { fontSize: `${zoom}%` } : undefined}
+      >
         {file.note && (
           <div className="mono mx-4 mb-3 rounded-lg border border-warn/25 bg-warn/5 px-3 py-2 text-[11px] leading-relaxed text-warn/90">
             {file.note}
