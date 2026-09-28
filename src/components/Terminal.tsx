@@ -187,14 +187,18 @@ export function Terminal() {
             <button
               className="icon-btn h-7 w-7"
               data-active={stick}
-              title={lang === "ru" ? "Автопрокрутка" : "Autoscroll"}
+              title={
+                stick
+                  ? (lang === "ru" ? "Автопрокрутка включена" : "Autoscroll enabled")
+                  : (lang === "ru" ? "Автопрокрутка приостановлена (нажмите для включения)" : "Autoscroll paused (click to resume)")
+              }
               onClick={() => {
                 const next = !stick;
                 setStick(next);
                 if (next) jumpToEnd();
               }}
             >
-              <ArrowDownToLine size={13} />
+              <ArrowDownToLine size={13} className={stick ? "text-acid" : "text-warn"} />
             </button>
             <button
               className="icon-btn h-7 w-7"
@@ -256,10 +260,10 @@ export function Terminal() {
           {!stick && (
             <button
               onClick={jumpToEnd}
-              className="btn btn-tonal absolute right-3 bottom-2 h-7 px-2.5 text-[11px]"
+              className="btn btn-tonal absolute right-4 bottom-3 h-7 gap-1.5 rounded-lg border border-warn/40 bg-surface px-2.5 text-[11px] text-warn shadow-lg hover:border-acid hover:text-acid"
             >
-              <ArrowDownToLine size={12} />
-              {lang === "ru" ? "к концу" : "to bottom"}
+              <ArrowDownToLine size={12} className="animate-bounce" />
+              {lang === "ru" ? "Вниз (пауза)" : "To bottom (paused)"}
             </button>
           )}
         </div>
