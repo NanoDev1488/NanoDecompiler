@@ -173,6 +173,8 @@ export interface Settings {
   keepLineNumbers: boolean;
   openFolderOnDone: boolean;
   disableVsCodeLogs: boolean;
+  telemetryEnabled: boolean;
+  telemetryUrl: string;
   /** единственное поле здесь, которое реально доходит до движка -
    * остальные (threads/renameObfuscated/keepLineNumbers) сейчас чисто
    * визуальные: CLI принимает только [jarPath, outDir, --no-legitimacy-check?].

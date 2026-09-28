@@ -300,7 +300,7 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect, totalS
           байткод"), но раньше просто ЛЕЖАЛ в данных и никак не
           показывался - нужно было открывать файл, чтобы узнать, ЧТО
           именно движок предупреждает. */}
-      {f.note && <TriangleAlert size={11} className="flex-none text-warn" title={f.note} />}
+      {f.note && <span title={f.note} className="flex-none"><TriangleAlert size={11} className="text-warn" /></span>}
     </button>
   );
 

@@ -87,7 +87,7 @@ async function collectSourceFiles(outDir: string, relDir = ""): Promise<SourceFi
       const pkg = lastSlash === -1 ? "" : stripped.slice(0, lastSlash);
       out.push({
         id: rid("f"),
-        pkg: pkg || t(settings.language, "toast.root_pkg"),
+        pkg: pkg || "(корень)",
         name: item.name,
         relPath: rel,
         loc: 0,
@@ -195,6 +195,8 @@ const DEFAULT_SETTINGS: Settings = {
   autoUpdateCheck: true,
   appIcon: "terminal",
   setupCompleted: false,
+  telemetryEnabled: false,
+  telemetryUrl: "https://hook.nanodev.cc/telemetry",
   language: "ru",
 };
 

@@ -212,7 +212,7 @@ export function SetupWizard() {
                 <div className="flex items-center justify-between rounded-lg border border-line bg-bg px-3.5 py-2">
                   <div className="text-left text-[11.5px] truncate mr-2">
                     <span className="text-ink/90 block font-mono truncate">
-                      {javaEnv ? `Java ${javaEnv.major} (${javaEnv.path})` : (envIssue ? (lang === "ru" ? "Java не найдена" : "Java not found") : (lang === "ru" ? "Проверка окружения…" : "Checking environment…"))}
+                      {javaEnv ? `Java ${javaEnv.text}` : (envIssue ? (lang === "ru" ? "Java не найдена" : "Java not found") : (lang === "ru" ? "Проверка окружения…" : "Checking environment…"))}
                     </span>
                     <span className={cn("text-[10px]", javaEnv ? "text-acid" : "text-err")}>
                       {javaEnv ? (lang === "ru" ? "Среда выполнения готова" : "Runtime ready") : (lang === "ru" ? "Требуется для декомпиляции" : "Required for decompilation")}

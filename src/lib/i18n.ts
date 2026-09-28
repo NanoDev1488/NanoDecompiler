@@ -13,6 +13,8 @@ export const DICT = {
     "settings.section.telemetry": "Отчёты об ошибках",
     "settings.telemetry.enabled": "Автоматически отправлять отчёты об ошибках и сбоях",
     "settings.telemetry.desc": "Помогает улучшать алгоритмы декомпиляции при отказах движка",
+    
+    "settings.disable_vscode_logs": "Отключать VS Code стиль визуализации логов (log.info)",
     "settings.language.ru": "Русский",
     "settings.language.en": "English",
     "settings.engine.label": "Движок",
@@ -147,6 +149,7 @@ export const DICT = {
     "settings.section.telemetry": "Error reporting",
     "settings.telemetry.enabled": "Automatically send error and crash reports",
     "settings.telemetry.desc": "Helps improve decompiler algorithms on engine fallback",
+    "settings.disable_vscode_logs": "Отключать VS Code стиль визуализации логов (log.info)",
     "settings.language.ru": "Русский",
     "settings.language.en": "English",
     "settings.engine.label": "Engine",

@@ -1,0 +1,1 @@
+﻿const fs=require("fs"); let c=fs.readFileSync("src/components/FileTree.tsx", "utf8"); c=c.replace(/<TriangleAlert size=\{11\} className="flex-none text-warn" title=\{f\.note\} \/>/, `<span title={f.note} className="flex-none"><TriangleAlert size={11} className="text-warn" /></span>`); fs.writeFileSync("src/components/FileTree.tsx", c);

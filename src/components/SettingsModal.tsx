@@ -486,8 +486,7 @@ export function SettingsModal() {
               <Row
                 label={t(draft.language, "settings.disable_vscode_logs")}
                   control={
-                    <Toggle
-                    checked={draft.disableVsCodeLogs}
+                    <Toggle label="" checked={draft.disableVsCodeLogs}
                     onChange={v => setDraft(d => ({ ...d, disableVsCodeLogs: v }))}
                   />
                 }

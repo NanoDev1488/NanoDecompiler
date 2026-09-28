@@ -108,7 +108,7 @@ export const CodeView = memo(function CodeView({
   jobId?: string;
   outDir?: string;
 }) {
-  const { copyText, selectFile, toast, settings } = useEngine();
+  const { copyText, selectFile, toast, settings, addJarPaths } = useEngine();
   const lang = settings.language;
   const [wrap, setWrap] = useState(false);
   const codeContainerRef = useRef<HTMLDivElement>(null);
@@ -155,7 +155,7 @@ export const CodeView = memo(function CodeView({
         resetZoom();
       } else if (e.altKey && e.key.toLowerCase() === "w") {
         e.preventDefault();
-        if (jobId) selectFile(jobId, null);
+        if (jobId) selectFile(jobId, "");
       }
     };
     window.addEventListener("keydown", onKey);
@@ -195,8 +195,8 @@ export const CodeView = memo(function CodeView({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const job = jobId ? useEngine().jobs[jobId] : undefined;
-  const platformVersion = job?.stats?.platform_version;
+  const job = jobId ? useEngine().jobs.find(j => j.id === jobId) : undefined;
+  const platformVersion = undefined;
 
   const displayCode = useMemo(() => {
     if (file?.code === undefined) return undefined;
