@@ -89,6 +89,7 @@ export function CommandPalette() {
       {
         id: "toggle-terminal",
         label: engine.terminalOpen ? "Свернуть терминал" : "Развернуть терминал",
+        hint: "Ctrl `",
         icon: PanelBottom,
         run: engine.toggleTerminal,
       },
@@ -131,7 +132,9 @@ export function CommandPalette() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return actions;
-    return actions.filter(a => a.label.toLowerCase().includes(q));
+    return actions.filter(
+      a => a.label.toLowerCase().includes(q) || (a.hint && a.hint.toLowerCase().includes(q)),
+    );
   }, [actions, query]);
 
   useEffect(() => setIndex(0), [query]);
