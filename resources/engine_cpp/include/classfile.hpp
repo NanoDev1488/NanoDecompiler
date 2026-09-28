@@ -38,6 +38,7 @@ public:
     void skip(size_t n);
     size_t pos() const { return pos_; }
     size_t size() const { return data_.size(); }
+    size_t remaining() const { return pos_ < data_.size() ? data_.size() - pos_ : 0; }
 
 private:
     const std::vector<uint8_t>& data_;
@@ -62,6 +63,7 @@ struct CpEntry {
     std::string utf8_value;
     // Integer/Long (Long хранится как int64_t)
     int64_t int_value = 0;
+    uint64_t long_value = 0;
     // Float/Double
     double float_value = 0.0;
     // Class: name_idx ; String: string_idx ; MethodType: desc_idx ; Module/Package: name_idx

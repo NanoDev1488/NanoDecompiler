@@ -45,9 +45,10 @@ using ExprPtr = std::shared_ptr<Expr>;
 class Const : public Expr {
 public:
     std::string literal;              // готовый Java-литерал строкой, напр. "42", "\"abc\"", "null"
+    std::string value;                // alias for literal ("true", "false", "255", etc.)
     std::optional<std::string> raw;   // для type=="String" - сырая строка (для str_decrypt.py)
     Const(std::string literal_, std::string type_ = "int", std::optional<std::string> raw_ = std::nullopt)
-        : Expr(ExprKind::Const), literal(std::move(literal_)), raw(std::move(raw_)) {
+        : Expr(ExprKind::Const), literal(literal_), value(std::move(literal_)), raw(std::move(raw_)) {
         type = std::move(type_);
     }
     int prec() const override { return 100; }

@@ -563,6 +563,7 @@ void ClassFile::parse(const std::vector<uint8_t>& data) {
                 uint32_t hi = r.u4(), lo = r.u4();
                 uint64_t v = (uint64_t(hi) << 32) | uint64_t(lo);
                 e.int_value = static_cast<int64_t>(v);
+                e.long_value = v;
                 pool[i] = e;
                 i += 2;  // Long занимает 2 слота constant pool (JVM spec)
                 continue;

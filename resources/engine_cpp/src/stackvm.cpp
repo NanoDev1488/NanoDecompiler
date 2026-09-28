@@ -1061,7 +1061,7 @@ ExprPtr handle_invokedynamic(const ClassFile& cf, const Instruction& ins, Method
     std::string ret_type = indy_ret.empty() ? "Object" : indy_ret;
     return std::make_shared<MethodCall>(
         std::make_shared<Raw>("/* indy: " + bsm_owner + "." + bsm_name + " */ " + indy_name),
-        indy_name, call_args, ret_type, false, false, std::nullopt);
+        indy_name, call_args, ret_type, false);
 }
 
 }  // namespace
