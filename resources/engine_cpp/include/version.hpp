@@ -159,5 +159,6 @@ namespace nd {
 // НОВОЕ v1.9.70: извлечение контрольных сумм CRC32 и безопасная обработка пустых (0 байт) файлов при распаковке ZIP/JAR.
 // НОВОЕ v1.9.71: переключение режима переноса строк (word wrap) в редакторе кода по горячей клавише Alt+Z.
 // НОВОЕ v1.9.72: чистое форматирование multi-catch блоков catch (IOException | SQLException e) в генераторе Java-кода.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.72";
+// НОВОЕ v1.9.73: скрытие вспомогательных синтетических методов $SWITCH_TABLE$... и access$... компилятора javac при выводе классов.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.73";
 }

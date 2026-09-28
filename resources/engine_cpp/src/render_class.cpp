@@ -844,8 +844,11 @@ std::pair<std::string, OrderedImports> render_class(
     for (auto& m : cf.methods) {
         if (skip_methods.count(&m)) continue;
         // Пропускаем синтетические методы реализации lambda (lambda$...),
-        // сгенерированные компилятором javac при desugaring invokedynamic.
-        if ((m.access & 0x1000) && m.name.rfind("lambda$", 0) == 0) {
+        // switch-таблицы ($SWITCH_TABLE$...) и мосты доступа (access$...),
+        // сгенерированные компилятором javac.
+        if ((m.access & 0x1000) && (m.name.rfind("lambda$", 0) == 0 ||
+                                    m.name.rfind("$SWITCH_TABLE$", 0) == 0 ||
+                                    m.name.rfind("access$", 0) == 0)) {
             stats.total_methods += 1;
             stats.decompiled_methods += 1;
             continue;
