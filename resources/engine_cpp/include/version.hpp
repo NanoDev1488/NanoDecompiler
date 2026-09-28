@@ -145,5 +145,6 @@ namespace nd {
 // НОВОЕ v1.9.56: улучшение терминала логов (визуальный статус-индикатор паузы автопрокрутки и удобная плавающая кнопка перехода к новым сообщениям).
 // НОВОЕ v1.9.57: поддержка и корректная свёртка пустых synchronized-блоков (monitorenter/monitorexit) без ложного сброса метода в байткод.
 // НОВОЕ v1.9.58: устранение недостижимых операторов break после return/throw внутри блоков switch-case в генераторе Java-кода.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.58";
+// НОВОЕ v1.9.59: улучшение формы обратной связи (счётчик символов и подсказка быстрой отправки комбинацией Ctrl+Enter).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.59";
 }

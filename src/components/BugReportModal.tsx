@@ -77,6 +77,9 @@ export function BugReportModal({ onClose }: { onClose: () => void }) {
             spellCheck
           />
           <div className="flex items-center justify-end gap-2">
+            <span className="mono mr-auto text-[10.5px] text-faint">
+              {text.length} {lang === "ru" ? "симв. · Ctrl+Enter для отправки" : "chars · Ctrl+Enter to send"}
+            </span>
             <button className="btn btn-ghost h-8 text-[12px]" onClick={onClose}>
               {t(lang, "bug.cancel")}
             </button>
