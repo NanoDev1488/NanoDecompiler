@@ -483,6 +483,7 @@ export function SettingsModal() {
                   />
                 }
               />
+              <div className="h-px bg-line" />
               <Row
                 label={t(draft.language, "settings.disable_vscode_logs")}
                   control={
