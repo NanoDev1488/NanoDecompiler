@@ -85,7 +85,13 @@ function buildPkgTree(files: SourceFile[], keyPrefix: string): ResTreeNode[] {
       n.children = childMap ? finalize(childMap) : [];
       delete (n as any)._childMap;
     }
-    arr.sort((a, b) => a.label.localeCompare(b.label));
+    arr.sort((a, b) => {
+      const aRoot = a.label.startsWith("(корень");
+      const bRoot = b.label.startsWith("(корень");
+      if (aRoot && !bRoot) return -1;
+      if (!aRoot && bRoot) return 1;
+      return a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" });
+    });
     return arr;
   };
   return finalize(rootChildren);
@@ -113,9 +119,9 @@ function countFilesIn(node: ResTreeNode): number {
 type SortMode = "name" | "size" | "warnings";
 
 function compareFiles(a: SourceFile, b: SourceFile, mode: SortMode): number {
-  if (mode === "size") return b.loc - a.loc || a.name.localeCompare(b.name);
-  if (mode === "warnings") return (b.note ? 1 : 0) - (a.note ? 1 : 0) || a.name.localeCompare(b.name);
-  return a.name.localeCompare(b.name);
+  if (mode === "size") return b.loc - a.loc || a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+  if (mode === "warnings") return (b.note ? 1 : 0) - (a.note ? 1 : 0) || a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+  return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
 }
 
 // БАГ-ФИКС v1.8.2 (заодно с переносом java на дерево - см. buildPkgTree):
