@@ -2103,7 +2103,7 @@ std::vector<StmtPtr> inline_crossing_pass(const std::vector<StmtPtr>& lst, Metho
                     auto* a = static_cast<Assign*>(es->expr.get());
                     if (a->target && a->target->kind == ExprKind::Local) {
                         std::string tname = static_cast<Local*>(a->target.get())->name;
-                        if (ctx.crossing_temp_types.count(tname) || (tname.rfind("__stk", 0) == 0)) {
+                        if (ctx.crossing_temp_types.count(tname) || (tname.rfind("__stk", 0) == 0) || (tname.rfind("__temp", 0) == 0)) {
                             std::vector<StmtPtr> rest(work.begin() + i + 1, work.end());
                             if (count_local_uses_list(rest, tname) == 1) {
                                 if (nxt->kind == StmtKind::ReturnStmt) {
