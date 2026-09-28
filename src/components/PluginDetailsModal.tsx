@@ -1,5 +1,5 @@
-import { ExternalLink, X, FolderOpen, Star, TriangleAlert } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { Copy, ExternalLink, X, FolderOpen, Star, TriangleAlert } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 import { fmtBytes, fmtNum, fmtSeconds, joinOutDir, type Job } from "../lib/model";
 import { t } from "../lib/i18n";
 import { useEngine } from "../state/engine";
@@ -20,7 +20,7 @@ function GithubIcon({ size = 16, className }: { size?: number; className?: strin
 }
 
 export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => void }) {
-  const { openOutput, toast, addJarPaths, settings } = useEngine();
+  const { openOutput, toast, addJarPaths, settings, copyText } = useEngine();
   const lang = settings.language;
   const d = job.details;
   const [ghLoading, setGhLoading] = useState(false);
@@ -65,7 +65,14 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
         className="animate-rise flex max-h-[86vh] w-[520px] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl shadow-black/50"
       >
         <div className="flex h-11 flex-none items-center gap-2 border-b border-line px-4">
-          <h2 className="mono truncate text-[13px] font-semibold text-ink">{job.fileName}</h2>
+          <h2 className="mono truncate text-[13px] font-semibold text-ink" title={job.fileName}>{job.fileName}</h2>
+          <button
+            className="icon-btn h-6 w-6 text-faint hover:text-ink"
+            onClick={() => copyText(job.fileName, "Имя файла")}
+            title={lang === "ru" ? "Скопировать имя файла" : "Copy filename"}
+          >
+            <Copy size={12} />
+          </button>
           <div className="flex-1" />
           <button className="icon-btn h-7 w-7" onClick={onClose} aria-label="Закрыть">
             <X size={14} />
@@ -82,6 +89,34 @@ export function PluginDetailsModal({ job, onClose }: { job: Job; onClose: () => 
             </p>
           ) : (
             <div className="flex flex-col gap-3 text-[12.5px]">
+              {job.pluginName && (
+                <Row
+                  label={lang === "ru" ? "Имя плагина" : "Plugin name"}
+                  value={
+                    <span
+                      className="cursor-pointer hover:text-acid"
+                      title={lang === "ru" ? "Нажмите, чтобы скопировать" : "Click to copy"}
+                      onClick={() => copyText(job.pluginName!, "Имя плагина")}
+                    >
+                      {job.pluginName}
+                    </span>
+                  }
+                />
+              )}
+              {job.pluginAuthor && (
+                <Row
+                  label={lang === "ru" ? "Автор" : "Author"}
+                  value={
+                    <span
+                      className="cursor-pointer hover:text-acid"
+                      title={lang === "ru" ? "Нажмите, чтобы скопировать" : "Click to copy"}
+                      onClick={() => copyText(job.pluginAuthor!, "Автор")}
+                    >
+                      {job.pluginAuthor}
+                    </span>
+                  }
+                />
+              )}
               <Row label={lang === "ru" ? "Платформа" : "Platform"} value={d.stats.platform ?? (lang === "ru" ? "не определена" : "unknown")} />
               <Row label={lang === "ru" ? "Размер архива" : "Archive size"} value={fmtBytes(job.sizeBytes)} />
               <Row label={lang === "ru" ? "Классов в архиве" : "Classes in archive"} value={fmtNum(d.stats.classes_total)} />
