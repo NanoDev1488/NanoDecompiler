@@ -97,6 +97,28 @@ std::optional<std::string> extract_mcmod_info_name(const std::string& text) {
     return std::nullopt;
 }
 
+// quilt.mod.json (Quilt mod loader) - имя лежит внутри quilt_loader.metadata.name
+// или quilt_loader.id, если metadata не задана.
+std::optional<std::string> extract_quilt_name(const std::string& text) {
+    auto parsed = json_parse(text);
+    if (!parsed.has_value() || !parsed->is_object()) return std::nullopt;
+    if (const JsonValue* ql = parsed->get("quilt_loader")) {
+        if (ql->is_object()) {
+            if (const JsonValue* meta = ql->get("metadata")) {
+                if (meta->is_object()) {
+                    if (const JsonValue* name = meta->get("name")) {
+                        if (auto s = name->as_string(); s.has_value() && !s->empty()) return s;
+                    }
+                }
+            }
+            if (const JsonValue* id = ql->get("id")) {
+                if (auto s = id->as_string(); s.has_value() && !s->empty()) return s;
+            }
+        }
+    }
+    return extract_json_field(text, "name");
+}
+
 }  // namespace
 
 PlatformInfo detect_platform(const std::vector<std::string>& all_names,
@@ -107,38 +129,27 @@ PlatformInfo detect_platform(const std::vector<std::string>& all_names,
         return std::find(all_names.begin(), all_names.end(), path) != all_names.end();
     };
 
-    // БАГ-ФИКС (реальный, воспроизведён на настоящем ViaVersion-5.11.0.jar -
-    // одном из самых популярных плагинов Minecraft): раньше моды
-    // проверялись ПЕРВЫМИ, до любых серверных манифестов - логика была
-    // "не дать моду провалиться в декомпиляцию плагина". Но ViaVersion -
-    // легитимный кросс-платформенный jar, который одновременно содержит
-    // plugin.yml (Bukkit), velocity-plugin.json (Velocity) И
-    // fabric.mod.json (Fabric) - три манифеста в одном файле, потому что
-    // ViaVersion реально ставится на все три платформы из одного и того
-    // же архива. Старый порядок видел fabric.mod.json первым и ЦЕЛИКОМ
-    // отклонял ViaVersion как "мод", даже не взглянув на plugin.yml/
-    // velocity-plugin.json рядом. Теперь СНАЧАЛА проверяем все серверные
-    // форматы - если хотя бы один найден, jar декомпилируется как
-    // соответствующий плагин, НЕЗАВИСИМО от того, есть ли рядом ЕЩЁ и
-    // мод-манифест. Отказ как "мод" происходит, только если НИ ОДНОГО
-    // серверного манифеста нет вообще - это по-прежнему верно отсекает
-    // чистые Fabric/Forge-моды без единого признака серверного плагина.
     if (has("velocity-plugin.json")) {
         info.kind = PlatformKind::Velocity;
         info.manifest_path = "velocity-plugin.json";
-        if (auto text = read_entry("velocity-plugin.json")) info.name = extract_json_field(*text, "name");
+        if (auto text = read_entry("velocity-plugin.json")) {
+            info.name = extract_json_field(*text, "name");
+            if (!info.name.has_value()) info.name = extract_json_field(*text, "id");
+        }
         return info;
     }
-    if (has("bungee.yml")) {
+    std::string bungee_path = has("bungee.yml") ? "bungee.yml" : (has("waterfall.yml") ? "waterfall.yml" : "");
+    if (!bungee_path.empty()) {
         info.kind = PlatformKind::Bungee;
-        info.manifest_path = "bungee.yml";
-        if (auto text = read_entry("bungee.yml")) info.name = extract_yaml_name(*text);
+        info.manifest_path = bungee_path;
+        if (auto text = read_entry(bungee_path)) info.name = extract_yaml_name(*text);
         return info;
     }
-    if (has("paper-plugin.yml")) {
+    std::string paper_path = has("paper-plugin.yml") ? "paper-plugin.yml" : (has("META-INF/paper-plugin.yml") ? "META-INF/paper-plugin.yml" : "");
+    if (!paper_path.empty()) {
         info.kind = PlatformKind::Paper;
-        info.manifest_path = "paper-plugin.yml";
-        if (auto text = read_entry("paper-plugin.yml")) info.name = extract_yaml_name(*text);
+        info.manifest_path = paper_path;
+        if (auto text = read_entry(paper_path)) info.name = extract_yaml_name(*text);
         return info;
     }
     if (has("plugin.yml")) {
@@ -159,7 +170,7 @@ PlatformInfo detect_platform(const std::vector<std::string>& all_names,
     if (has("quilt.mod.json")) {
         info.kind = PlatformKind::ModFabric;
         info.manifest_path = "quilt.mod.json";
-        if (auto text = read_entry("quilt.mod.json")) info.name = extract_json_field(*text, "name");
+        if (auto text = read_entry("quilt.mod.json")) info.name = extract_quilt_name(*text);
         return info;
     }
     if (has("META-INF/mods.toml") || has("META-INF/neoforge.mods.toml")) {

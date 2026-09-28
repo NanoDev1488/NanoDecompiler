@@ -119,5 +119,6 @@ namespace nd {
 // НОВОЕ v1.9.30: безопасный дизассемблер при повреждённом/обфусцированном байткоде (защита от выхода за границы буфера и переполнения в switch/cp/wide инструкциях).
 // НОВОЕ v1.9.31: расширение десугаринга циклов (распознавание do-while с хвостовым if-break без ветки else, автоматическое удаление избыточных хвостовых continue).
 // НОВОЕ v1.9.32: устранение избыточных двойных скобок в выражениях приведения типов (Cast emission: стандартный приоритет оператора каста, чистое форматирование).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.32";
+// НОВОЕ v1.9.33: расширенная детекция платформ (поддержка META-INF/paper-plugin.yml, waterfall.yml, fallback по id для Velocity и вложенных имён Quilt).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.33";
 }
