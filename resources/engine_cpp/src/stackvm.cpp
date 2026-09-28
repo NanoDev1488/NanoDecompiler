@@ -1171,6 +1171,11 @@ void MethodCtx::init_params() {
             if (is_array && pit == kPrimitiveNames.end()) lname += "s";  // players, items - множественное число для читаемых имён-объектов
             int idx = ++type_seen_count[base];
             name = type_total_count[base] > 1 ? lname + std::to_string(idx) : lname;
+            if (!is_safe_local_name(name)) {
+                if (name == "class") name = type_total_count[base] > 1 ? "clazz" + std::to_string(idx) : "clazz";
+                else name = "param" + std::to_string(i);
+            }
+            used_local_names_.insert(name);
         }
         LocalInfo info;
         info.name = name;
