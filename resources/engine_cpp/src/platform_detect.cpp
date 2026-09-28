@@ -31,14 +31,18 @@ std::string trim(const std::string& s) {
 // website/author в legitimacy_check.cpp - не дублируем регэксп заново,
 // но это отдельный, самодостаточный модуль (platform_detect не должен
 // тянуть legitimacy_check.hpp), поэтому здесь свой маленький экстрактор.
-std::optional<std::string> extract_yaml_name(const std::string& text) {
-    static const std::regex re(R"(^name:\s*['"]?([^'"\n]+)['"]?\s*$)", std::regex::multiline);
+std::optional<std::string> extract_yaml_field(const std::string& text, const std::string& field) {
+    std::regex re(R"(^)" + field + R"(:\s*['"]?([^'"\n]+)['"]?\s*$)", std::regex::multiline);
     std::smatch m;
     if (std::regex_search(text, m, re)) {
         std::string v = trim(m[1].str());
         if (!v.empty()) return v;
     }
     return std::nullopt;
+}
+
+std::optional<std::string> extract_yaml_name(const std::string& text) {
+    return extract_yaml_field(text, "name");
 }
 
 // velocity-plugin.json / fabric.mod.json - настоящий JSON, есть готовый
@@ -137,6 +141,8 @@ PlatformInfo detect_platform(const std::vector<std::string>& all_names,
         if (auto text = read_entry(vel_path)) {
             info.name = extract_json_field(*text, "name");
             if (!info.name.has_value()) info.name = extract_json_field(*text, "id");
+            info.version = extract_json_field(*text, "version");
+            info.description = extract_json_field(*text, "description");
         }
         return info;
     }
@@ -144,20 +150,32 @@ PlatformInfo detect_platform(const std::vector<std::string>& all_names,
     if (!bungee_path.empty()) {
         info.kind = PlatformKind::Bungee;
         info.manifest_path = bungee_path;
-        if (auto text = read_entry(bungee_path)) info.name = extract_yaml_name(*text);
+        if (auto text = read_entry(bungee_path)) {
+            info.name = extract_yaml_field(*text, "name");
+            info.version = extract_yaml_field(*text, "version");
+            info.description = extract_yaml_field(*text, "description");
+        }
         return info;
     }
     std::string paper_path = has("paper-plugin.yml") ? "paper-plugin.yml" : (has("META-INF/paper-plugin.yml") ? "META-INF/paper-plugin.yml" : "");
     if (!paper_path.empty()) {
         info.kind = PlatformKind::Paper;
         info.manifest_path = paper_path;
-        if (auto text = read_entry(paper_path)) info.name = extract_yaml_name(*text);
+        if (auto text = read_entry(paper_path)) {
+            info.name = extract_yaml_field(*text, "name");
+            info.version = extract_yaml_field(*text, "version");
+            info.description = extract_yaml_field(*text, "description");
+        }
         return info;
     }
     if (has("plugin.yml")) {
         info.kind = PlatformKind::Bukkit;
         info.manifest_path = "plugin.yml";
-        if (auto text = read_entry("plugin.yml")) info.name = extract_yaml_name(*text);
+        if (auto text = read_entry("plugin.yml")) {
+            info.name = extract_yaml_field(*text, "name");
+            info.version = extract_yaml_field(*text, "version");
+            info.description = extract_yaml_field(*text, "description");
+        }
         return info;
     }
 
@@ -168,19 +186,30 @@ PlatformInfo detect_platform(const std::vector<std::string>& all_names,
     if (!fabric_path.empty()) {
         info.kind = PlatformKind::ModFabric;
         info.manifest_path = fabric_path;
-        if (auto text = read_entry(fabric_path)) info.name = extract_json_field(*text, "name");
+        if (auto text = read_entry(fabric_path)) {
+            info.name = extract_json_field(*text, "name");
+            info.version = extract_json_field(*text, "version");
+            info.description = extract_json_field(*text, "description");
+        }
         return info;
     }
     if (has("quilt.mod.json")) {
         info.kind = PlatformKind::ModFabric;
         info.manifest_path = "quilt.mod.json";
-        if (auto text = read_entry("quilt.mod.json")) info.name = extract_quilt_name(*text);
+        if (auto text = read_entry("quilt.mod.json")) {
+            info.name = extract_quilt_name(*text);
+            info.version = extract_json_field(*text, "version");
+        }
         return info;
     }
     if (has("META-INF/mods.toml") || has("META-INF/neoforge.mods.toml")) {
         info.kind = PlatformKind::ModForge;
         info.manifest_path = has("META-INF/mods.toml") ? "META-INF/mods.toml" : "META-INF/neoforge.mods.toml";
-        if (auto text = read_entry(info.manifest_path)) info.name = extract_toml_field(*text, "displayName");
+        if (auto text = read_entry(info.manifest_path)) {
+            info.name = extract_toml_field(*text, "displayName");
+            info.version = extract_toml_field(*text, "version");
+            info.description = extract_toml_field(*text, "description");
+        }
         return info;
     }
     if (has("mcmod.info")) {

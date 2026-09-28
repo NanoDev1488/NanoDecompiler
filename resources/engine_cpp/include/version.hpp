@@ -162,5 +162,6 @@ namespace nd {
 // НОВОЕ v1.9.73: скрытие вспомогательных синтетических методов $SWITCH_TABLE$... и access$... компилятора javac при выводе классов.
 // НОВОЕ v1.9.74: удаление избыточного завершающего break в последней ветке switch в генераторе Java-кода.
 // НОВОЕ v1.9.75: визуальные бейджи с числом файлов для пакетов и детальная подсказка разделения на классы/ресурсы в дереве проектов.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.75";
+// НОВОЕ v1.9.76: расширенное извлечение версии (version) и описания (description) плагинов и модов из манифестов всех платформ в detect_platform.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.76";
 }

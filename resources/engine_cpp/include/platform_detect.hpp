@@ -37,6 +37,10 @@ struct PlatformInfo {
     // формат на разных платформах (YAML-подобный plugin.yml/bungee.yml,
     // JSON velocity-plugin.json/fabric.mod.json, TOML mods.toml).
     std::optional<std::string> name;
+    // Версия плагина/мода, извлечённая из манифеста.
+    std::optional<std::string> version;
+    // Описание плагина/мода, извлечённое из манифеста.
+    std::optional<std::string> description;
 
     bool is_mod() const { return kind == PlatformKind::ModFabric || kind == PlatformKind::ModForge; }
     bool is_server_plugin() const {
