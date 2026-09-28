@@ -161,6 +161,9 @@ export const CodeView = memo(function CodeView({
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         saveNowRef.current();
+      } else if (e.altKey && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        setWrap(v => !v);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -289,7 +292,7 @@ export const CodeView = memo(function CodeView({
         </button>
         <button
           className="icon-btn h-7 w-7"
-          title={wrap ? (lang === "ru" ? "Отключить перенос строк" : "Disable word wrap") : (lang === "ru" ? "Переносить строки" : "Enable word wrap")}
+          title={`${wrap ? (lang === "ru" ? "Отключить перенос строк" : "Disable word wrap") : (lang === "ru" ? "Переносить строки" : "Enable word wrap")} (Alt+Z)`}
           data-active={wrap}
           disabled={canEdit}
           onClick={() => setWrap(v => !v)}
