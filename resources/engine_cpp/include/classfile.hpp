@@ -183,6 +183,8 @@ public:
     std::vector<InnerClassEntry> inner_classes;
     // Непусто <=> класс - настоящий record (JDK 16+) - см. RecordComponent.
     std::vector<RecordComponent> record_components;
+    // PermittedSubclasses (JDK 17+, JEP 409 sealed classes)
+    std::vector<std::string> permitted_subclasses;
 
     std::map<uint16_t, CpEntry> pool;
 

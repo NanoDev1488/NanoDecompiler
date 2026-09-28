@@ -155,5 +155,6 @@ namespace nd {
 // НОВОЕ v1.9.66: устранение избыточных блоков else после безусловного return/throw внутри then-ветки в структуризаторе CFG.
 // НОВОЕ v1.9.67: точный рендеринг модификаторов доступа (static, private, protected) для внутренних и вложенных классов из таблицы InnerClasses.
 // НОВОЕ v1.9.68: расширенный нечёткий (fuzzy) и мультитокенный поиск команд в командной палитре (Ctrl+K).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.68";
+// НОВОЕ v1.9.69: поддержка sealed-классов Java 17+ (парсинг атрибута PermittedSubclasses, рендеринг модификатора sealed и секции permits).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.69";
 }

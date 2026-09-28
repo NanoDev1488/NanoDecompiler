@@ -792,6 +792,23 @@ void ClassFile::parse(const std::vector<uint8_t>& data) {
             } catch (...) {
                 // Игнорируем повреждённый атрибут Record без падения парсера всего класса
             }
+        } else if (a_name == "PermittedSubclasses") {
+            try {
+                Reader ar(a_data);
+                if (ar.remaining() >= 2) {
+                    uint16_t n = ar.u2();
+                    for (uint16_t b = 0; b < n; ++b) {
+                        if (ar.remaining() < 2) break;
+                        uint16_t c_idx = ar.u2();
+                        auto cname = class_name(c_idx);
+                        if (cname.has_value() && !cname->empty()) {
+                            permitted_subclasses.push_back(*cname);
+                        }
+                    }
+                }
+            } catch (...) {
+                // Защита от повреждённого атрибута PermittedSubclasses
+            }
         }
     }
 }

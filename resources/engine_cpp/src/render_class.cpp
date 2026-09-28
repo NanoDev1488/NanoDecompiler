@@ -361,6 +361,8 @@ std::pair<std::string, OrderedImports> render_class(
     if ((effective_access & 0x0008) && !is_interface && !is_enum) mod_bits.push_back("static");
     if ((effective_access & 0x0010) && !is_enum && !is_record) mod_bits.push_back("final");
     if ((effective_access & 0x0400) && !is_interface && !is_enum) mod_bits.push_back("abstract");
+    bool is_sealed = !cf.permitted_subclasses.empty();
+    if (is_sealed) mod_bits.push_back("sealed");
     std::string mods;
     for (size_t i = 0; i < mod_bits.size(); ++i) {
         if (i) mods += " ";
@@ -447,6 +449,18 @@ std::pair<std::string, OrderedImports> render_class(
             joined += iface_strs[i];
         }
         header += " " + kw + " " + joined;
+    }
+    if (is_sealed) {
+        std::vector<std::string> perm_strs;
+        for (const auto& p : cf.permitted_subclasses) {
+            perm_strs.push_back(mark_type(format_type_dotted(dotted_from_internal(p), renamer, known_internal_by_dotted, &all_imports)));
+        }
+        std::string perm_joined;
+        for (size_t i = 0; i < perm_strs.size(); ++i) {
+            if (i) perm_joined += ", ";
+            perm_joined += perm_strs[i];
+        }
+        if (!perm_joined.empty()) header += " permits " + perm_joined;
     }
     header += " {";
 
