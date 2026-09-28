@@ -156,6 +156,12 @@ PlatformInfo detect_platform(const std::vector<std::string>& all_names,
         if (auto text = read_entry("fabric.mod.json")) info.name = extract_json_field(*text, "name");
         return info;
     }
+    if (has("quilt.mod.json")) {
+        info.kind = PlatformKind::ModFabric;
+        info.manifest_path = "quilt.mod.json";
+        if (auto text = read_entry("quilt.mod.json")) info.name = extract_json_field(*text, "name");
+        return info;
+    }
     if (has("META-INF/mods.toml") || has("META-INF/neoforge.mods.toml")) {
         info.kind = PlatformKind::ModForge;
         info.manifest_path = has("META-INF/mods.toml") ? "META-INF/mods.toml" : "META-INF/neoforge.mods.toml";

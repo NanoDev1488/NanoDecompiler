@@ -41,3 +41,9 @@ out_check_client_cli/
 # OS
 .DS_Store
 Thumbs.db
+
+# Test JARs and scratch tests (local only, never committed)
+temp_test_jars/
+*.jar
+out_decompile_test/
+

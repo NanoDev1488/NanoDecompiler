@@ -1829,32 +1829,51 @@ std::string simple_type(const std::string& t) {
 }
 
 std::vector<StmtPtr> inline_crossing_pass(const std::vector<StmtPtr>& lst, MethodCtx& ctx) {
-    std::vector<StmtPtr> out;
-    size_t i = 0, n = lst.size();
-    while (i < n) {
-        StmtPtr cur = lst[i];
-        StmtPtr nxt = (i + 1 < n) ? lst[i + 1] : nullptr;
-        if (cur->kind == StmtKind::ExprStmt) {
-            auto* es = static_cast<ExprStmtNode*>(cur.get());
-            if (es->expr->kind == ExprKind::Assign) {
-                auto* a = static_cast<Assign*>(es->expr.get());
-                if (a->target->kind == ExprKind::Local) {
-                    std::string tname = static_cast<Local*>(a->target.get())->name;
-                    if (ctx.crossing_temp_types.count(tname) && nxt && nxt->kind == StmtKind::ReturnStmt) {
-                        auto* r = static_cast<ReturnStmt*>(nxt.get());
-                        if (r->expr && r->expr->kind == ExprKind::Local && static_cast<Local*>(r->expr.get())->name == tname) {
-                            out.push_back(std::make_shared<ReturnStmt>(coerce_arg(a->value, ctx.ret_type)));
-                            i += 2;
-                            continue;
+    std::vector<StmtPtr> work = lst;
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        std::vector<StmtPtr> out;
+        size_t i = 0, n = work.size();
+        while (i < n) {
+            StmtPtr cur = work[i];
+            StmtPtr nxt = (i + 1 < n) ? work[i + 1] : nullptr;
+            if (cur->kind == StmtKind::ExprStmt && nxt) {
+                auto* es = static_cast<ExprStmtNode*>(cur.get());
+                if (es->expr && es->expr->kind == ExprKind::Assign) {
+                    auto* a = static_cast<Assign*>(es->expr.get());
+                    if (a->target && a->target->kind == ExprKind::Local) {
+                        std::string tname = static_cast<Local*>(a->target.get())->name;
+                        if (ctx.crossing_temp_types.count(tname) || (tname.rfind("__stk", 0) == 0)) {
+                            std::vector<StmtPtr> rest(work.begin() + i + 1, work.end());
+                            if (count_local_uses_list(rest, tname) == 1) {
+                                if (nxt->kind == StmtKind::ReturnStmt) {
+                                    auto* r = static_cast<ReturnStmt*>(nxt.get());
+                                    if (r->expr && r->expr->kind == ExprKind::Local && static_cast<Local*>(r->expr.get())->name == tname) {
+                                        out.push_back(std::make_shared<ReturnStmt>(coerce_arg(a->value, ctx.ret_type)));
+                                        i += 2;
+                                        changed = true;
+                                        continue;
+                                    }
+                                }
+                                StmtPtr nxt_mod = nxt;
+                                if (substitute_local_once_stmt(nxt_mod, tname, a->value)) {
+                                    out.push_back(nxt_mod);
+                                    i += 2;
+                                    changed = true;
+                                    continue;
+                                }
+                            }
                         }
                     }
                 }
             }
+            out.push_back(cur);
+            i += 1;
         }
-        out.push_back(cur);
-        i += 1;
+        work = std::move(out);
     }
-    return out;
+    return work;
 }
 
 std::vector<StmtPtr> inline_single_use_crossing_temps(const std::vector<StmtPtr>& stmts, MethodCtx& ctx) {
@@ -2168,6 +2187,8 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
             throw DecompileAbort("переменная объявлена в блоке, но используется за его пределами "
                                   "(типично для switch(String) через hashCode) - структуризация ненадёжна");
         }
+
+        refresh_crossing_temp_types(stmts, ctx);
 
         std::string pad(4 * static_cast<size_t>(indent), ' ');
         std::vector<std::string> pre_lines;
