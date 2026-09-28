@@ -1,4 +1,4 @@
-﻿// i18n.ts — локализация интерфейса NanoDecompiler (ru / en)
+// i18n.ts — локализация интерфейса NanoDecompiler (ru / en)
 export type Lang = "ru" | "en";
 
 export const DICT = {

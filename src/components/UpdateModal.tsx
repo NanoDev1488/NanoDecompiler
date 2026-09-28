@@ -16,6 +16,7 @@ export function UpdateModal() {
     guiVersion,
     checkForUpdates,
     applyEngineUpdate,
+    applyClientUpdate,
     openClientDownload,
   } = useEngine();
 
