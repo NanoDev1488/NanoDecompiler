@@ -1,13 +1,16 @@
 import {
+  Bug,
   ClipboardCopy,
   FolderOpen,
   FolderOutput,
   ListX,
   PanelBottom,
   Play,
+  RefreshCw,
   Search,
   Settings2,
   Square,
+  Terminal,
   Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent } from "react";
@@ -56,6 +59,14 @@ export function CommandPalette() {
         run: engine.openFileDialog,
       },
       {
+        id: "project-search",
+        label: "Поиск по проекту…",
+        hint: "Ctrl Shift F",
+        icon: Search,
+        disabled: !selectedJob || selectedJob.status !== "done",
+        run: () => engine.setProjectSearchOpen(true),
+      },
+      {
         id: "open-out",
         label: "Открыть папку результата",
         icon: FolderOutput,
@@ -82,10 +93,29 @@ export function CommandPalette() {
         run: engine.toggleTerminal,
       },
       {
+        id: "open-dev-logs",
+        label: "Окно логов разработчика",
+        hint: "F12",
+        icon: Terminal,
+        run: () => window.nano.openLogWindow(),
+      },
+      {
         id: "clear-queue",
         label: "Очистить список задач",
         icon: ListX,
         run: engine.clearQueue,
+      },
+      {
+        id: "bug-report",
+        label: "Сообщить о проблеме",
+        icon: Bug,
+        run: () => engine.setBugReportOpen(true),
+      },
+      {
+        id: "check-updates",
+        label: "Проверить обновления",
+        icon: RefreshCw,
+        run: () => engine.setUpdateModalOpen(true),
       },
       {
         id: "settings",
