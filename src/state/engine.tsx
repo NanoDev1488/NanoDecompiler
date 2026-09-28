@@ -1218,9 +1218,14 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       toast("Лог пуст — копировать нечего", "warn");
       return;
     }
-    const text = log.map(l => `[${fmtClock(l.at)}] [${l.tag}] ${l.msg}`).join("\n");
-    copyText(text, `Лог (${log.length} строк)`);
-  }, [copyText, log, toast]);
+    const filtered = logFilter === "all" ? log : log.filter(l => l.level === logFilter);
+    if (filtered.length === 0) {
+      toast("Нет записей по выбранному фильтру", "warn");
+      return;
+    }
+    const text = filtered.map(l => `[${fmtClock(l.at)}] [${l.tag}] ${l.msg}`).join("\n");
+    copyText(text, logFilter === "all" ? `Лог (${filtered.length} строк)` : `Лог [${logFilter}] (${filtered.length} строк)`);
+  }, [copyText, log, logFilter, toast]);
 
   const toggleTerminal = useCallback(() => setTerminalOpen(v => !v), []);
 

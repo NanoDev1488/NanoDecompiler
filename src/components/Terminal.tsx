@@ -14,10 +14,11 @@ const TAG_COLOR: Record<LogLevel, string> = {
 };
 
 export function Terminal() {
-  const { log, logFilter, setLogFilter, terminalOpen, toggleTerminal, clearLog, copyLog, runningJob, terminalHeight, setTerminalHeight, settings } =
+  const { log, logFilter, setLogFilter, terminalOpen, toggleTerminal, clearLog, copyLog, copyText, runningJob, terminalHeight, setTerminalHeight, settings } =
     useEngine();
   const lang = settings.language;
   const [stick, setStick] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   // БАГ-ФИКС v1.7.3 (найдено сторонним ревью - реальная регрессия из
   // v1.7.2): scrollTo({behavior:"smooth"}) анимируется НЕСКОЛЬКО кадров, и
@@ -41,10 +42,14 @@ export function Terminal() {
     return c;
   }, [log]);
 
-  const visible = useMemo(
-    () => (logFilter === "all" ? log : log.filter(l => l.level === logFilter)),
-    [log, logFilter],
-  );
+  const visible = useMemo(() => {
+    let items = logFilter === "all" ? log : log.filter(l => l.level === logFilter);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      items = items.filter(l => l.msg.toLowerCase().includes(q) || l.tag.toLowerCase().includes(q));
+    }
+    return items;
+  }, [log, logFilter, searchQuery]);
 
   useEffect(() => {
     if (!stick || !terminalOpen) return;
@@ -161,6 +166,24 @@ export function Terminal() {
 
         {terminalOpen && (
           <>
+            <div className="relative flex items-center mr-1">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder={lang === "ru" ? "Поиск..." : "Search..."}
+                className="h-[22px] w-24 rounded border border-line bg-surface/70 px-2 text-[10.5px] text-ink placeholder:text-faint focus:w-36 focus:border-line-strong focus:outline-none transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-1 text-faint hover:text-dim text-[10px]"
+                  title={lang === "ru" ? "Очистить" : "Clear"}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
             <button
               className="icon-btn h-7 w-7"
               data-active={stick}
@@ -173,7 +196,19 @@ export function Terminal() {
             >
               <ArrowDownToLine size={13} />
             </button>
-            <button className="icon-btn h-7 w-7" title={t(lang, "term.copy")} onClick={copyLog}>
+            <button
+              className="icon-btn h-7 w-7"
+              title={t(lang, "term.copy")}
+              onClick={() => {
+                if (searchQuery.trim()) {
+                  if (visible.length === 0) return;
+                  const text = visible.map(l => `[${fmtClock(l.at)}] [${l.tag}] ${l.msg}`).join("\n");
+                  copyText(text, lang === "ru" ? `Лог (${visible.length} строк)` : `Log (${visible.length} lines)`);
+                } else {
+                  copyLog();
+                }
+              }}
+            >
               <Copy size={13} />
             </button>
             <button className="icon-btn h-7 w-7" title={`${t(lang, "term.clear")} (Ctrl L)`} onClick={clearLog}>
