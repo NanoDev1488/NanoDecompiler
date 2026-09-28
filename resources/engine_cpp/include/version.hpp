@@ -126,5 +126,6 @@ namespace nd {
 // НОВОЕ v1.9.37: поиск и фильтрация в терминале GUI (быстрый поиск строк лога, копирование отфильтрованных результатов вместо полного дампа).
 // НОВОЕ v1.9.38: явное указание причины fallback-сброса в байткод прямо в комментариях декомпилированного Java-кода.
 // НОВОЕ v1.9.39: исправление компиляции C++ движка в CI (устранение ошибки типов CastExpr -> Cast и приведения f->init в uses_name_in_expr).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.39";
+// НОВОЕ v1.9.40: исправление свёртки StringBuilder (корректный пропуск int capacity конструктора new StringBuilder(N) без попадания в текст конкатенации).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.40";
 }

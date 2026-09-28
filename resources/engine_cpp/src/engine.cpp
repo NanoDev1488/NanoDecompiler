@@ -843,8 +843,12 @@ std::optional<std::vector<ExprPtr>> try_match_sb_chain(const ExprPtr& e) {
         if (cur->kind == ExprKind::NewObject) {
             auto* no = static_cast<NewObject*>(cur.get());
             if (!is_stringbuilder_type(no->type)) return std::nullopt;
-            if (no->args.size() == 1) pieces_rev.push_back(no->args[0]);
-            else if (!no->args.empty()) return std::nullopt;  // StringBuilder(int capacity) - не наш случай
+            if (no->args.size() == 1) {
+                // Если аргумент int (initial capacity, напр. new StringBuilder(16)) - игнорируем как часть строки
+                if (no->args[0]->type != "int") {
+                    pieces_rev.push_back(no->args[0]);
+                }
+            } else if (!no->args.empty()) return std::nullopt;
             break;
         }
         return std::nullopt;
