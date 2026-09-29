@@ -434,7 +434,8 @@ jobs:
 
       - name: Собрать движок (Linux)
         working-directory: resources/engine_cpp
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
           cmake --build build --parallel
           cp build/NanoDecompilerCLI ../../NanoDecompilerClApi
 
@@ -471,7 +472,8 @@ jobs:
 
       - name: Собрать движок (macOS)
         working-directory: resources/engine_cpp
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
           cmake --build build --parallel
           cp build/NanoDecompilerCLI ../../NanoDecompilerClApi
 
