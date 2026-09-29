@@ -110,4 +110,5 @@ if(MINGW)
   # НОВОЕ v1.7.5: shell32 - там живёт CommandLineToArgvW (см. cli_main.cpp,
   # get_utf8_argv() - фикс аргументов командной строки с не-ASCII байтами).
   target_link_libraries(NanoDecompilerCLI PRIVATE shell32)
+  target_link_libraries(NanoDecompilerCLI PRIVATE wininet)
 endif()
