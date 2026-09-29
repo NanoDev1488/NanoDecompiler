@@ -81,6 +81,43 @@ static std::string download_file(const std::string& url, const std::string& out_
 #endif
 }
 
+static std::string normalize_version(std::string v) {
+    if (v.rfind("NanoDecompiler ", 0) == 0) {
+        v = v.substr(15);
+    }
+    if (!v.empty() && (v[0] == 'v' || v[0] == 'V')) {
+        v = v.substr(1);
+    }
+    return v;
+}
+
+static int compare_semver(const std::string& a, const std::string& b) {
+    auto parse_parts = [](const std::string& s) {
+        std::vector<int> parts;
+        size_t start = 0;
+        while (start < s.size()) {
+            size_t dot = s.find('.', start);
+            if (dot == std::string::npos) dot = s.size();
+            try {
+                parts.push_back(std::stoi(s.substr(start, dot - start)));
+            } catch (...) {
+                parts.push_back(0);
+            }
+            start = dot + 1;
+        }
+        return parts;
+    };
+    auto pa = parse_parts(a);
+    auto pb = parse_parts(b);
+    size_t n = pa.size() > pb.size() ? pa.size() : pb.size();
+    for (size_t i = 0; i < n; ++i) {
+        int va = (i < pa.size()) ? pa[i] : 0;
+        int vb = (i < pb.size()) ? pb[i] : 0;
+        if (va != vb) return (va > vb) ? 1 : -1;
+    }
+    return 0;
+}
+
 void check_update() {
     std::cout << "Checking for updates..." << std::endl;
     std::string json_str = get_url("https://api.github.com/repos/NanoDev1488/NanoDecompiler/releases/latest");
@@ -98,7 +135,9 @@ void check_update() {
         std::string tag = val.get("tag_name")->as_string().value_or("");
         std::cout << "Current version: " << NANO_DECOMPILER_VERSION << std::endl;
         std::cout << "Latest version:  " << tag << std::endl;
-        if (tag != NANO_DECOMPILER_VERSION) {
+        std::string current_norm = normalize_version(NANO_DECOMPILER_VERSION);
+        std::string latest_norm = normalize_version(tag);
+        if (compare_semver(latest_norm, current_norm) > 0) {
             std::cout << "\nUpdate available! Run with --update to upgrade." << std::endl;
         } else {
             std::cout << "\nYou are on the latest version." << std::endl;
@@ -125,7 +164,9 @@ void do_update(const std::string& self_path_argv) {
     JsonValue val = *opt_val;
     if (val.is_object() && val.get("tag_name") && val.get("assets")) {
         tag = val.get("tag_name")->as_string().value_or("");
-        if (tag == NANO_DECOMPILER_VERSION) {
+        std::string current_norm = normalize_version(NANO_DECOMPILER_VERSION);
+        std::string latest_norm = normalize_version(tag);
+        if (compare_semver(latest_norm, current_norm) <= 0) {
             std::cout << "Already at the latest version (" << tag << ")." << std::endl;
             return;
         }
