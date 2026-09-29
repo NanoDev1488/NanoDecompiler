@@ -1,6 +1,6 @@
 ﻿{
     "name":  "nano-decompiler-gui",
-    "version":  "1.9.98",
+    "version":  "1.9.99",
     "description":  "NanoDecompiler вЂ” Electron/React GUI РїРѕРІРµСЂС… C++ РґРІРёР¶РєР° РґРµРєРѕРјРїРёР»СЏС†РёРё",
     "main":  "dist-electron/main.js",
     "scripts":  {

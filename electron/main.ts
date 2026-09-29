@@ -93,6 +93,7 @@ type Settings = {
   // при завершении любого job'а с хотя бы одним fallback-контекстом отчёт
   // уходит автоматически (см. finalize() в state/engine.tsx), кнопка в
   // карточке плагина остаётся для ручной отправки/повтора.
+  disableVsCodeLogs: boolean;
   telemetryEnabled: boolean;
   telemetryUrl: string;
 };
@@ -102,6 +103,7 @@ const DEFAULT_SETTINGS: Settings = {
   appIcon: "terminal",
   setupCompleted: false,
   language: "ru",
+  disableVsCodeLogs: false,
   telemetryEnabled: false,
   telemetryUrl: "http://195.179.231.14:15015/report",
 };
@@ -124,6 +126,7 @@ function loadSettings(): Settings {
       appIcon: parsed.appIcon === "terminal" || parsed.appIcon === "layers" ? parsed.appIcon : DEFAULT_SETTINGS.appIcon,
       setupCompleted: typeof parsed.setupCompleted === "boolean" ? parsed.setupCompleted : DEFAULT_SETTINGS.setupCompleted,
       language: parsed.language === "ru" || parsed.language === "en" ? parsed.language : DEFAULT_SETTINGS.language,
+      disableVsCodeLogs: typeof parsed.disableVsCodeLogs === "boolean" ? parsed.disableVsCodeLogs : DEFAULT_SETTINGS.disableVsCodeLogs,
       telemetryEnabled: typeof parsed.telemetryEnabled === "boolean" ? parsed.telemetryEnabled : DEFAULT_SETTINGS.telemetryEnabled,
       // БАГ-ФИКС v1.9.12 (жалоба "новый IP не работает"): telemetryUrl
       // ВСЕГДА берётся из DEFAULT_SETTINGS, сохранённое значение из

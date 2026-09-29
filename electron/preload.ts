@@ -29,6 +29,7 @@ export type AppSettings = {
   // это ПЕРВЫЙ ШАГ (инфраструктура + один экран), не полное покрытие.
   language: "ru" | "en";
   // НОВОЕ v1.8.4 - см. комментарий у Settings.telemetryEnabled в main.ts.
+  disableVsCodeLogs: boolean;
   telemetryEnabled: boolean;
   telemetryUrl: string;
 };

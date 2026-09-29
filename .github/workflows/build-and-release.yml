@@ -569,6 +569,7 @@ jobs:
           tag_name: ${{ env.RELEASE_TAG }}
           name: "NanoDecompiler ${{ env.RELEASE_TAG }}"
           files: release-files/*
+          generate_release_notes: true
           body: |
             ## 🚀 NanoDecompiler ${{ env.RELEASE_TAG }}
 
