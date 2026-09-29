@@ -120,7 +120,7 @@ jobs:
         working-directory: resources/engine_cpp
         run: |
           cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
-          cmake --build build --parallel 1
+          cmake --build build --parallel
           cp build/NanoDecompilerCLI.exe ../engine/NanoDecompilerCLI.exe
 
       - name: Записать .engine-api-version (см. electron/updater.ts)
@@ -221,7 +221,7 @@ jobs:
         working-directory: resources/engine_cpp
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
-          cmake --build build --parallel 1
+          cmake --build build --parallel
           cp build/NanoDecompilerCLI ../engine/NanoDecompilerCLI
           chmod +x ../engine/NanoDecompilerCLI
 

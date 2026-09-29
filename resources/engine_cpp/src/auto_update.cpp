@@ -1,15 +1,15 @@
-﻿#include "auto_update.hpp"
+﻿#include ""auto_update.hpp""
 #include <iostream>
 #include <string>
 #include <vector>
 #include <cstdio>
-#include "json_value.hpp"
-#include "version.hpp"
+#include ""json_value.hpp""
+#include ""version.hpp""
 
 #ifdef _WIN32
 #include <windows.h>
 #include <wininet.h>
-#pragma comment(lib, "wininet.lib")
+#pragma comment(lib, ""wininet.lib"")
 #else
 #include <cstdlib>
 #endif
@@ -18,10 +18,10 @@ namespace nd {
 
 static std::string get_url(const std::string& url) {
 #ifdef _WIN32
-    HINTERNET hInternet = InternetOpenA("NanoDecompilerCLI", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
-    if (!hInternet) return "";
+    HINTERNET hInternet = InternetOpenA(""NanoDecompilerCLI"", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
+    if (!hInternet) return """";
     HINTERNET hConnect = InternetOpenUrlA(hInternet, url.c_str(), NULL, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_SECURE, 0);
-    if (!hConnect) { InternetCloseHandle(hInternet); return ""; }
+    if (!hConnect) { InternetCloseHandle(hInternet); return """"; }
     
     std::string result;
     char buffer[4096];
@@ -33,11 +33,11 @@ static std::string get_url(const std::string& url) {
     InternetCloseHandle(hInternet);
     return result;
 #else
-    std::string cmd = "curl -sL \"" + url + "\"";
-    FILE* pipe = popen(cmd.c_str(), "r");
-    if (!pipe) return "";
+    std::string cmd = ""curl -sL \"""" + url + ""\"""";
+    FILE* pipe = popen(cmd.c_str(), ""r"");
+    if (!pipe) return """";
     char buffer[4096];
-    std::string result = "";
+    std::string result = """";
     while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
         result += buffer;
     }
@@ -48,16 +48,16 @@ static std::string get_url(const std::string& url) {
 
 static std::string download_file(const std::string& url, const std::string& out_path) {
 #ifdef _WIN32
-    HINTERNET hInternet = InternetOpenA("NanoDecompilerCLI", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
-    if (!hInternet) return "InternetOpen failed";
+    HINTERNET hInternet = InternetOpenA(""NanoDecompilerCLI"", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
+    if (!hInternet) return ""InternetOpen failed"";
     HINTERNET hConnect = InternetOpenUrlA(hInternet, url.c_str(), NULL, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_SECURE, 0);
-    if (!hConnect) { InternetCloseHandle(hInternet); return "InternetOpenUrl failed"; }
+    if (!hConnect) { InternetCloseHandle(hInternet); return ""InternetOpenUrl failed""; }
     
-    FILE* f = fopen(out_path.c_str(), "wb");
+    FILE* f = fopen(out_path.c_str(), ""wb"");
     if (!f) {
         InternetCloseHandle(hConnect);
         InternetCloseHandle(hInternet);
-        return "Cannot open output file";
+        return ""Cannot open output file"";
     }
 
     char buffer[4096];
@@ -68,117 +68,122 @@ static std::string download_file(const std::string& url, const std::string& out_
     fclose(f);
     InternetCloseHandle(hConnect);
     InternetCloseHandle(hInternet);
-    return "";
+    return """";
 #else
-    std::string cmd = "curl -sL -o \"" + out_path + "\" \"" + url + "\"";
+    std::string cmd = ""curl -sL -o \"""" + out_path + ""\"" \"""" + url + ""\"""";
     int res = system(cmd.c_str());
-    if (res != 0) return "curl failed";
-    return "";
+    if (res != 0) return ""curl failed"";
+    return """";
 #endif
 }
 
 void check_update() {
-    std::cout << "Checking for updates..." << std::endl;
-    std::string json_str = get_url("https://api.github.com/repos/NanoDev1488/NanoDecompiler/releases/latest");
+    std::cout << ""Checking for updates..."" << std::endl;
+    std::string json_str = get_url(""https://api.github.com/repos/NanoDev1488/NanoDecompiler/releases/latest"");
     if (json_str.empty()) {
-        std::cerr << "Failed to check updates." << std::endl;
+        std::cerr << ""Failed to check updates."" << std::endl;
         return;
     }
     // Parse JSON
-    try {
-        JsonValue val = JsonValue::parse(json_str);
-        if (val.is_object() && val.has("tag_name")) {
-            std::string tag = val["tag_name"].as_string();
-            std::cout << "Current version: " << NANO_DECOMPILER_VERSION << std::endl;
-            std::cout << "Latest version:  " << tag << std::endl;
-            if (tag != NANO_DECOMPILER_VERSION) {
-                std::cout << "\nUpdate available! Run with --update to upgrade." << std::endl;
-            } else {
-                std::cout << "\nYou are on the latest version." << std::endl;
-            }
+    auto opt_val = json_parse(json_str);
+    if (!opt_val) {
+        std::cerr << ""Failed to parse GitHub response."" << std::endl;
+        return;
+    }
+    JsonValue val = *opt_val;
+    if (val.is_object() && val.get(""tag_name"")) {
+        std::string tag = val.get(""tag_name"")->as_string().value_or("""");
+        std::cout << ""Current version: "" << NANO_DECOMPILER_VERSION << std::endl;
+        std::cout << ""Latest version:  "" << tag << std::endl;
+        if (tag != NANO_DECOMPILER_VERSION) {
+            std::cout << ""\nUpdate available! Run with --update to upgrade."" << std::endl;
         } else {
-            std::cerr << "Invalid response from GitHub." << std::endl;
+            std::cout << ""\nYou are on the latest version."" << std::endl;
         }
-    } catch (...) {
-        std::cerr << "Failed to parse GitHub response." << std::endl;
+    } else {
+        std::cerr << ""Invalid response from GitHub."" << std::endl;
     }
 }
 
 void do_update(const std::string& self_path_argv) {
-    std::cout << "Fetching latest release info..." << std::endl;
-    std::string json_str = get_url("https://api.github.com/repos/NanoDev1488/NanoDecompiler/releases/latest");
+    std::cout << ""Fetching latest release info..."" << std::endl;
+    std::string json_str = get_url(""https://api.github.com/repos/NanoDev1488/NanoDecompiler/releases/latest"");
     if (json_str.empty()) {
-        std::cerr << "Failed to get release info." << std::endl;
+        std::cerr << ""Failed to get release info."" << std::endl;
         return;
     }
     std::string tag;
     std::string asset_url;
-    try {
-        JsonValue val = JsonValue::parse(json_str);
-        if (val.is_object() && val.has("tag_name") && val.has("assets")) {
-            tag = val["tag_name"].as_string();
-            if (tag == NANO_DECOMPILER_VERSION) {
-                std::cout << "Already at the latest version (" << tag << ")." << std::endl;
-                return;
-            }
-            JsonArray arr = val["assets"].as_array();
+    auto opt_val = json_parse(json_str);
+    if (!opt_val) {
+        std::cerr << ""Failed to parse JSON."" << std::endl;
+        return;
+    }
+    JsonValue val = *opt_val;
+    if (val.is_object() && val.get(""tag_name"") && val.get(""assets"")) {
+        tag = val.get(""tag_name"")->as_string().value_or("""");
+        if (tag == NANO_DECOMPILER_VERSION) {
+            std::cout << ""Already at the latest version ("" << tag << "")."" << std::endl;
+            return;
+        }
+        auto assets_val = val.get(""assets"");
+        if (assets_val->is_array() && assets_val->arr_v) {
             std::string target_name;
 #ifdef _WIN32
-            target_name = "NanoDecompilerClApi-windows.exe";
+            target_name = ""NanoDecompilerClApi-windows.exe"";
 #elif defined(__APPLE__)
-            target_name = "NanoDecompilerClApi-macos";
+            target_name = ""NanoDecompilerClApi-macos"";
 #else
-            target_name = "NanoDecompilerClApi-linux";
+            target_name = ""NanoDecompilerClApi-linux"";
 #endif
-            for (auto& a : arr) {
-                if (a.has("name") && a["name"].as_string() == target_name) {
-                    asset_url = a["browser_download_url"].as_string();
-                    break;
+            for (auto& a : *(assets_val->arr_v)) {
+                if (a.is_object() && a.get(""name"") && a.get(""name"")->as_string().value_or("""") == target_name) {
+                    if (a.get(""browser_download_url"")) {
+                        asset_url = a.get(""browser_download_url"")->as_string().value_or("""");
+                        break;
+                    }
                 }
             }
         }
-    } catch (...) {
-        std::cerr << "Failed to parse JSON." << std::endl;
-        return;
     }
 
     if (asset_url.empty()) {
-        std::cerr << "Could not find compatible asset for this OS in the latest release." << std::endl;
+        std::cerr << ""Could not find compatible asset for this OS in the latest release."" << std::endl;
         return;
     }
 
-    std::cout << "Downloading update from " << asset_url << " ..." << std::endl;
-    std::string exe_path = "NanoDecompilerCLI_new";
+    std::cout << ""Downloading update from "" << asset_url << "" ..."" << std::endl;
+    std::string exe_path = ""NanoDecompilerCLI_new"";
 #ifdef _WIN32
-    exe_path += ".exe";
+    exe_path += "".exe"";
 #endif
     std::string err = download_file(asset_url, exe_path);
     if (!err.empty()) {
-        std::cerr << "Download failed: " << err << std::endl;
+        std::cerr << ""Download failed: "" << err << std::endl;
         return;
     }
     
-    std::cout << "Download complete. Replacing executable..." << std::endl;
+    std::cout << ""Download complete. Replacing executable..."" << std::endl;
 #ifdef _WIN32
     // Windows: Rename current executable to .old, rename new to current
     char self_path[MAX_PATH];
     GetModuleFileNameA(NULL, self_path, MAX_PATH);
-    std::string old_path = std::string(self_path) + ".old";
+    std::string old_path = std::string(self_path) + "".old"";
     DeleteFileA(old_path.c_str());
     if (MoveFileA(self_path, old_path.c_str())) {
         if (MoveFileA(exe_path.c_str(), self_path)) {
-            std::cout << "Update successful! Restart the application." << std::endl;
+            std::cout << ""Update successful! Restart the application."" << std::endl;
         } else {
-            std::cerr << "Failed to rename new executable to " << self_path << std::endl;
+            std::cerr << ""Failed to rename new executable to "" << self_path << std::endl;
         }
     } else {
-        std::cerr << "Failed to rename current executable." << std::endl;
+        std::cerr << ""Failed to rename current executable."" << std::endl;
     }
 #else
     // Linux/macOS
-    std::string cmd = "chmod +x " + exe_path + " && mv " + exe_path + " '" + self_path_argv + "'";
+    std::string cmd = ""chmod +x "" + exe_path + "" && mv "" + exe_path + "" '"" + self_path_argv + ""'"";
     system(cmd.c_str());
-    std::cout << "Update successful! Restart the application." << std::endl;
+    std::cout << ""Update successful! Restart the application."" << std::endl;
 #endif
 }
 
