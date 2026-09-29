@@ -129,7 +129,7 @@ std::string Renamer::method_name(const std::string& owner_internal, const std::s
         method_ctr_ += 1;
         new_name = "method" + std::to_string(method_ctr_);
     } else {
-        new_name = name;
+        new_name = name; std::replace(new_name.begin(), new_name.end(), '$', '_');
     }
     method_map_[key] = new_name;
     return new_name;
@@ -145,7 +145,7 @@ std::string Renamer::field_name(const std::string& owner_internal, const std::st
         field_ctr_ += 1;
         new_name = "field" + std::to_string(field_ctr_);
     } else {
-        new_name = name;
+        new_name = name; std::replace(new_name.begin(), new_name.end(), '$', '_');
     }
     field_map_[key] = new_name;
     return new_name;
