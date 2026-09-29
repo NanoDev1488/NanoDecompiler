@@ -434,7 +434,9 @@ jobs:
 
       - name: Собрать движок (Linux)
         working-directory: resources/engine_cpp
-        run: ccache g++ -std=c++17 -O2 -Iinclude src/*.cpp -lz -o ../../NanoDecompilerClApi
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          cmake --build build --parallel
+          cp build/NanoDecompilerCLI ../../NanoDecompilerClApi
 
       - name: Проверка - бинарник реально работает
         run: |
@@ -469,7 +471,9 @@ jobs:
 
       - name: Собрать движок (macOS)
         working-directory: resources/engine_cpp
-        run: ccache g++ -std=c++17 -O2 -Iinclude src/*.cpp -lz -o ../../NanoDecompilerClApi
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          cmake --build build --parallel
+          cp build/NanoDecompilerCLI ../../NanoDecompilerClApi
 
       - name: Проверка - бинарник реально работает
         run: |

@@ -31,6 +31,7 @@
 #include "process_jar.hpp"
 #include "stats_json.hpp"
 #include "toolinstaller.hpp"
+#include "auto_update.hpp"
 #include "version.hpp"
 
 namespace fs = std::filesystem;
@@ -110,7 +111,9 @@ void print_usage() {
         std::cout << "       NanoDecompilerCLI plugin.jar [out_dir] --json-output   (one-shot run, JSON to stdout)\n";
         std::cout << "       NanoDecompilerCLI --api-server [--host H] [--port 8791]   (HTTP server)\n";
         std::cout << "       NanoDecompilerCLI --jar-summary plugin.jar   (JSON summary for GUI)\n";
-        std::cout << "       NanoDecompilerCLI --version   (JSON with engine version, for GUI)\n";
+        std::cout << "       NanoDecompilerCLI --check-update   (Check latest version)
+       NanoDecompilerCLI --update   (Download and apply latest version)
+       NanoDecompilerCLI --version   (JSON with engine version, for GUI)\n";
         std::cout << "       NanoDecompilerCLI --install-tools[=jdk|maven]   (portable JDK/Maven on demand)\n";
     } else {
         std::cout << "Использование: NanoDecompilerCLI plugin.jar [output_dir] [--lang=ru|en]\n";
@@ -118,7 +121,9 @@ void print_usage() {
         std::cout << "       NanoDecompilerCLI plugin.jar [out_dir] --json-output   (разовый вызов, JSON в stdout)\n";
         std::cout << "       NanoDecompilerCLI --api-server [--host H] [--port 8791]   (HTTP-сервер)\n";
         std::cout << "       NanoDecompilerCLI --jar-summary plugin.jar   (JSON-сводка для GUI)\n";
-        std::cout << "       NanoDecompilerCLI --version   (JSON с версией движка, для GUI - см. settings:checkEngine)\n";
+        std::cout << "       NanoDecompilerCLI --check-update   (Check latest version)
+       NanoDecompilerCLI --update   (Download and apply latest version)
+       NanoDecompilerCLI --version   (JSON с версией движка, для GUI - см. settings:checkEngine)\n";
         std::cout << "       NanoDecompilerCLI --install-tools[=jdk|maven]   (portable JDK/Maven по требованию)\n";
     }
 }
@@ -301,6 +306,14 @@ int run_cli(int argc, char** argv) {
         return 1;
     }
 
+        if (args[0] == "--check-update") {
+        nd::check_update();
+        return 0;
+    }
+    if (args[0] == "--update") {
+        nd::do_update(argv[0]);
+        return 0;
+    }
     if (args[0] == "--version") {
         // БАГ-ФИКС: раньше версии движка/GUI в SettingsModal.tsx/AppHeader.tsx/
         // Titlebar.tsx/StatusBar.tsx были захардкожены заглушками из демо-
