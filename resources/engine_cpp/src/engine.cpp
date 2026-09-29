@@ -352,11 +352,16 @@ std::vector<StmtPtr> strip_decl_to_assign(const std::vector<StmtPtr>& lst, const
                                            std::map<std::string, std::string>& types) {
     std::vector<StmtPtr> out;
     for (auto st : lst) {
+        if (!st) continue;
         if (st->kind == StmtKind::LocalDecl && names.count(static_cast<LocalDecl*>(st.get())->name)) {
             auto* ld = static_cast<LocalDecl*>(st.get());
-            if (!types.count(ld->name)) types[ld->name] = ld->type;
-            out.push_back(std::make_shared<ExprStmtNode>(
-                std::make_shared<Assign>(std::make_shared<Local>(ld->name, ld->type), ld->init)));
+            if (!types.count(ld->name) || types[ld->name].empty() || types[ld->name] == "Object") {
+                if (!ld->type.empty()) types[ld->name] = ld->type;
+            }
+            if (ld->init) {
+                out.push_back(std::make_shared<ExprStmtNode>(
+                    std::make_shared<Assign>(std::make_shared<Local>(ld->name, ld->type), ld->init)));
+            }
             continue;
         }
         if (st->kind == StmtKind::IfStmt) {
@@ -1014,33 +1019,53 @@ void collapse_sb_in_stmts(std::vector<StmtPtr>& stmts) {
 std::vector<StmtPtr> hoist_escaping_locals(const std::vector<StmtPtr>& stmts, std::set<std::string>& declared_so_far) {
     std::vector<StmtPtr> fixed;
     for (auto s : stmts) {
+        if (!s) continue;
         if (s->kind == StmtKind::IfStmt) {
             auto* i = static_cast<IfStmt*>(s.get());
-            i->then_body = hoist_escaping_locals(i->then_body, declared_so_far);
-            if (i->else_body.has_value()) i->else_body = hoist_escaping_locals(*i->else_body, declared_so_far);
+            auto branch_declared = declared_so_far;
+            i->then_body = hoist_escaping_locals(i->then_body, branch_declared);
+            if (i->else_body.has_value()) {
+                auto else_declared = declared_so_far;
+                i->else_body = hoist_escaping_locals(*i->else_body, else_declared);
+            }
         } else if (s->kind == StmtKind::WhileStmt) {
             auto* w = static_cast<WhileStmt*>(s.get());
-            w->body = hoist_escaping_locals(w->body, declared_so_far);
+            auto branch_declared = declared_so_far;
+            w->body = hoist_escaping_locals(w->body, branch_declared);
         } else if (s->kind == StmtKind::DoWhileStmt) {
             auto* w = static_cast<DoWhileStmt*>(s.get());
-            w->body = hoist_escaping_locals(w->body, declared_so_far);
+            auto branch_declared = declared_so_far;
+            w->body = hoist_escaping_locals(w->body, branch_declared);
         } else if (s->kind == StmtKind::ForStmt) {
             auto* f = static_cast<ForStmt*>(s.get());
-            f->body = hoist_escaping_locals(f->body, declared_so_far);
+            auto branch_declared = declared_so_far;
+            f->body = hoist_escaping_locals(f->body, branch_declared);
         } else if (s->kind == StmtKind::SyncStmt) {
             auto* sy = static_cast<SyncStmt*>(s.get());
-            sy->body = hoist_escaping_locals(sy->body, declared_so_far);
+            auto branch_declared = declared_so_far;
+            sy->body = hoist_escaping_locals(sy->body, branch_declared);
         } else if (s->kind == StmtKind::BlockStmt) {
             auto* b = static_cast<BlockStmt*>(s.get());
-            b->stmts = hoist_escaping_locals(b->stmts, declared_so_far);
+            auto branch_declared = declared_so_far;
+            b->stmts = hoist_escaping_locals(b->stmts, branch_declared);
         } else if (s->kind == StmtKind::SwitchStmt) {
             auto* sw = static_cast<SwitchStmt*>(s.get());
-            for (auto& c : sw->cases) c.body = hoist_escaping_locals(c.body, declared_so_far);
+            for (auto& c : sw->cases) {
+                auto branch_declared = declared_so_far;
+                c.body = hoist_escaping_locals(c.body, branch_declared);
+            }
         } else if (s->kind == StmtKind::TryStmt) {
             auto* t = static_cast<TryStmt*>(s.get());
-            t->body = hoist_escaping_locals(t->body, declared_so_far);
-            for (auto& c : t->catches) c.body = hoist_escaping_locals(c.body, declared_so_far);
-            if (t->finally_body.has_value()) t->finally_body = hoist_escaping_locals(*t->finally_body, declared_so_far);
+            auto try_declared = declared_so_far;
+            t->body = hoist_escaping_locals(t->body, try_declared);
+            for (auto& c : t->catches) {
+                auto catch_declared = declared_so_far;
+                c.body = hoist_escaping_locals(c.body, catch_declared);
+            }
+            if (t->finally_body.has_value()) {
+                auto fin_declared = declared_so_far;
+                t->finally_body = hoist_escaping_locals(*t->finally_body, fin_declared);
+            }
         }
         fixed.push_back(s);
     }
@@ -1049,6 +1074,10 @@ std::vector<StmtPtr> hoist_escaping_locals(const std::vector<StmtPtr>& stmts, st
     size_t n = fixed.size();
     for (size_t idx = 0; idx < n; ++idx) {
         StmtPtr s = fixed[idx];
+        if (!s) continue;
+        if (s->kind == StmtKind::LocalDecl) {
+            declared_so_far.insert(static_cast<LocalDecl*>(s.get())->name);
+        }
         auto inner = inner_body_of(s);
         if (inner.has_value() && !inner->empty()) {
             auto declared = collect_declared_names(*inner);
@@ -1092,8 +1121,8 @@ std::vector<StmtPtr> hoist_escaping_locals(const std::vector<StmtPtr>& stmts, st
                 std::set<std::string> new_names;
                 std::set_difference(escaping.begin(), escaping.end(), declared_so_far.begin(), declared_so_far.end(),
                                      std::inserter(new_names, new_names.begin()));
-                for (auto& name : new_names) {  // std::set - уже отсортировано, как sorted(new_names)
-                    std::string typ = types.count(name) ? types[name] : "Object";
+                for (auto& name : new_names) {
+                    std::string typ = (types.count(name) && !types[name].empty()) ? types[name] : "Object";
                     out.push_back(std::make_shared<LocalDecl>(typ, name, nullptr));
                 }
                 declared_so_far.insert(escaping.begin(), escaping.end());
@@ -1109,49 +1138,148 @@ std::vector<StmtPtr> hoist_escaping_locals(const std::vector<StmtPtr>& stmts, st
 bool has_escaping_local_decl_check(const std::vector<StmtPtr>& lst) {
     for (size_t i = 0; i < lst.size(); ++i) {
         StmtPtr s = lst[i];
-        std::optional<std::vector<StmtPtr>> inner;
-        if (s->kind == StmtKind::IfStmt) {
-            auto* ifs = static_cast<IfStmt*>(s.get());
-            std::vector<StmtPtr> comb = ifs->then_body;
-            if (ifs->else_body.has_value()) comb.insert(comb.end(), ifs->else_body->begin(), ifs->else_body->end());
-            inner = comb;
-        } else if (s->kind == StmtKind::WhileStmt) {
-            inner = static_cast<WhileStmt*>(s.get())->body;
-        } else if (s->kind == StmtKind::DoWhileStmt) {
-            inner = static_cast<DoWhileStmt*>(s.get())->body;
-        } else if (s->kind == StmtKind::ForStmt) {
-            inner = static_cast<ForStmt*>(s.get())->body;
-        } else if (s->kind == StmtKind::SyncStmt) {
-            inner = static_cast<SyncStmt*>(s.get())->body;
-        } else if (s->kind == StmtKind::BlockStmt) {
-            inner = static_cast<BlockStmt*>(s.get())->stmts;
-        } else if (s->kind == StmtKind::SwitchStmt) {
-            std::vector<StmtPtr> comb;
-            for (auto& c : static_cast<SwitchStmt*>(s.get())->cases) comb.insert(comb.end(), c.body.begin(), c.body.end());
-            inner = comb;
-        } else if (s->kind == StmtKind::TryStmt) {
-            auto* t = static_cast<TryStmt*>(s.get());
-            std::vector<StmtPtr> comb = t->body;
-            for (auto& c : t->catches) comb.insert(comb.end(), c.body.begin(), c.body.end());
-            if (t->finally_body.has_value()) comb.insert(comb.end(), t->finally_body->begin(), t->finally_body->end());
-            inner = comb;
-        }
+        if (!s) continue;
+        auto inner = inner_body_of(s);
         if (inner.has_value() && !inner->empty()) {
             auto declared = collect_declared_names(*inner);
             std::vector<StmtPtr> rest(lst.begin() + i + 1, lst.end());
             auto later = collect_shallow_referenced_names(rest);
-            bool intersects = false;
             for (auto& d : declared) {
-                if (later.count(d)) { intersects = true; break; }
+                if (later.count(d)) return true;
             }
-            if (intersects) return true;
-            if (has_escaping_local_decl_check(*inner)) return true;
+        }
+        if (s->kind == StmtKind::IfStmt) {
+            auto* ifs = static_cast<IfStmt*>(s.get());
+            if (has_escaping_local_decl_check(ifs->then_body)) return true;
+            if (ifs->else_body.has_value() && has_escaping_local_decl_check(*ifs->else_body)) return true;
+        } else if (s->kind == StmtKind::WhileStmt) {
+            if (has_escaping_local_decl_check(static_cast<WhileStmt*>(s.get())->body)) return true;
+        } else if (s->kind == StmtKind::DoWhileStmt) {
+            if (has_escaping_local_decl_check(static_cast<DoWhileStmt*>(s.get())->body)) return true;
+        } else if (s->kind == StmtKind::ForStmt) {
+            if (has_escaping_local_decl_check(static_cast<ForStmt*>(s.get())->body)) return true;
+        } else if (s->kind == StmtKind::SyncStmt) {
+            if (has_escaping_local_decl_check(static_cast<SyncStmt*>(s.get())->body)) return true;
+        } else if (s->kind == StmtKind::BlockStmt) {
+            if (has_escaping_local_decl_check(static_cast<BlockStmt*>(s.get())->stmts)) return true;
+        } else if (s->kind == StmtKind::SwitchStmt) {
+            for (auto& c : static_cast<SwitchStmt*>(s.get())->cases) {
+                if (has_escaping_local_decl_check(c.body)) return true;
+            }
+        } else if (s->kind == StmtKind::TryStmt) {
+            auto* t = static_cast<TryStmt*>(s.get());
+            if (has_escaping_local_decl_check(t->body)) return true;
+            for (auto& c : t->catches) {
+                if (has_escaping_local_decl_check(c.body)) return true;
+            }
+            if (t->finally_body.has_value() && has_escaping_local_decl_check(*t->finally_body)) return true;
         }
     }
     return false;
 }
 
 bool has_escaping_local_decl(const std::vector<StmtPtr>& stmts) { return has_escaping_local_decl_check(stmts); }
+
+// ---------------- _collect_all_escaping_names & _hoist_all_escaping_to_root ----------------
+
+std::set<std::string> collect_all_escaping_names(const std::vector<StmtPtr>& lst) {
+    std::set<std::string> escaping;
+    for (size_t i = 0; i < lst.size(); ++i) {
+        StmtPtr s = lst[i];
+        if (!s) continue;
+        auto inner = inner_body_of(s);
+        if (inner.has_value() && !inner->empty()) {
+            auto declared = collect_declared_names(*inner);
+            std::vector<StmtPtr> rest(lst.begin() + i + 1, lst.end());
+            auto later = collect_shallow_referenced_names(rest);
+            for (auto& d : declared) {
+                if (later.count(d)) escaping.insert(d);
+            }
+        }
+        if (s->kind == StmtKind::IfStmt) {
+            auto* ifs = static_cast<IfStmt*>(s.get());
+            auto sub = collect_all_escaping_names(ifs->then_body);
+            escaping.insert(sub.begin(), sub.end());
+            if (ifs->else_body.has_value()) {
+                sub = collect_all_escaping_names(*ifs->else_body);
+                escaping.insert(sub.begin(), sub.end());
+            }
+        } else if (s->kind == StmtKind::WhileStmt) {
+            auto sub = collect_all_escaping_names(static_cast<WhileStmt*>(s.get())->body);
+            escaping.insert(sub.begin(), sub.end());
+        } else if (s->kind == StmtKind::DoWhileStmt) {
+            auto sub = collect_all_escaping_names(static_cast<DoWhileStmt*>(s.get())->body);
+            escaping.insert(sub.begin(), sub.end());
+        } else if (s->kind == StmtKind::ForStmt) {
+            auto sub = collect_all_escaping_names(static_cast<ForStmt*>(s.get())->body);
+            escaping.insert(sub.begin(), sub.end());
+        } else if (s->kind == StmtKind::SyncStmt) {
+            auto sub = collect_all_escaping_names(static_cast<SyncStmt*>(s.get())->body);
+            escaping.insert(sub.begin(), sub.end());
+        } else if (s->kind == StmtKind::BlockStmt) {
+            auto sub = collect_all_escaping_names(static_cast<BlockStmt*>(s.get())->stmts);
+            escaping.insert(sub.begin(), sub.end());
+        } else if (s->kind == StmtKind::SwitchStmt) {
+            for (auto& c : static_cast<SwitchStmt*>(s.get())->cases) {
+                auto sub = collect_all_escaping_names(c.body);
+                escaping.insert(sub.begin(), sub.end());
+            }
+        } else if (s->kind == StmtKind::TryStmt) {
+            auto* t = static_cast<TryStmt*>(s.get());
+            auto sub = collect_all_escaping_names(t->body);
+            escaping.insert(sub.begin(), sub.end());
+            for (auto& c : t->catches) {
+                sub = collect_all_escaping_names(c.body);
+                escaping.insert(sub.begin(), sub.end());
+            }
+            if (t->finally_body.has_value()) {
+                sub = collect_all_escaping_names(*t->finally_body);
+                escaping.insert(sub.begin(), sub.end());
+            }
+        }
+    }
+    return escaping;
+}
+
+std::vector<StmtPtr> hoist_all_escaping_to_root(std::vector<StmtPtr> stmts, MethodCtx& ctx) {
+    auto escaping = collect_all_escaping_names(stmts);
+    if (escaping.empty()) return stmts;
+    std::map<std::string, std::string> types;
+    for (auto& [slot, info] : ctx.locals) {
+        if (!info.name.empty() && !info.type.empty()) types[info.name] = info.type;
+    }
+    for (auto& [name, typ] : ctx.crossing_temp_types) {
+        if (!name.empty() && !typ.empty()) types[name] = typ;
+    }
+    stmts = strip_decl_to_assign(stmts, escaping, types);
+    std::set<std::string> root_declared;
+    for (auto& s : stmts) {
+        if (s && s->kind == StmtKind::LocalDecl) {
+            root_declared.insert(static_cast<LocalDecl*>(s.get())->name);
+        }
+    }
+    for (auto& [slot, info] : ctx.locals) {
+        if (info.is_param) root_declared.insert(info.name);
+    }
+    std::vector<StmtPtr> prefix;
+    for (auto& name : escaping) {
+        if (root_declared.count(name)) continue;
+        std::string typ = (types.count(name) && !types[name].empty()) ? types[name] : "Object";
+        prefix.push_back(std::make_shared<LocalDecl>(typ, name, nullptr));
+        root_declared.insert(name);
+    }
+    if (!prefix.empty()) {
+        size_t insert_pos = 0;
+        if (!stmts.empty() && stmts[0] && stmts[0]->kind == StmtKind::ExprStmt) {
+            auto* es = static_cast<ExprStmtNode*>(stmts[0].get());
+            if (es->expr && es->expr->kind == ExprKind::MethodCall && static_cast<MethodCall*>(es->expr.get())->is_ctor) {
+                insert_pos = 1;
+            }
+        }
+        stmts.insert(stmts.begin() + insert_pos, prefix.begin(), prefix.end());
+    }
+    return stmts;
+}
 
 // ---------------- _expr_key / monitor-sync folding ----------------
 
@@ -2451,6 +2579,9 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
         prune_unused_imports(stmts, ctx);
         stmts = collapse_adjacent_monitors(stmts);
         if (contains_unfolded_monitor(stmts)) throw DecompileAbort("synchronized-блок не свёрнут (monitorenter/monitorexit)");
+        if (has_escaping_local_decl(stmts)) {
+            stmts = hoist_all_escaping_to_root(stmts, ctx);
+        }
         if (has_escaping_local_decl(stmts)) {
             throw DecompileAbort("переменная объявлена в блоке, но используется за его пределами "
                                   "(типично для switch(String) через hashCode) - структуризация ненадёжна");

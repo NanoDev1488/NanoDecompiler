@@ -196,7 +196,7 @@ const DEFAULT_SETTINGS: Settings = {
   appIcon: "terminal",
   setupCompleted: false,
   telemetryEnabled: false,
-  telemetryUrl: "https://hook.nanodev.cc/telemetry",
+  telemetryUrl: "http://195.179.231.14:15015/report",
   language: "ru",
 };
 
@@ -528,7 +528,17 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       .getSettings()
       .then(s => {
         if (cancelled) return;
-        setSettings(prev => ({ ...prev, legitimacyCheck: s.legitimacyCheck, autoUpdateCheck: s.autoUpdateCheck, appIcon: s.appIcon, setupCompleted: s.setupCompleted }));
+        setSettings(prev => ({
+          ...prev,
+          legitimacyCheck: s.legitimacyCheck,
+          autoUpdateCheck: s.autoUpdateCheck,
+          appIcon: s.appIcon,
+          setupCompleted: s.setupCompleted,
+          language: s.language,
+          disableVsCodeLogs: s.disableVsCodeLogs,
+          telemetryEnabled: s.telemetryEnabled,
+          telemetryUrl: s.telemetryUrl,
+        }));
         // Автопроверка обновлений при старте - только ПОСЛЕ того, как
         // узнали настоящее значение из настроек (не дефолт), иначе
         // выключенная пользователем автопроверка на миг игнорировалась бы.
