@@ -482,8 +482,58 @@ void Structurer::prepare_try() {
 
 std::vector<StmtPtr> Structurer::build(int64_t entry_pc) {
     auto stmts = region(entry_pc, {});
+    recover_unconsumed_blocks(stmts, entry_pc);
     check_full_coverage(entry_pc);
     return stmts;
+}
+
+void Structurer::recover_unconsumed_blocks(std::vector<StmtPtr>& stmts, int64_t entry_pc) {
+    std::set<int64_t> reachable;
+    std::vector<int64_t> stack = {entry_pc};
+    while (!stack.empty()) {
+        int64_t b = stack.back();
+        stack.pop_back();
+        if (reachable.count(b) || !cfg_.blocks.count(b)) continue;
+        reachable.insert(b);
+        for (int64_t s : cfg_.blocks.at(b).succs) stack.push_back(s);
+    }
+
+    while (true) {
+        std::set<int64_t> missing;
+        for (int64_t pc : reachable) {
+            if (!all_consumed_.count(pc)) missing.insert(pc);
+        }
+        if (missing.empty()) break;
+
+        int64_t next_recover = -1;
+        for (int64_t pc : missing) {
+            const Block& b = cfg_.blocks.at(pc);
+            bool has_real_stmts = false;
+            if (results_.count(pc)) {
+                for (auto& st : results_.at(pc).stmts) {
+                    if (!st) continue;
+                    if (st->kind == StmtKind::ReturnStmt && !static_cast<ReturnStmt*>(st.get())->expr) continue;
+                    has_real_stmts = true;
+                    break;
+                }
+            }
+            if (has_real_stmts || (!b.instrs.empty() && b.instrs[0].mnemonic != "return" && b.instrs[0].mnemonic != "nop" && b.instrs[0].mnemonic != "goto" && b.instrs[0].mnemonic != "goto_w")) {
+                next_recover = pc;
+                break;
+            }
+        }
+
+        if (next_recover == -1) {
+            for (int64_t pc : missing) all_consumed_.insert(pc);
+            break;
+        }
+
+        auto extra = region(next_recover, {});
+        if (!extra.empty()) {
+            stmts.insert(stmts.end(), extra.begin(), extra.end());
+        }
+        all_consumed_.insert(next_recover);
+    }
 }
 
 void Structurer::check_full_coverage(int64_t entry_pc) {
@@ -521,8 +571,16 @@ void Structurer::check_full_coverage(int64_t entry_pc) {
             }
             if (all_nops_or_goto) empty_or_pure_jump = true;
         }
-        bool has_stmts = results_.count(pc) && !results_.at(pc).stmts.empty();
-        if (!empty_or_pure_jump || has_stmts) {
+        bool has_real_stmts = false;
+        if (results_.count(pc)) {
+            for (auto& st : results_.at(pc).stmts) {
+                if (!st) continue;
+                if (st->kind == StmtKind::ReturnStmt && !static_cast<ReturnStmt*>(st.get())->expr) continue;
+                has_real_stmts = true;
+                break;
+            }
+        }
+        if (!empty_or_pure_jump || has_real_stmts) {
             real_missing.insert(pc);
         }
     }
@@ -1007,14 +1065,36 @@ std::pair<StmtPtr, std::optional<int64_t>> Structurer::build_try(int64_t pc, con
     std::optional<int64_t> overall_merge = (overall_it != ipdom_.end()) ? overall_it->second : std::nullopt;
     if (overall_merge.has_value() && stop_addrs.count(*overall_merge)) overall_merge = std::nullopt;
 
+    std::set<int64_t> handler_pcs;
+    for (auto& [ct, h] : entries) handler_pcs.insert(h);
+
     if (cfg_.blocks.count(end) && !stop_addrs.count(end)) {
         const Block& end_block = cfg_.blocks.at(end);
         bool is_trampoline = end_block.instrs.size() == 1 &&
                               (end_block.instrs[0].mnemonic == "goto" || end_block.instrs[0].mnemonic == "goto_w");
-        std::set<int64_t> handler_pcs;
-        for (auto& [ct, h] : entries) handler_pcs.insert(h);
         if (!is_trampoline && !handler_pcs.count(end)) {
             if (!overall_merge.has_value() || end < *overall_merge) overall_merge = end;
+        } else if (is_trampoline && !end_block.succs.empty()) {
+            int64_t target = end_block.succs[0];
+            if (!stop_addrs.count(target) && !handler_pcs.count(target)) {
+                if (!overall_merge.has_value() || target < *overall_merge) overall_merge = target;
+            }
+        }
+    }
+
+    if (!overall_merge.has_value()) {
+        std::set<int64_t> candidate_merges;
+        for (auto& [bpc, blk] : cfg_.blocks) {
+            if (bpc >= start && bpc < end && all_consumed_.count(bpc)) {
+                for (int64_t succ : blk.succs) {
+                    if (!all_consumed_.count(succ) && !stop_addrs.count(succ) && !handler_pcs.count(succ) && cfg_.blocks.count(succ)) {
+                        candidate_merges.insert(succ);
+                    }
+                }
+            }
+        }
+        if (!candidate_merges.empty()) {
+            overall_merge = *candidate_merges.begin();
         }
     }
     last_try_merge_pc_ = overall_merge;
