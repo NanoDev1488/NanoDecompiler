@@ -1,17 +1,18 @@
-﻿#include "auto_update.hpp"
+﻿const fs = require('fs');
+
+const cpp = 
+#include "auto_update.hpp"
 #include <iostream>
 #include <string>
 #include <vector>
 #include <cstdio>
+#include <cstdlib>
 #include "json_value.hpp"
 #include "version.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
 #include <wininet.h>
-#pragma comment(lib, "wininet.lib")
-#else
-#include <cstdlib>
 #endif
 
 namespace nd {
@@ -33,10 +34,9 @@ static std::string get_url(const std::string& url) {
     InternetCloseHandle(hInternet);
     return result;
 #else
-    std::string cmd = "curl -sL \"" + url + "\"";
     std::string tmp = "nd_update_tmp.json";
-    std::string full_cmd = cmd + " > " + tmp;
-    int res = system(full_cmd.c_str());
+    std::string cmd = "curl -sL '" + url + "' > " + tmp;
+    int res = system(cmd.c_str());
     (void)res;
     std::string result = "";
     FILE* f = fopen(tmp.c_str(), "r");
@@ -76,7 +76,7 @@ static std::string download_file(const std::string& url, const std::string& out_
     InternetCloseHandle(hInternet);
     return "";
 #else
-    std::string cmd = "curl -sL -o \"" + out_path + "\" \"" + url + "\"";
+    std::string cmd = "curl -sL -o '" + out_path + "' '" + url + "'";
     int res = system(cmd.c_str());
     if (res != 0) return "curl failed";
     return "";
@@ -90,7 +90,6 @@ void check_update() {
         std::cerr << "Failed to check updates." << std::endl;
         return;
     }
-    // Parse JSON
     auto opt_val = json_parse(json_str);
     if (!opt_val) {
         std::cerr << "Failed to parse GitHub response." << std::endl;
@@ -102,9 +101,9 @@ void check_update() {
         std::cout << "Current version: " << NANO_DECOMPILER_VERSION << std::endl;
         std::cout << "Latest version:  " << tag << std::endl;
         if (tag != NANO_DECOMPILER_VERSION) {
-            std::cout << "\nUpdate available! Run with --update to upgrade." << std::endl;
+            std::cout << "\\nUpdate available! Run with --update to upgrade." << std::endl;
         } else {
-            std::cout << "\nYou are on the latest version." << std::endl;
+            std::cout << "\\nYou are on the latest version." << std::endl;
         }
     } else {
         std::cerr << "Invalid response from GitHub." << std::endl;
@@ -171,7 +170,6 @@ void do_update(const std::string& self_path_argv) {
     
     std::cout << "Download complete. Replacing executable..." << std::endl;
 #ifdef _WIN32
-    // Windows: Rename current executable to .old, rename new to current
     char self_path[MAX_PATH];
     GetModuleFileNameA(NULL, self_path, MAX_PATH);
     std::string old_path = std::string(self_path) + ".old";
@@ -186,7 +184,6 @@ void do_update(const std::string& self_path_argv) {
         std::cerr << "Failed to rename current executable." << std::endl;
     }
 #else
-    // Linux/macOS
     std::string cmd = "chmod +x " + exe_path + " && mv " + exe_path + " '" + self_path_argv + "'";
     system(cmd.c_str());
     std::cout << "Update successful! Restart the application." << std::endl;
@@ -194,3 +191,7 @@ void do_update(const std::string& self_path_argv) {
 }
 
 } // namespace nd
+;
+
+fs.writeFileSync('resources/engine_cpp/src/auto_update.cpp', cpp);
+console.log('Fixed auto_update.cpp completely.');
