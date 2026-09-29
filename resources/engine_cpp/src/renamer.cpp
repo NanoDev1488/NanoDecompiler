@@ -1,6 +1,7 @@
 // renamer.cpp - см. renamer.hpp. 1:1 порт класса Renamer из main.py.
 #include "renamer.hpp"
 
+#include <algorithm>
 #include <cctype>
 
 #include "javatypes.hpp"

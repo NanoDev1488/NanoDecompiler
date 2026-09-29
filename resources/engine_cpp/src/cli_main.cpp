@@ -111,9 +111,9 @@ void print_usage() {
         std::cout << "       NanoDecompilerCLI plugin.jar [out_dir] --json-output   (one-shot run, JSON to stdout)\n";
         std::cout << "       NanoDecompilerCLI --api-server [--host H] [--port 8791]   (HTTP server)\n";
         std::cout << "       NanoDecompilerCLI --jar-summary plugin.jar   (JSON summary for GUI)\n";
-        std::cout << "       NanoDecompilerCLI --check-update   (Check latest version)
-       NanoDecompilerCLI --update   (Download and apply latest version)
-       NanoDecompilerCLI --version   (JSON with engine version, for GUI)\n";
+        std::cout << "       NanoDecompilerCLI --check-update   (Check latest version)\n";
+        std::cout << "       NanoDecompilerCLI --update   (Download and apply latest version)\n";
+        std::cout << "       NanoDecompilerCLI --version   (JSON with engine version, for GUI)\n";
         std::cout << "       NanoDecompilerCLI --install-tools[=jdk|maven]   (portable JDK/Maven on demand)\n";
     } else {
         std::cout << "Использование: NanoDecompilerCLI plugin.jar [output_dir] [--lang=ru|en]\n";
@@ -121,9 +121,9 @@ void print_usage() {
         std::cout << "       NanoDecompilerCLI plugin.jar [out_dir] --json-output   (разовый вызов, JSON в stdout)\n";
         std::cout << "       NanoDecompilerCLI --api-server [--host H] [--port 8791]   (HTTP-сервер)\n";
         std::cout << "       NanoDecompilerCLI --jar-summary plugin.jar   (JSON-сводка для GUI)\n";
-        std::cout << "       NanoDecompilerCLI --check-update   (Check latest version)
-       NanoDecompilerCLI --update   (Download and apply latest version)
-       NanoDecompilerCLI --version   (JSON с версией движка, для GUI - см. settings:checkEngine)\n";
+        std::cout << "       NanoDecompilerCLI --check-update   (Check latest version)\n";
+        std::cout << "       NanoDecompilerCLI --update   (Download and apply latest version)\n";
+        std::cout << "       NanoDecompilerCLI --version   (JSON с версией движка, для GUI - см. settings:checkEngine)\n";
         std::cout << "       NanoDecompilerCLI --install-tools[=jdk|maven]   (portable JDK/Maven по требованию)\n";
     }
 }
