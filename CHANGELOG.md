@@ -1,5 +1,15 @@
 # NanoDecompiler Changelog
 
+## [1.9.135] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **Устойчивый парсинг сигнатур дженериков (Resilient Generic Signature Parsing & Nested Class Normalization)**:
+  - `resources/engine_cpp/src/javatypes.cpp`: в `parse_class_type` добавлена автонормализация разделителя вложенных классов `$` в стандартную точечную нотацию (`Map.Entry<K, V>` вместо устаревшей/обфусцированной формы `Map$Entry<K, V>`).
+  - `resources/engine_cpp/src/javatypes.cpp`: устранена чувствительность к отсутствию закрывающего символа `;` на границах обрезанных или модифицированных сигнатур типов.
+  - `resources/engine_cpp/src/javatypes.cpp`: добавлена устойчивость парсера параметров типов `parse_type_params` и аргументов `parse_type_args` к частичным и неполным границам типов без выброса исключений и потери сигнатуры метода/класса.
+
+---
+
 ## [1.9.134] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

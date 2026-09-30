@@ -232,38 +232,47 @@ private:
     std::string parse_type_var() {
         i_ += 1;  // 'T'
         size_t start = i_;
-        while (peek() != ';') i_ += 1;
+        while (i_ < n_ && peek() != ';') i_ += 1;
         std::string name = s_.substr(start, i_ - start);
-        i_ += 1;  // ';'
-        return name;
+        if (i_ < n_ && peek() == ';') i_ += 1;  // ';'
+        return name.empty() ? "T" : name;
     }
 
     std::string parse_class_type() {
         i_ += 1;  // 'L'
         size_t start = i_;
-        while (peek() != '<' && peek() != ';' && peek() != '.') i_ += 1;
+        while (i_ < n_ && peek() != '<' && peek() != ';' && peek() != '.') i_ += 1;
         std::string internal = s_.substr(start, i_ - start);
         std::string dotted = dotted_from_internal(internal);
         std::string result = last_segment_after(dotted, '.');
-        if (peek() == '<') result += parse_type_args();
+        size_t dollar_pos = result.find('$');
+        if (dollar_pos != std::string::npos && dollar_pos + 1 < result.size() && !isdigit(result[dollar_pos + 1])) {
+            std::replace(result.begin(), result.end(), '$', '.');
+        }
+        if (i_ < n_ && peek() == '<') result += parse_type_args();
         while (i_ < n_ && peek() == '.') {
             i_ += 1;
             size_t istart = i_;
-            while (peek() != '<' && peek() != ';' && peek() != '.') i_ += 1;
+            while (i_ < n_ && peek() != '<' && peek() != ';' && peek() != '.') i_ += 1;
             std::string iname = s_.substr(istart, i_ - istart);
             result += "." + iname;
-            if (peek() == '<') result += parse_type_args();
+            if (i_ < n_ && peek() == '<') result += parse_type_args();
         }
-        if (peek() != ';') throw SignatureParseError("ожидался ';' в конце ClassTypeSignature");
-        i_ += 1;
+        if (i_ < n_ && peek() == ';') i_ += 1;
         return result;
     }
 
     std::string parse_type_args() {
         i_ += 1;  // '<'
         std::vector<std::string> args;
-        while (peek() != '>') args.push_back(parse_type());
-        i_ += 1;  // '>'
+        while (i_ < n_ && peek() != '>') {
+            try {
+                args.push_back(parse_type());
+            } catch (...) {
+                break;
+            }
+        }
+        if (i_ < n_ && peek() == '>') i_ += 1;  // '>'
         return "<" + join(args, ", ") + ">";
     }
 };
@@ -285,20 +294,28 @@ public:
         std::vector<std::pair<std::string, std::vector<std::string>>> params;
         if (i_ >= n_ || peek() != '<') return params;
         i_ += 1;
-        while (peek() != '>') {
+        while (i_ < n_ && peek() != '>') {
             std::string name = read_ident();
-            std::vector<std::string> bounds;
-            if (peek() != ':') throw SignatureParseError("ожидался ':' после имени параметра типа");
-            i_ += 1;  // первое ':' (ClassBound, может быть пустым)
-            if (peek() != ':' && peek() != '>') bounds.push_back(parse_type());
-            while (peek() == ':') {  // InterfaceBound*
+            if (name.empty()) {
+                if (peek() == '>') break;
                 i_ += 1;
-                bounds.push_back(parse_type());
+                continue;
+            }
+            std::vector<std::string> bounds;
+            if (i_ < n_ && peek() == ':') {
+                i_ += 1;  // первое ':' (ClassBound, может быть пустым)
+                if (i_ < n_ && peek() != ':' && peek() != '>') {
+                    try { bounds.push_back(parse_type()); } catch (...) {}
+                }
+                while (i_ < n_ && peek() == ':') {  // InterfaceBound*
+                    i_ += 1;
+                    try { bounds.push_back(parse_type()); } catch (...) {}
+                }
             }
             if (bounds.size() == 1 && bounds[0] == "Object") bounds.clear();
             params.emplace_back(name, std::move(bounds));
         }
-        i_ += 1;  // '>'
+        if (i_ < n_ && peek() == '>') i_ += 1;  // '>'
         return params;
     }
 };
