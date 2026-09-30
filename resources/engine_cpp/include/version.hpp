@@ -191,7 +191,8 @@ namespace nd {
 // НОВОЕ v1.9.118: реконструирование составных булевых условий (&&, ||) по законам де Моргана, объединение вложенных и последовательных if-ветвей.
 // НОВОЕ v1.9.119: селективный вывод меток циклов и switch (только при наличии целевых break/continue), поддержка именованных break для switch.
 // НОВОЕ v1.9.120: десугаринг конструкции try-with-resources (AutoCloseable, suppression и свертка в try (Resource r = ...)).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.120";
+// НОВОЕ v1.9.121: распознавание и очистка присваиваний перехваченных исключений в catch-блоках (structure.cpp), многопроходный хостинг убегающих переменных (multi-pass hoisting) и поддержка инвертированных и прямых условий в switch(String).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.121";
 }
 
 

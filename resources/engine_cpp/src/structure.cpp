@@ -1062,8 +1062,33 @@ std::pair<StmtPtr, std::optional<int64_t>> Structurer::build_try(int64_t pc, con
         auto cbody = region(handler_pc, local_stop);
         std::string var_name = "e" + std::to_string(catch_var_ctr_);
         if (!cbody.empty() && cbody[0]->kind == StmtKind::LocalDecl && is_sentinel(static_cast<LocalDecl*>(cbody[0].get())->init)) {
-            var_name = static_cast<LocalDecl*>(cbody[0].get())->name;
+            std::string old_name = static_cast<LocalDecl*>(cbody[0].get())->name;
             cbody.erase(cbody.begin());
+            if (old_name.rfind("var", 0) == 0 || old_name.rfind("__", 0) == 0 || old_name == "obj" || old_name == "arg") {
+                rename_local(cbody, old_name, var_name);
+            } else {
+                var_name = old_name;
+                rename_sentinel(cbody, var_name);
+            }
+        } else if (!cbody.empty() && cbody[0]->kind == StmtKind::ExprStmt) {
+            auto* es = static_cast<ExprStmtNode*>(cbody[0].get());
+            if (es->expr && es->expr->kind == ExprKind::Assign) {
+                auto* a = static_cast<Assign*>(es->expr.get());
+                if (is_sentinel(a->value) && a->target && a->target->kind == ExprKind::Local) {
+                    std::string old_name = static_cast<Local*>(a->target.get())->name;
+                    cbody.erase(cbody.begin());
+                    if (old_name.rfind("var", 0) == 0 || old_name.rfind("__", 0) == 0 || old_name == "obj" || old_name == "arg") {
+                        rename_local(cbody, old_name, var_name);
+                    } else {
+                        var_name = old_name;
+                        rename_sentinel(cbody, var_name);
+                    }
+                } else {
+                    rename_sentinel(cbody, var_name);
+                }
+            } else {
+                rename_sentinel(cbody, var_name);
+            }
         } else {
             rename_sentinel(cbody, var_name);
         }

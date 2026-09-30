@@ -1,5 +1,15 @@
 # NanoDecompiler Changelog
 
+## [1.9.121] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **Устранение откатов из-за утечки локальных переменных (escaping variables & catch exception resolution)**:
+  - `resources/engine_cpp/src/structure.cpp`: в `build_try` добавлена поддержка распознавания и очистки присваиваний перехваченных исключений `ExprStmtNode(Assign(Local, CAUGHT_SENTINEL))`. Устранено ложное связывание исключения catch-блока со слотами try-блока (`var4`, `var13` и т.д.), приводящее к выходу переменной за пределы блока.
+  - `resources/engine_cpp/src/engine.cpp`: улучшен `match_hash_case` в `collapse_string_switch` — добавлена поддержка как инвертированных (`if (!x.equals(...)) break;`), так и прямых (`if (x.equals(...)) { idx = N; break; }`) javac-паттернов switch(String).
+  - `resources/engine_cpp/src/engine.cpp`: цикл хостинга убегающих переменных переведён на multi-pass (до 4 проходов) с безопасным выносом остаточных объявлений в корень метода вместо фатального `DecompileAbort`.
+
+---
+
 ## [1.9.120] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

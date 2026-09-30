@@ -1,0 +1,176 @@
+{
+  "fetched_at": "2026-09-30T07:55:51.229880+00:00",
+  "total_sources": 17,
+  "files": [
+    {
+      "id": "jep-280-indify-string-concat",
+      "title": "JEP 280: Indify String Concatenation",
+      "url": "https://openjdk.org/jeps/280",
+      "category": "jvm_modern_specs",
+      "relative_path": "jvm_modern_specs/jep-280-indify-string-concat.md",
+      "bytes": 28155,
+      "sha256": "5ba2378df23cfa1112a8ebe644817832a4164d36727315f8a8538eedca619d78",
+      "http_status": 200
+    },
+    {
+      "id": "jep-394-pattern-matching-instanceof",
+      "title": "JEP 394: Pattern Matching for instanceof",
+      "url": "https://openjdk.org/jeps/394",
+      "category": "jvm_modern_specs",
+      "relative_path": "jvm_modern_specs/jep-394-pattern-matching-instanceof.md",
+      "bytes": 22293,
+      "sha256": "1897fab6eda9d2df2c72a6b973e7caef653dabfc407006be145f8db28d61460d",
+      "http_status": 200
+    },
+    {
+      "id": "jep-395-records",
+      "title": "JEP 395: Records",
+      "url": "https://openjdk.org/jeps/395",
+      "category": "jvm_modern_specs",
+      "relative_path": "jvm_modern_specs/jep-395-records.md",
+      "bytes": 40105,
+      "sha256": "45fb593e9f156feb5557d30f1d7a5957e599f4be55de73d0b54961393c1b424c",
+      "http_status": 200
+    },
+    {
+      "id": "jep-409-sealed-classes",
+      "title": "JEP 409: Sealed Classes",
+      "url": "https://openjdk.org/jeps/409",
+      "category": "jvm_modern_specs",
+      "relative_path": "jvm_modern_specs/jep-409-sealed-classes.md",
+      "bytes": 38575,
+      "sha256": "67f6e298ca8adc5e7ed80f4e05775cfc91148de10a1fe282241ac711b3798a74",
+      "http_status": 200
+    },
+    {
+      "id": "jep-440-record-patterns",
+      "title": "JEP 440: Record Patterns",
+      "url": "https://openjdk.org/jeps/440",
+      "category": "jvm_modern_specs",
+      "relative_path": "jvm_modern_specs/jep-440-record-patterns.md",
+      "bytes": 25175,
+      "sha256": "93408aea962607cd4c70cd0dae821bf59141f072f41322ca3b25a935b820c647",
+      "http_status": 200
+    },
+    {
+      "id": "jep-441-pattern-matching-switch",
+      "title": "JEP 441: Pattern Matching for switch",
+      "url": "https://openjdk.org/jeps/441",
+      "category": "jvm_modern_specs",
+      "relative_path": "jvm_modern_specs/jep-441-pattern-matching-switch.md",
+      "bytes": 66964,
+      "sha256": "bb13df772f04bb35dc55fbd1bdd843ef4eef7448b095c7bdfe3e8919f1424083",
+      "http_status": 200
+    },
+    {
+      "id": "jep-456-unnamed-variables-patterns",
+      "title": "JEP 456: Unnamed Variables & Patterns",
+      "url": "https://openjdk.org/jeps/456",
+      "category": "jvm_modern_specs",
+      "relative_path": "jvm_modern_specs/jep-456-unnamed-variables-patterns.md",
+      "bytes": 32762,
+      "sha256": "c8469035cadb9710d40d97b6bcb06303696de9b3d60133dde0bea2aca1cfb10e",
+      "http_status": 200
+    },
+    {
+      "id": "jvms-se21-ch2-structure",
+      "title": "JVMS SE 21: Chapter 2 - The Structure of the Java Virtual Machine",
+      "url": "https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-2.html",
+      "category": "jvms_specification",
+      "relative_path": "jvms_specification/jvms-se21-ch2-structure.md",
+      "bytes": 222113,
+      "sha256": "2daf4465b92e173300cf363d21be3a8caeada3c36f2832a5e5e13643e6ef0640",
+      "http_status": 200
+    },
+    {
+      "id": "jvms-se21-ch3-compiling",
+      "title": "JVMS SE 21: Chapter 3 - Compiling for the Java Virtual Machine",
+      "url": "https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-3.html",
+      "category": "jvms_specification",
+      "relative_path": "jvms_specification/jvms-se21-ch3-compiling.md",
+      "bytes": 125496,
+      "sha256": "6afe8f5521a268c0dc51927beee328501073654c1f0cf94c4f2bbbceea43ebd2",
+      "http_status": 200
+    },
+    {
+      "id": "jvms-se21-ch4-class-file-format",
+      "title": "JVMS SE 21: Chapter 4 - The class File Format",
+      "url": "https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-4.html",
+      "category": "jvms_specification",
+      "relative_path": "jvms_specification/jvms-se21-ch4-class-file-format.md",
+      "bytes": 1261150,
+      "sha256": "9128a4c5a68286f1e4a52c584faf73652c6d47de3aeca5196567198795676fa9",
+      "http_status": 200
+    },
+    {
+      "id": "jvms-se21-ch5-loading-linking-initializing",
+      "title": "JVMS SE 21: Chapter 5 - Loading, Linking, and Initializing",
+      "url": "https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-5.html",
+      "category": "jvms_specification",
+      "relative_path": "jvms_specification/jvms-se21-ch5-loading-linking-initializing.md",
+      "bytes": 288833,
+      "sha256": "9d87f675d470b43d57e90025b103f494ec73f6fb50c0106b9e6ae4a83e679112",
+      "http_status": 200
+    },
+    {
+      "id": "jvms-se21-ch6-instruction-set",
+      "title": "JVMS SE 21: Chapter 6 - The Java Virtual Machine Instruction Set",
+      "url": "https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-6.html",
+      "category": "jvms_specification",
+      "relative_path": "jvms_specification/jvms-se21-ch6-instruction-set.md",
+      "bytes": 990996,
+      "sha256": "959f0eff5725d9eef0a23f38cb90112c9a90e8a3873a45a2364cb64531a54818",
+      "http_status": 200
+    },
+    {
+      "id": "cpp-raii-resource-management",
+      "title": "cppreference: RAII (Resource Acquisition Is Initialization)",
+      "url": "https://en.cppreference.com/w/cpp/language/raii",
+      "category": "cpp_architecture",
+      "relative_path": "cpp_architecture/cpp-raii-resource-management.md",
+      "bytes": 48103,
+      "sha256": "4f5badf2d6c5b86eb71cde03e232dd3447854c7505a51961af19cb056b67f31e",
+      "http_status": 200
+    },
+    {
+      "id": "cpp-memory-model",
+      "title": "cppreference: C++ Memory Model and Data Races",
+      "url": "https://en.cppreference.com/w/cpp/language/memory_model",
+      "category": "cpp_architecture",
+      "relative_path": "cpp_architecture/cpp-memory-model.md",
+      "bytes": 50498,
+      "sha256": "7b9d16d30a37b227e6be878b4f0997da4fa01fa16129a4fad26450077466ada9",
+      "http_status": 200
+    },
+    {
+      "id": "cpp-move-semantics",
+      "title": "cppreference: Move Constructors and Rvalue References",
+      "url": "https://en.cppreference.com/w/cpp/language/move_constructor",
+      "category": "cpp_architecture",
+      "relative_path": "cpp_architecture/cpp-move-semantics.md",
+      "bytes": 89506,
+      "sha256": "d4b41b9d9d50fd05cb53f2042c3ede3f4f515b3466171f30959ae6f89bd718e9",
+      "http_status": 200
+    },
+    {
+      "id": "cpp-smart-pointers",
+      "title": "cppreference: std::unique_ptr and AST Node Ownership",
+      "url": "https://en.cppreference.com/w/cpp/memory/unique_ptr",
+      "category": "cpp_architecture",
+      "relative_path": "cpp_architecture/cpp-smart-pointers.md",
+      "bytes": 109024,
+      "sha256": "da6fe410766097c079fc64d454f0c03063a47a623fcb1996e7fe8270d7917148",
+      "http_status": 200
+    },
+    {
+      "id": "cpp-variant-sum-types",
+      "title": "cppreference: std::variant and Type-Safe Sum Types for IR",
+      "url": "https://en.cppreference.com/w/cpp/utility/variant",
+      "category": "cpp_architecture",
+      "relative_path": "cpp_architecture/cpp-variant-sum-types.md",
+      "bytes": 81244,
+      "sha256": "497395d99f1879228b23f68998afc3be6c0aa712db609f5d21cf7f7865646d2e",
+      "http_status": 200
+    }
+  ]
+}

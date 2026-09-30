@@ -1,0 +1,14399 @@
+---
+source_url: https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-4.html
+title: JVMS SE 21: Chapter 4 - The class File Format
+downloaded_at_utc: 2026-09-30T07:56:18.622887+00:00
+http_status: 200
+content_sha256: 9128a4c5a68286f1e4a52c584faf73652c6d47de3aeca5196567198795676fa9
+category: jvms_specification
+---
+
+# JVMS SE 21: Chapter 4 - The class File Format
+
+**Официальный первоисточник:** [https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-4.html](https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-4.html)  
+**Статус загрузки:** HTTP 200 OK  
+**Хэш содержимого (SHA-256):** `9128a4c5a68286f1e4a52c584faf73652c6d47de3aeca5196567198795676fa9`  
+
+---
+
+
+Chapter 4. The class File Format
+
+Java SE  >  Java SE Specifications  >  Java Virtual Machine Specification
+
+Chapter 4. The `class` File Format
+
+Prev
+
+Next
+
+#   Chapter 4. The `class` File Format
+
+Table of Contents
+
+4.1. The `ClassFile` Structure
+4.2. Names
+
+4.2.1. Binary Class and Interface Names
+4.2.2. Unqualified Names
+4.2.3. Module and Package Names
+
+4.3. Descriptors
+
+4.3.1. Grammar Notation
+4.3.2. Field Descriptors
+4.3.3. Method Descriptors
+
+4.4. The Constant Pool
+
+4.4.1. The `CONSTANT_Class_info` Structure
+4.4.2. The `CONSTANT_Fieldref_info`, `CONSTANT_Methodref_info`, and `CONSTANT_InterfaceMethodref_info` Structures
+4.4.3. The `CONSTANT_String_info` Structure
+4.4.4. The `CONSTANT_Integer_info` and `CONSTANT_Float_info` Structures
+4.4.5. The `CONSTANT_Long_info` and `CONSTANT_Double_info` Structures
+4.4.6. The `CONSTANT_NameAndType_info` Structure
+4.4.7. The `CONSTANT_Utf8_info` Structure
+4.4.8. The `CONSTANT_MethodHandle_info` Structure
+4.4.9. The `CONSTANT_MethodType_info` Structure
+4.4.10. The `CONSTANT_Dynamic_info` and `CONSTANT_InvokeDynamic_info` Structures
+4.4.11. The `CONSTANT_Module_info` Structure
+4.4.12. The `CONSTANT_Package_info` Structure
+
+4.5. Fields
+4.6. Methods
+4.7. Attributes
+
+4.7.1. Defining and Naming New Attributes
+4.7.2. The `ConstantValue` Attribute
+4.7.3. The `Code` Attribute
+4.7.4. The `StackMapTable` Attribute
+4.7.5. The `Exceptions` Attribute
+4.7.6. The `InnerClasses` Attribute
+4.7.7. The `EnclosingMethod` Attribute
+4.7.8. The `Synthetic` Attribute
+4.7.9. The `Signature` Attribute
+
+4.7.9.1. Signatures
+
+4.7.10. The `SourceFile` Attribute
+4.7.11. The `SourceDebugExtension` Attribute
+4.7.12. The `LineNumberTable` Attribute
+4.7.13. The `LocalVariableTable` Attribute
+4.7.14. The `LocalVariableTypeTable` Attribute
+4.7.15. The `Deprecated` Attribute
+4.7.16. The `RuntimeVisibleAnnotations` Attribute
+
+4.7.16.1. The `element_value` structure
+
+4.7.17. The `RuntimeInvisibleAnnotations` Attribute
+4.7.18. The `RuntimeVisibleParameterAnnotations` Attribute
+4.7.19. The `RuntimeInvisibleParameterAnnotations` Attribute
+4.7.20. The `RuntimeVisibleTypeAnnotations` Attribute
+
+4.7.20.1. The `target_info` union
+4.7.20.2. The `type_path` structure
+
+4.7.21. The `RuntimeInvisibleTypeAnnotations` Attribute
+4.7.22. The `AnnotationDefault` Attribute
+4.7.23. The `BootstrapMethods` Attribute
+4.7.24. The `MethodParameters` Attribute
+4.7.25. The `Module` Attribute
+4.7.26. The `ModulePackages` Attribute
+4.7.27. The `ModuleMainClass` Attribute
+4.7.28. The `NestHost` Attribute
+4.7.29. The `NestMembers` Attribute
+4.7.30. The `Record` Attribute
+4.7.31. The `PermittedSubclasses` Attribute
+
+4.8. Format Checking
+4.9. Constraints on Java Virtual Machine Code
+
+4.9.1. Static Constraints
+4.9.2. Structural Constraints
+
+4.10. Verification of `class` Files
+
+4.10.1. Verification by Type Checking
+
+4.10.1.1. Accessors for Java Virtual Machine Artifacts
+4.10.1.2. Verification Type System
+4.10.1.3. Instruction Representation
+4.10.1.4. Stack Map Frames and Type Transitions
+4.10.1.5. Type Checking Abstract and Native Methods
+4.10.1.6. Type Checking Methods with Code
+4.10.1.7. Type Checking Load and Store Instructions
+4.10.1.8. Type Checking for `protected` Members
+4.10.1.9. Type Checking Instructions
+
+aaload
+aastore
+aconst_null
+aload  ,   aload_<n>
+anewarray
+areturn
+arraylength
+astore  ,   astore_<n>
+athrow
+baload
+bastore
+bipush
+caload
+castore
+checkcast
+d2f  ,   d2i  ,   d2l
+dadd
+daload
+dastore
+dcmp<op>
+dconst_<d>
+ddiv
+dload  ,   dload_<n>
+dmul
+dneg
+drem
+dreturn
+dstore  ,   dstore_<n>
+dsub
+dup
+dup_x1
+dup_x2
+dup2
+dup2_x1
+dup2_x2
+f2d  ,   f2i  ,   f2l
+fadd
+faload
+fastore
+fcmp<op>
+fconst_<f>
+fdiv
+fload  ,   fload_<n>
+fmul
+fneg
+frem
+freturn
+fstore  ,   fstore_<n>
+fsub
+getfield
+getstatic
+goto  ,   goto_w
+i2b  ,   i2c  ,   i2d  ,   i2f  ,   i2l  ,   i2s
+iadd
+iaload
+iand
+iastore
+iconst_<i>
+idiv
+if_acmp<cond>
+if_icmp<cond>
+if<cond>
+ifnonnull  ,   ifnull
+iinc
+iload  ,   iload_<n>
+imul
+ineg
+instanceof
+invokedynamic
+invokeinterface
+invokespecial
+invokestatic
+invokevirtual
+ior  ,   irem
+ireturn
+ishl  ,   ishr  ,   iushr
+istore  ,   istore_<n>
+isub  ,   ixor
+l2d  ,   l2f  ,   l2i
+ladd
+laload
+land
+lastore
+lcmp
+lconst_<l>
+ldc  ,   ldc_w  ,   ldc2_w
+ldiv
+lload  ,   lload_<n>
+lmul
+lneg
+lookupswitch
+lor  ,   lrem
+lreturn
+lshl  ,   lshr  ,   lushr
+lstore  ,   lstore_<n>
+lsub  ,   lxor
+monitorenter  ,   monitorexit
+multianewarray
+new
+newarray
+nop
+pop  ,   pop2
+putfield
+putstatic
+return
+saload
+sastore
+sipush
+swap
+tableswitch
+wide
+
+4.10.2. Verification by Type Inference
+
+4.10.2.1. The Process of Verification by Type Inference
+4.10.2.2. The Bytecode Verifier
+4.10.2.3. Values of Types `long` and `double`
+4.10.2.4. Instance Initialization Methods and Newly Created Objects
+4.10.2.5. Exceptions and `finally`
+
+4.11. Limitations of the Java Virtual Machine
+
+This chapter describes the `class` file format of the Java Virtual Machine. Each
+`class` file contains the definition of a single  class, interface, or module. Although a class,
+interface, or module need not have an external representation
+literally contained in a file (for instance, because the class is
+generated by a class loader), we will colloquially refer to any valid
+representation of a class, interface, or module as being in the
+`class` file format.
+
+A `class` file consists of a
+stream of 8-bit bytes.  16-bit and 32-bit quantities are constructed
+by reading in two and four consecutive 8-bit bytes, respectively.
+Multibyte data items are always stored in big-endian order, where the
+high bytes come first. This chapter defines  the data types
+`u1`, `u2`, and `u4`
+to represent an unsigned one-, two-, or four-byte quantity, respectively.
+
+In the Java SE Platform API, the `class` file format is
+supported by interfaces `java.io.DataInput`
+and `java.io.DataOutput` and classes such as
+`java.io.DataInputStream`
+and `java.io.DataOutputStream`. For example, values
+of the types `u1`, `u2`,
+and `u4` may be read by methods such
+as `readUnsignedByte`,
+`readUnsignedShort`, and `readInt`
+of the interface `java.io.DataInput`.
+
+This chapter presents the
+`class` file format using pseudostructures written in a C-like
+structure notation. To avoid confusion with the fields of classes and
+class instances, etc., the contents of the structures describing the
+`class` file format are referred to as   items  .
+Successive items are stored in the `class` file sequentially, without
+padding or alignment.
+
+Tables  ,
+consisting of zero or more variable-sized items, are used in several
+`class` file structures. Although we use C-like array syntax to refer
+to table items, the fact that tables are streams of varying-sized
+structures means that it is not possible to translate a table index
+directly to a byte offset into the table.
+
+Where we refer to a data
+structure as an   array  , it consists of zero or
+more contiguous fixed-sized items and can be indexed like an array.
+
+Reference to an ASCII character
+in this chapter should be interpreted to mean the Unicode code point
+corresponding to the ASCII character.
+
+##   4.1. The `ClassFile` Structure
+
+A `class` file consists of a single `ClassFile` structure:
+
+```
+
+ClassFile {
+u4             magic;
+u2             minor_version;
+u2             major_version;
+u2             constant_pool_count;
+cp_info        constant_pool[constant_pool_count-1];
+u2             access_flags;
+u2             this_class;
+u2             super_class;
+u2             interfaces_count;
+u2             interfaces[interfaces_count];
+u2             fields_count;
+field_info     fields[fields_count];
+u2             methods_count;
+method_info    methods[methods_count];
+u2             attributes_count;
+attribute_info attributes[attributes_count];
+}
+
+```
+
+The items in the `ClassFile` structure are as follows:
+
+magic
+
+The `magic` item supplies the magic number
+identifying the `class` file format; it has the
+value `0xCAFEBABE`.
+
+minor_version, major_version
+
+The values of the `minor_version` and `major_version` items
+are the minor and major version numbers of this `class`
+file. Together, a major and a minor version number determine
+the version of the `class` file format. If a `class` file has
+major version number `M` and minor version number `m`, we
+denote the version of its `class` file format as
+`M`.`m`.
+
+A Java Virtual Machine implementation which conforms to Java SE `N` must
+support exactly the major versions of the `class` file format
+specified in the fourth column of  Table 4.1-A ,
+"Supported majors". The notation  A  ..  B  means major versions
+A  through  B , inclusive of both  A  and  B .
+The third column, "Major", shows the major version introduced
+by each Java SE release, that is, the first release that could
+have accepted a `class` file containing that `major_version` item.
+For very early releases, the JDK version is shown instead
+of the Java SE release.
+
+Table 4.1-A. `class` file format major versions
+
+Java SE
+Released
+Major
+Supported majors
+
+1.0.2
+May 1996
+45
+45
+
+1.1
+February 1997
+45
+45
+
+1.2
+December 1998
+46
+45 .. 46
+
+1.3
+May 2000
+47
+45 .. 47
+
+1.4
+February 2002
+48
+45 .. 48
+
+5.0
+September 2004
+49
+45 .. 49
+
+6
+December 2006
+50
+45 .. 50
+
+7
+July 2011
+51
+45 .. 51
+
+8
+March 2014
+52
+45 .. 52
+
+9
+September 2017
+53
+45 .. 53
+
+10
+
+March 2018
+54
+45 .. 54
+
+11
+
+September 2018
+55
+45 .. 55
+
+12
+
+March 2019
+56
+45 .. 56
+
+13
+
+September 2019
+57
+45 .. 57
+
+14
+
+March 2020
+58
+45 .. 58
+
+15
+
+September 2020
+59
+45 .. 59
+
+16
+
+March 2021
+60
+45 .. 60
+
+17
+
+September 2021
+61
+45 .. 61
+
+18
+
+March 2022
+62
+45 .. 62
+
+19
+
+September 2022
+63
+45 .. 63
+
+20
+
+March 2023
+64
+45 .. 64
+
+21
+
+September 2023
+65
+45 .. 65
+
+For a `class` file whose `major_version` is 56 or above, the
+`minor_version` must be 0 or 65535.
+
+For a `class` file whose `major_version` is between 45 and 55
+inclusive, the `minor_version` may be any value.
+
+A historical perspective is warranted on JDK support for
+`class` file format versions. JDK 1.0.2 supported versions
+45.0 through 45.3 inclusive. JDK 1.1 supported versions 45.0
+through 45.65535 inclusive. When JDK 1.2 introduced support
+for major version 46, the only minor version supported under
+that major version was 0. Later JDKs continued the practice of
+introducing support for a new major version (47, 48, etc) but
+supporting only a minor version of 0 under the new major
+version. Finally, the introduction of preview features in Java
+SE 12 (see below) motivated a standard role for the minor
+version of the `class` file format, so JDK 12 supported minor
+versions of 0   and   65535 under major
+version 56. Subsequent JDKs introduce support for `N`.0 and
+`N`.65535 where `N` is the corresponding major version of the
+implemented Java SE Platform. For example, JDK 13 supports 57.0 and
+57.65535.
+
+The Java SE Platform may define   preview features  .
+A Java Virtual Machine implementation which conforms to Java SE `N` (`N`
+&#8805;  12) must support all the preview features of Java SE
+`N`, and none of the preview features of any other Java SE
+release. The implementation must by default disable the
+supported preview features, and must provide a way to enable
+all of them, and must not provide a way to enable only some of
+them.
+
+A `class` file is said to   depend on the preview
+features of Java SE `N`   (`N`  &#8805;  12) if it has a
+`major_version` that corresponds to Java SE `N` (according to
+Table 4.1-A ) and a `minor_version` of
+65535.
+
+A Java Virtual Machine implementation which conforms to Java SE `N` (`N`
+&#8805;  12) must behave as follows:
+
+A `class` file that depends on the preview features of
+Java SE `N` may be loaded only when the preview features
+of Java SE `N` are enabled.
+
+A `class` file that depends on the preview features of
+another Java SE release must never be loaded.
+
+A `class` file that does not depend on the preview
+features of any Java SE release may be loaded regardless
+of whether the preview features of Java SE `N` are enabled.
+
+constant_pool_count
+
+The value of the `constant_pool_count` item
+is equal to the number of entries in the `constant_pool` table
+plus one. A `constant_pool` index is considered valid if it is
+greater than zero and less
+than `constant_pool_count`, with the
+exception for constants of type `long` and `double` noted in
+&sect;4.4.5 .
+
+constant_pool[]
+
+The `constant_pool` is a table of structures
+( &sect;4.4 ) representing various string
+constants, class and interface names, field names, and other
+constants that are referred to within the `ClassFile`
+structure and its substructures. The format of each
+`constant_pool` table entry is indicated by its first "tag"
+byte.
+
+The `constant_pool` table is indexed from 1
+to `constant_pool_count` - 1.
+
+access_flags
+
+The value of the `access_flags` item is a mask of flags used
+to denote access permissions to and properties of this class
+or interface. The interpretation of each flag, when set, is
+specified in  Table 4.1-B .
+
+Table 4.1-B. Class access and property modifiers
+
+Flag Name
+Value
+Interpretation
+
+`ACC_PUBLIC`
+0x0001
+Declared `public`; may be accessed from outside its
+package.
+
+`ACC_FINAL`
+0x0010
+Declared `final`; no subclasses allowed.
+
+`ACC_SUPER`
+0x0020
+Treat superclass methods specially when invoked
+by the   invokespecial   instruction.
+
+`ACC_INTERFACE`
+0x0200
+Is an interface, not a class.
+
+`ACC_ABSTRACT`
+0x0400
+Declared `abstract`; must not be instantiated.
+
+`ACC_SYNTHETIC`
+0x1000
+Declared synthetic; not present in the source code.
+
+`ACC_ANNOTATION`
+0x2000
+Declared as an annotation interface.
+
+`ACC_ENUM`
+0x4000
+Declared as an `enum` class.
+
+`ACC_MODULE`
+
+0x8000
+Is a module, not a class or interface.
+
+The `ACC_MODULE` flag indicates that this `class` file defines
+a module, not a class or interface. If the `ACC_MODULE` flag
+is set, then special rules apply to the `class` file which are
+given at the end of this section. If the `ACC_MODULE` flag is
+not set, then the rules immediately below the current
+paragraph apply to the `class` file.
+
+An interface is distinguished by the `ACC_INTERFACE` flag
+being set. If the `ACC_INTERFACE` flag is not set, this
+`class` file defines a class, not an interface or module.
+
+If the `ACC_INTERFACE` flag is set, the `ACC_ABSTRACT` flag
+must also be set, and the `ACC_FINAL`, `ACC_SUPER`,
+`ACC_ENUM`, and `ACC_MODULE` flags set must not be set.
+
+If the `ACC_INTERFACE` flag is not set, any of the other flags
+in  Table 4.1-B  may be set except
+`ACC_ANNOTATION` and `ACC_MODULE`. However, such a `class`
+file must not have both its `ACC_FINAL` and `ACC_ABSTRACT`
+flags set (JLS &sect;8.1.1.2).
+
+The `ACC_SUPER` flag indicates which of two alternative
+semantics is to be expressed by the   invokespecial
+instruction ( &sect;  invokespecial   ) if it
+appears in this class or interface. Compilers to the
+instruction set of the Java Virtual Machine should set the `ACC_SUPER`
+flag. In Java SE 8 and above, the Java Virtual Machine considers the
+`ACC_SUPER` flag to be set in every `class` file, regardless
+of the actual value of the flag in the `class` file and the
+version of the `class` file.
+
+The `ACC_SUPER` flag exists for backward
+compatibility with code compiled by older compilers for the
+Java programming language. Prior to JDK 1.0.2, the compiler generated
+`access_flags` in which the flag now representing `ACC_SUPER`
+had no assigned meaning, and Oracle's Java Virtual Machine implementation
+ignored the flag if it was set.
+
+The `ACC_SYNTHETIC` flag indicates that this class or
+interface was generated by a compiler and does not appear in
+source code.
+
+An annotation interface (JLS &sect;9.6) must have its `ACC_ANNOTATION`
+flag set. If the `ACC_ANNOTATION` flag is set, the
+`ACC_INTERFACE` flag must also be set.
+
+The `ACC_ENUM` flag indicates that this class or its
+superclass is declared as an enum class	(JLS &sect;8.9).
+
+All bits of the `access_flags` item not assigned in
+Table 4.1-B  are reserved for future
+use. They should be set to zero in generated `class` files and
+should be ignored by Java Virtual Machine implementations.
+
+this_class
+
+The value of the `this_class` item must be a
+valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Class_info` structure ( &sect;4.4.1 )
+representing the class or interface defined by this `class`
+file.
+
+super_class
+
+For a class, the value of the `super_class`
+item either must be zero or must be a valid index into the
+`constant_pool` table. If the value of
+the `super_class` item is nonzero, the
+`constant_pool` entry at that index must be a
+`CONSTANT_Class_info` structure representing the direct
+superclass of the class defined by this `class` file. Neither
+the direct superclass nor any of its superclasses may have the
+`ACC_FINAL` flag set in the `access_flags` item of its
+`ClassFile` structure.
+
+If the value of the `super_class` item is
+zero, then this `class` file must represent the class
+`Object`, the only class or interface without a direct
+superclass.
+
+For an interface, the value of the
+`super_class` item must always be a valid
+index into the `constant_pool` table. The `constant_pool`
+entry at that index must be a `CONSTANT_Class_info` structure
+representing the class `Object`.
+
+interfaces_count
+
+The value of the `interfaces_count` item
+gives the number of direct superinterfaces of this class or
+interface type.
+
+interfaces[]
+
+Each value in the `interfaces` array must be
+a valid index into the `constant_pool` table. The
+`constant_pool` entry at each value of
+`interfaces[  i  ]`, where 0  &#8804;    i
+< `interfaces_count`, must be a
+`CONSTANT_Class_info` structure representing an interface that
+is a direct superinterface of this class or interface type, in
+the left-to-right order given in the source for the
+type.
+
+fields_count
+
+The value of the `fields_count` item gives
+the number of `field_info` structures in
+the `fields` table. The `field_info`
+structures represent all fields, both class variables and
+instance variables, declared by this class or interface
+type.
+
+fields[]
+
+Each value in the `fields` table must be a
+`field_info` structure ( &sect;4.5 ) giving a
+complete description of a field in this class or
+interface. The `fields` table includes only
+those fields that are declared by this class or interface. It
+does not include items representing fields that are inherited
+from superclasses or superinterfaces.
+
+methods_count
+
+The value of the `methods_count` item gives
+the number of `method_info` structures in
+the `methods` table.
+
+methods[]
+
+Each value in the `methods` table must be a
+`method_info` structure ( &sect;4.6 ) giving a
+complete description of a method in this class or
+interface. If neither of the `ACC_NATIVE` and `ACC_ABSTRACT`
+flags are set in the `access_flags` item of a `method_info`
+structure, the Java Virtual Machine instructions implementing the method are
+also supplied.
+
+The `method_info` structures represent all methods declared by
+this class or interface type, including instance methods,
+class methods, instance initialization methods
+( &sect;2.9.1 ), and any class or interface
+initialization method ( &sect;2.9.2 ). The
+`methods` table does not include items
+representing methods that are inherited from superclasses or
+superinterfaces.
+
+attributes_count
+
+The value of the `attributes_count` item
+gives the number of attributes in the `attributes` table of
+this class.
+
+attributes[]
+
+Each value of the `attributes` table must be an
+`attribute_info` structure ( &sect;4.7 ).
+
+The attributes defined by this specification as appearing in
+the `attributes` table of a `ClassFile` structure are listed
+in  Table 4.7-C .
+
+The rules concerning attributes defined to appear in the
+`attributes` table of a `ClassFile` structure are given in
+&sect;4.7 .
+
+The rules concerning non-predefined attributes in the
+`attributes` table of a `ClassFile` structure are given in
+&sect;4.7.1 .
+
+If the `ACC_MODULE` flag is set in the `access_flags`
+item, then no other flag in the `access_flags` item
+may be set, and the following rules apply to the rest of the
+`ClassFile` structure:
+
+`major_version`, `minor_version`:
+&#8805;  53.0 (i.e., Java SE 9 and above)
+
+`this_class`: `module-info`
+
+`super_class`,
+`interfaces_count`,
+`fields_count`,
+`methods_count`: zero
+
+`attributes`: One `Module` attribute must be
+present. Except for `Module`, `ModulePackages`,
+`ModuleMainClass`, `InnerClasses`, `SourceFile`,
+`SourceDebugExtension`, `RuntimeVisibleAnnotations`, and
+`RuntimeInvisibleAnnotations`, none of the pre-defined
+attributes ( &sect;4.7 ) may appear.
+
+##   4.2. Names
+
+###   4.2.1. Binary Class and Interface Names
+
+Class and interface names
+that appear in `class` file structures are always represented in a
+fully qualified form known as   binary names   (JLS
+&sect;13.1). Such names are always represented as `CONSTANT_Utf8_info`
+structures ( &sect;4.4.7 ) and thus may be drawn, where
+not further constrained, from the entire Unicode codespace. Class and
+interface names are referenced from those `CONSTANT_NameAndType_info`
+structures ( &sect;4.4.6 ) which have such names as
+part of their descriptor ( &sect;4.3 ), and from all
+`CONSTANT_Class_info` structures ( &sect;4.4.1 ).
+
+For historical reasons, the
+syntax of binary names that appear in `class` file structures differs
+from the syntax of binary names documented in JLS &sect;13.1. In this
+internal form, the ASCII periods (`.`) that normally separate the
+identifiers which make up the binary name are replaced by ASCII
+forward slashes (`/`). The identifiers themselves must be
+unqualified names ( &sect;4.2.2 ).
+
+For example, the normal binary name of class
+`Thread` is `java.lang.Thread`. In the internal form
+used in descriptors in the `class` file format, a reference to the
+name of class `Thread` is implemented using a `CONSTANT_Utf8_info`
+structure representing the string `java/lang/Thread`.
+
+###   4.2.2. Unqualified Names
+
+Names of methods, fields, local variables, and formal parameters are
+stored as   unqualified names  . An unqualified name
+must contain at least one Unicode code point and must not contain any
+of the ASCII characters `.` `;` `[` `/` (that is, period
+or semicolon or left square bracket or forward slash).
+
+Method names are further
+constrained so that, with the exception of the special method names
+`<init>` and `<clinit>` ( &sect;2.9 ), they must not
+contain the ASCII characters `<` or `>` (that is, left angle
+bracket or right angle bracket).
+
+Note that  no method invocation instruction may reference
+`<clinit>`, and only the   invokespecial   instruction ( &sect;  invokespecial   ) may reference `<init>`.
+
+###   4.2.3. Module and Package Names
+
+Module names referenced from the `Module` attribute are stored
+in `CONSTANT_Module_info` structures in the constant pool
+( &sect;4.4.11 ). A `CONSTANT_Module_info` structure
+wraps a `CONSTANT_Utf8_info` structure that denotes the module
+name. Module names are not encoded in "internal form" like class and
+interface names, that is, the ASCII periods (`.`) that separate the
+identifiers in a module name are not replaced by ASCII forward slashes
+(`/`).
+
+Module names may be drawn from the entire Unicode codespace,
+subject to the following constraints:
+
+A module name must not contain any code point in the range
+'`\u0000`' to '`\u001F`'
+inclusive.
+
+The ASCII backslash (`\`) is reserved for use as an
+escape character in module names. It must not appear in a module
+name unless it is followed by an ASCII backslash, an ASCII colon
+(`:`), or an ASCII at-sign (`@`). The ASCII character
+sequence `\``\` may be used to encode a
+backslash in a module name.
+
+The ASCII colon (`:`) and at-sign (`@`) are reserved
+for future use in module names. They must not appear in module
+names unless they are escaped. The ASCII character sequences
+`\``:` and `\``@` may be used to encode a
+colon and an at-sign in a module name.
+
+Package names referenced from the `Module` attribute are stored
+in `CONSTANT_Package_info` structures in the constant pool
+( &sect;4.4.12 ). A `CONSTANT_Package_info` structure
+wraps a `CONSTANT_Utf8_info` structure that represents a package name
+encoded in internal form.
+
+##   4.3. Descriptors
+
+A   descriptor   is a string
+representing the type of a field or method. Descriptors are
+represented in the `class` file format using modified UTF-8 strings
+( &sect;4.4.7 ) and thus may be drawn, where not
+further constrained, from the entire Unicode codespace.
+
+###   4.3.1. Grammar Notation
+
+Descriptors are specified
+using a grammar. The grammar is a set of productions that describe how
+sequences of characters can form syntactically correct descriptors of
+various kinds. Terminal symbols of the grammar are shown
+in `fixed width` font. Nonterminal symbols are shown
+in   italic   type. The definition of a nonterminal
+is introduced by the name of the nonterminal being defined, followed
+by a colon. One or more alternative definitions for the nonterminal
+then follow on succeeding lines.
+
+The syntax
+{x}   on the right-hand side of a production
+denotes zero or more occurrences of   x  .
+
+The phrase   (one
+of)   on the right-hand side of a production signifies that
+each of the terminal symbols on the following line or lines is an
+alternative definition.
+
+###   4.3.2. Field Descriptors
+
+A   field descriptor   represents the type of a
+class, instance, or local variable.
+
+FieldDescriptor:
+
+FieldType
+
+FieldType:
+
+BaseType
+
+ObjectType
+
+ArrayType
+
+BaseType:
+
+(one of)
+
+`B` `C` `D` `F`
+`I` `J` `S` `Z`
+
+ObjectType:
+
+`L` ClassName `;`
+
+ArrayType:
+
+`[`  ComponentType
+
+ComponentType:
+
+FieldType
+
+The characters of   BaseType  , the `L` and
+`;` of   ObjectType  , and the `[`
+of   ArrayType   are all ASCII characters.
+
+ClassName   represents a binary class or interface
+name encoded in internal form ( &sect;4.2.1 ).
+
+The interpretation of field
+descriptors as types is shown in  Table 4.3-A .
+
+A field descriptor
+representing an array type is valid only if it represents a type with
+255 or fewer dimensions.
+
+Table 4.3-A. Interpretation of field descriptors
+
+FieldType   term
+
+Type
+Interpretation
+
+`B`
+`byte`
+signed byte
+
+`C`
+`char`
+Unicode character code point in the Basic Multilingual
+Plane, encoded with UTF-16
+
+`D`
+`double`
+double-precision floating-point value
+
+`F`
+`float`
+single-precision floating-point value
+
+`I`
+`int`
+integer
+
+`J`
+`long`
+long integer
+
+`L`   ClassName   `;`
+`reference`
+an instance of class   ClassName
+
+`S`
+`short`
+signed short
+
+`Z`
+`boolean`
+`true` or `false`
+
+`[`
+`reference`
+one array dimension
+
+The field descriptor of an instance variable of type
+`int` is simply `I`.
+
+The field descriptor of an instance variable of type
+`Object` is `Ljava/lang/Object;`. Note that the
+internal form of the binary name for class `Object` is used.
+
+The field descriptor of an instance variable of the
+multidimensional array type `double[][][]`
+is `[[[D`.
+
+###   4.3.3. Method Descriptors
+
+A   method
+descriptor   contains zero or more   parameter
+descriptors  , representing the types of parameters that the
+method takes, and a   return descriptor  ,
+representing the type of the value (if any) that the method
+returns.
+
+MethodDescriptor:
+
+`(`
+{ ParameterDescriptor }
+`)`
+ReturnDescriptor
+
+ParameterDescriptor:
+
+FieldType
+
+ReturnDescriptor:
+
+FieldType
+
+VoidDescriptor
+
+VoidDescriptor:
+
+`V`
+
+The
+character `V` indicates that the method returns no
+value (its result is `void`).
+
+The method descriptor for the method:
+
+```
+
+Object m(int i, double d, Thread t) {...}
+
+```
+
+is:
+
+```
+
+(IDLjava/lang/Thread;)Ljava/lang/Object;
+
+```
+
+Note that the internal forms of the binary names of
+`Thread` and `Object` are used.
+
+A method
+descriptor is valid only if it represents method parameters with a
+total length of 255 or less, where that length includes the
+contribution for `this` in the case of instance or interface method
+invocations. The total length is calculated by summing the
+contributions of the individual parameters, where a parameter of type
+`long` or `double` contributes two units to the length and a parameter
+of any other type contributes one unit.
+
+A method
+descriptor is the same whether the method it describes is a class
+method or an instance method. Although an instance method is passed
+`this`, a reference to the object on which the method is being
+invoked, in addition to its intended arguments, that fact is not
+reflected in the method descriptor. The reference to `this` is passed
+implicitly by the Java Virtual Machine instructions which invoke instance methods
+( &sect;2.6.1 ,  &sect;4.11 ).
+
+##   4.4. The Constant Pool
+
+Java Virtual Machine instructions do not rely on the run-time layout of classes,
+interfaces, class instances, or arrays. Instead, instructions refer to
+symbolic information in the `constant_pool` table.
+
+All `constant_pool` table entries have the following general format:
+
+```
+
+cp_info {
+u1 tag;
+u1 info[];
+}
+
+```
+
+Each entry in the `constant_pool` table must begin with a 1-byte tag
+indicating the kind of constant denoted by the entry. There are 17
+kinds of constant, listed in  Table 4.4-A  with their
+corresponding tags, and ordered by their section number in this
+chapter. Each tag byte must be followed by two or more bytes giving
+information about the specific constant. The format of the additional
+information depends on the tag byte, that is, the content of
+the `info` array varies with the value
+of `tag`.
+
+Table 4.4-A. Constant pool tags (by section)
+
+Constant Kind
+Tag
+Section
+
+`CONSTANT_Class`
+7
+&sect;4.4.1
+
+`CONSTANT_Fieldref`
+9
+&sect;4.4.2
+
+`CONSTANT_Methodref`
+10
+&sect;4.4.2
+
+`CONSTANT_InterfaceMethodref`
+11
+&sect;4.4.2
+
+`CONSTANT_String`
+8
+&sect;4.4.3
+
+`CONSTANT_Integer`
+3
+&sect;4.4.4
+
+`CONSTANT_Float`
+4
+&sect;4.4.4
+
+`CONSTANT_Long`
+5
+&sect;4.4.5
+
+`CONSTANT_Double`
+6
+&sect;4.4.5
+
+`CONSTANT_NameAndType`
+12
+&sect;4.4.6
+
+`CONSTANT_Utf8`
+1
+&sect;4.4.7
+
+`CONSTANT_MethodHandle`
+15
+&sect;4.4.8
+
+`CONSTANT_MethodType`
+16
+&sect;4.4.9
+
+`CONSTANT_Dynamic`
+17
+&sect;4.4.10
+
+`CONSTANT_InvokeDynamic`
+18
+&sect;4.4.10
+
+`CONSTANT_Module`
+19
+&sect;4.4.11
+
+`CONSTANT_Package`
+20
+&sect;4.4.12
+
+In a `class` file whose version number is   v  , each entry in the
+`constant_pool` table must have a tag that was first defined in
+version   v   or earlier of the `class` file format
+( &sect;4.1 ). That is, each entry must denote a kind
+of constant that is approved for use in the `class`
+file.  Table 4.4-B  lists each tag with the first
+version of the `class` file format in which it was defined. Also shown
+is the version of the Java SE Platform which introduced that version of the
+`class` file format.
+
+Table 4.4-B. Constant pool tags (by tag)
+
+Constant Kind
+Tag
+`class` file format
+
+Java SE
+
+`CONSTANT_Utf8`
+1
+45.3
+1.0.2
+
+`CONSTANT_Integer`
+3
+45.3
+1.0.2
+
+`CONSTANT_Float`
+4
+45.3
+1.0.2
+
+`CONSTANT_Long`
+5
+45.3
+1.0.2
+
+`CONSTANT_Double`
+6
+45.3
+1.0.2
+
+`CONSTANT_Class`
+7
+45.3
+1.0.2
+
+`CONSTANT_String`
+8
+45.3
+1.0.2
+
+`CONSTANT_Fieldref`
+9
+45.3
+1.0.2
+
+`CONSTANT_Methodref`
+10
+45.3
+1.0.2
+
+`CONSTANT_InterfaceMethodref`
+11
+45.3
+1.0.2
+
+`CONSTANT_NameAndType`
+12
+45.3
+1.0.2
+
+`CONSTANT_MethodHandle`
+15
+51.0
+7
+
+`CONSTANT_MethodType`
+16
+51.0
+7
+
+`CONSTANT_Dynamic`
+17
+55.0
+11
+
+`CONSTANT_InvokeDynamic`
+18
+51.0
+7
+
+`CONSTANT_Module`
+19
+53.0
+9
+
+`CONSTANT_Package`
+20
+53.0
+9
+
+Some entries in the `constant_pool` table are   loadable
+because they represent entities that can be pushed onto the stack at
+run time to enable further computation. In a `class` file whose
+version number is   v  , an entry in the `constant_pool` table
+is loadable if it has a tag that was first deemed to be loadable in
+version   v   or earlier of the `class` file format.
+Table 4.4-C  lists each tag with the first version
+of the `class` file format in which it was deemed to be loadable. Also
+shown is the version of the Java SE Platform which introduced that version
+of the `class` file format.
+
+In every case except `CONSTANT_Class`, a tag was first deemed to be
+loadable in the same version of the `class` file format that first
+defined the tag.
+
+Table 4.4-C. Loadable constant pool tags
+
+Constant Kind
+Tag
+`class` file format
+
+Java SE
+
+`CONSTANT_Integer`
+3
+45.3
+1.0.2
+
+`CONSTANT_Float`
+4
+45.3
+1.0.2
+
+`CONSTANT_Long`
+5
+45.3
+1.0.2
+
+`CONSTANT_Double`
+6
+45.3
+1.0.2
+
+`CONSTANT_Class`
+7
+49.0
+5.0
+
+`CONSTANT_String`
+8
+45.3
+1.0.2
+
+`CONSTANT_MethodHandle`
+15
+51.0
+7
+
+`CONSTANT_MethodType`
+16
+51.0
+7
+
+`CONSTANT_Dynamic`
+17
+55.0
+11
+
+###   4.4.1. The `CONSTANT_Class_info` Structure
+
+The `CONSTANT_Class_info` structure is used to represent a class or an
+interface:
+
+```
+
+CONSTANT_Class_info {
+u1 tag;
+u2 name_index;
+}
+
+```
+
+The items of the
+`CONSTANT_Class_info` structure are as follows:
+
+tag
+
+The `tag` item has the value `CONSTANT_Class` (7).
+
+name_index
+
+The value of the `name_index` item must be a
+valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing a valid binary class or interface name encoded in
+internal form ( &sect;4.2.1 ).
+
+Because arrays are objects,
+the opcodes   anewarray   and   multianewarray   - but not the opcode
+new   - can reference array "classes" via `CONSTANT_Class_info`
+structures in the `constant_pool` table. For such array classes, the
+name of the class is the descriptor of the array type
+( &sect;4.3.2 ).
+
+For example, the class name representing the
+two-dimensional array type `int[][]`
+is `[[I`, while the class name representing the
+type `Thread[]`
+is `[Ljava/lang/Thread;`.
+
+An array type descriptor is
+valid only if it represents 255 or fewer dimensions.
+
+###   4.4.2. The `CONSTANT_Fieldref_info`, `CONSTANT_Methodref_info`, and `CONSTANT_InterfaceMethodref_info` Structures
+
+Fields, methods, and
+interface methods are represented by similar structures:
+
+```
+
+CONSTANT_Fieldref_info {
+u1 tag;
+u2 class_index;
+u2 name_and_type_index;
+}
+
+CONSTANT_Methodref_info {
+u1 tag;
+u2 class_index;
+u2 name_and_type_index;
+}
+
+CONSTANT_InterfaceMethodref_info {
+u1 tag;
+u2 class_index;
+u2 name_and_type_index;
+}
+
+```
+
+The items of these structures are as follows:
+
+tag
+
+The `tag` item of a `CONSTANT_Fieldref_info` structure has the
+value `CONSTANT_Fieldref` (9).
+
+The `tag` item of a `CONSTANT_Methodref_info` structure has
+the value `CONSTANT_Methodref` (10).
+
+The `tag` item of a `CONSTANT_InterfaceMethodref_info`
+structure has the value `CONSTANT_InterfaceMethodref` (11).
+
+class_index
+
+The value of the `class_index` item must be a
+valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Class_info` structure ( &sect;4.4.1 )
+representing a class or interface type that has the field or
+method as a member.
+
+In a `CONSTANT_Fieldref_info` structure, the `class_index`
+item may be either a class type or an interface type.
+
+In a `CONSTANT_Methodref_info` structure, the `class_index`
+item should be a class type, not an interface type.
+
+In a `CONSTANT_InterfaceMethodref_info` structure, the
+`class_index` item should be an interface type,
+not a class type.
+
+name_and_type_index
+
+The value of the `name_and_type_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_NameAndType_info` structure ( &sect;4.4.6 ).
+This `constant_pool` entry indicates the name and descriptor
+of the field or method.
+
+In a `CONSTANT_Fieldref_info` structure, the indicated descriptor must
+be a field descriptor ( &sect;4.3.2 ).
+Otherwise, the indicated descriptor must be a method descriptor
+( &sect;4.3.3 ).
+
+If the name of the method in a `CONSTANT_Methodref_info`
+structure begins with a '`<`' ('`\u003c`'),
+then the name must be the special name `<init>`, representing an
+instance initialization method ( &sect;2.9.1 ).
+The return type of such a method must be `void`.
+
+###   4.4.3. The `CONSTANT_String_info` Structure
+
+The `CONSTANT_String_info` structure is used to represent constant
+objects of the type `String`:
+
+```
+
+CONSTANT_String_info {
+u1 tag;
+u2 string_index;
+}
+
+```
+
+The items of the `CONSTANT_String_info` structure are as follows:
+
+tag
+
+The `tag` item has the value `CONSTANT_String` (8).
+
+string_index
+
+The value of the `string_index` item must be
+a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the sequence of Unicode code points to which the
+`String` object is to be initialized.
+
+###   4.4.4. The `CONSTANT_Integer_info` and `CONSTANT_Float_info` Structures
+
+The `CONSTANT_Integer_info` and `CONSTANT_Float_info` structures
+represent 4-byte numeric (`int` and `float`) constants:
+
+```
+
+CONSTANT_Integer_info {
+u1 tag;
+u4 bytes;
+}
+
+CONSTANT_Float_info {
+u1 tag;
+u4 bytes;
+}
+
+```
+
+The items of these structures are as follows:
+
+tag
+
+The `tag` item of the `CONSTANT_Integer_info` structure has
+the value `CONSTANT_Integer` (3).
+
+The `tag` item of the `CONSTANT_Float_info` structure has the
+value `CONSTANT_Float` (4).
+
+bytes
+
+The `bytes` item of the
+`CONSTANT_Integer_info` structure represents the value of the
+`int` constant. The bytes of the value are stored in
+big-endian (high byte first) order.
+
+The `bytes` item of the `CONSTANT_Float_info`
+structure represents the value of the `float` constant in IEEE
+754 binary32 floating-point format ( &sect;2.3.2 ).
+The bytes of the item are stored in big-endian (high byte first)
+order.
+
+The value represented by the `CONSTANT_Float_info` structure
+is determined as follows. The bytes of the value are first
+converted into an `int`	constant   bits  . Then:
+
+If   bits   is `0x7f800000`,
+the `float` value will be positive infinity.
+
+If   bits   is `0xff800000`,
+the `float` value will be negative infinity.
+
+If   bits   is in the
+range `0x7f800001` through
+`0x7fffffff` or in the
+range `0xff800001`
+through `0xffffffff`, the `float` value
+will be NaN.
+
+In all other cases,
+let `s`, `e`,
+and `m` be three values that might be
+computed from   bits  :
+
+```
+
+int s = ((  bits   >> 31) == 0) ? 1 : -1;
+int e = ((  bits   >> 23) & 0xff);
+int m = (e == 0) ?
+(  bits   & 0x7fffff) << 1 :
+(  bits   & 0x7fffff) | 0x800000;
+
+```
+
+Then the `float` value equals the result of the mathematical
+expression
+`s &middot; m &middot; 2 e-150 `.
+
+###   4.4.5. The `CONSTANT_Long_info` and `CONSTANT_Double_info` Structures
+
+The `CONSTANT_Long_info` and `CONSTANT_Double_info` represent 8-byte
+numeric (`long` and `double`) constants:
+
+```
+
+CONSTANT_Long_info {
+u1 tag;
+u4 high_bytes;
+u4 low_bytes;
+}
+
+CONSTANT_Double_info {
+u1 tag;
+u4 high_bytes;
+u4 low_bytes;
+}
+
+```
+
+All 8-byte constants take up two entries in the `constant_pool` table
+of the `class` file. If a `CONSTANT_Long_info` or
+`CONSTANT_Double_info` structure is the entry at index   n   in the
+`constant_pool` table, then the next usable entry in the table is
+located at index   n  +2. The `constant_pool` index   n  +1 must be
+valid but is considered unusable.
+
+In retrospect, making 8-byte constants take two
+constant pool entries was a poor choice.
+
+The items of these structures are as follows:
+
+tag
+
+The `tag` item of the `CONSTANT_Long_info` structure has the
+value `CONSTANT_Long` (5).
+
+The `tag` item of the `CONSTANT_Double_info` structure has the
+value `CONSTANT_Double` (6).
+
+high_bytes, low_bytes
+
+The unsigned `high_bytes` and
+`low_bytes` items of the `CONSTANT_Long_info`
+structure together represent the value of the `long` constant
+
+```
+
+((long) high_bytes << 32) + low_bytes
+
+```
+
+where the bytes of each of `high_bytes`
+and `low_bytes` are stored in big-endian
+(high byte first) order.
+
+The `high_bytes` and
+`low_bytes` items of the
+`CONSTANT_Double_info` structure together represent the
+`double` value in IEEE 754 binary64 floating-point format
+( &sect;2.3.2 ). The bytes of each item are
+stored in big-endian (high byte first) order.
+
+The value represented by the `CONSTANT_Double_info` structure
+is determined as follows. The `high_bytes`
+and `low_bytes` items are converted into the
+`long` constant   bits  , which is equal
+to
+
+```
+
+((long) high_bytes << 32) + low_bytes
+
+```
+
+Then:
+
+If   bits
+is `0x7ff0000000000000L`, the `double`
+value will be positive infinity.
+
+If   bits
+is `0xfff0000000000000L`, the `double`
+value will be negative infinity.
+
+If   bits   is in the
+range `0x7ff0000000000001L` through
+`0x7fffffffffffffffL` or in the
+range `0xfff0000000000001L`
+through `0xffffffffffffffffL`, the double
+value will be NaN.
+
+In all other cases,
+let `s`, `e`,
+and `m` be three values that might be
+computed from   bits  :
+
+```
+
+int s = ((  bits   >> 63) == 0) ? 1 : -1;
+int e = (int)((  bits   >> 52) & 0x7ffL);
+long m = (e == 0) ?
+(  bits   & 0xfffffffffffffL) << 1 :
+(  bits   & 0xfffffffffffffL) | 0x10000000000000L;
+
+```
+
+Then the floating-point value equals the `double` value of the
+mathematical expression
+`s &middot; m &middot; 2 e-1075 `.
+
+###   4.4.6. The `CONSTANT_NameAndType_info` Structure
+
+The `CONSTANT_NameAndType_info` structure is used to represent a field
+or method, without indicating which class or interface type it belongs
+to:
+
+```
+
+CONSTANT_NameAndType_info {
+u1 tag;
+u2 name_index;
+u2 descriptor_index;
+}
+
+```
+
+The items of the
+`CONSTANT_NameAndType_info` structure are as follows:
+
+tag
+
+The `tag` item has the value `CONSTANT_NameAndType` (12).
+
+name_index
+
+The value of the `name_index` item must be a
+valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing either a valid unqualified name denoting a field
+or method ( &sect;4.2.2 ), or the special method
+name `<init>` ( &sect;2.9.1 ).
+
+descriptor_index
+
+The value of the `descriptor_index` item must
+be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing a valid field descriptor or method descriptor
+( &sect;4.3.2 ,  &sect;4.3.3 ).
+
+###   4.4.7. The `CONSTANT_Utf8_info` Structure
+
+The `CONSTANT_Utf8_info`
+structure is used to represent constant string values:
+
+```
+
+CONSTANT_Utf8_info {
+u1 tag;
+u2 length;
+u1 bytes[length];
+}
+
+```
+
+The items of the
+`CONSTANT_Utf8_info` structure are as follows:
+
+tag
+
+The `tag` item has the value `CONSTANT_Utf8` (1).
+
+length
+
+The value of the `length` item gives the
+number of bytes in the `bytes` array (not the
+length of the resulting string).
+
+bytes[]
+
+The `bytes` array contains the bytes of the
+string.
+
+No byte may have the value `(byte)0`.
+
+No byte may lie in the range `(byte)0xf0`
+to `(byte)0xff`.
+
+String content is encoded in
+modified UTF-8. Modified UTF-8 strings are encoded so that code point
+sequences that contain only non-null ASCII characters can be
+represented using only 1 byte per code point, but all code points in
+the Unicode codespace can be represented. Modified UTF-8 strings are
+not null-terminated. The encoding is as follows:
+
+Code points in the range '`\u0001`' to
+'`\u007F`' are represented by a single
+byte:
+
+Table 4.7.
+
+0
+bits 6-0
+
+The 7 bits of data in the byte give the value of the code point
+represented.
+
+The null code point ('`\u0000`') and code
+points in the range '`\u0080`' to
+'`\u07FF`' are represented by a pair of
+bytes `x` and `y` :
+
+Table 4.8.
+
+`x`:
+
+Table 4.9.
+
+1
+1
+0
+bits 10-6
+
+`y`:
+
+Table 4.10.
+
+1
+0
+bits 5-0
+
+The two bytes represent the code point with the value:
+
+```
+
+((x & 0x1f) << 6) + (y & 0x3f)
+
+```
+
+Code points in the range '`\u0800`' to
+'`\uFFFF`' are represented by 3
+bytes `x`, `y`,
+and `z` :
+
+Table 4.11.
+
+`x`:
+
+Table 4.12.
+
+1
+1
+1
+0
+bits 15-12
+
+`y`:
+
+Table 4.13.
+
+1
+0
+bits 11-6
+
+`z`:
+
+Table 4.14.
+
+1
+0
+bits 5-0
+
+The three bytes represent the code point with the value:
+
+```
+
+((x & 0xf) << 12) + ((y & 0x3f) << 6) + (z & 0x3f)
+
+```
+
+Characters with code points above U+FFFF
+(so-called   supplementary characters  ) are
+represented by separately encoding the two surrogate code units
+of their UTF-16 representation. Each of the surrogate code units
+is represented by three bytes. This means supplementary
+characters are represented by six
+bytes, `u`, `v`, `w`, `x`,
+`y`, and `z` :
+
+Table 4.15.
+
+`u`:
+
+Table 4.16.
+
+1
+1
+1
+0
+1
+1
+0
+1
+
+`v`:
+
+Table 4.17.
+
+1
+0
+1
+0
+(bits 20-16)-1
+
+`w`:
+
+Table 4.18.
+
+1
+0
+bits 15-10
+
+`x`:
+
+Table 4.19.
+
+1
+1
+1
+0
+1
+1
+0
+1
+
+`y`:
+
+Table 4.20.
+
+1
+0
+1
+1
+bits 9-6
+
+`z`:
+
+Table 4.21.
+
+1
+0
+bits 5-0
+
+The six bytes represent the code point with the value:
+
+```
+
+0x10000 + ((v & 0x0f) << 16) + ((w & 0x3f) << 10) +
+((y & 0x0f) << 6) + (z & 0x3f)
+
+```
+
+The bytes of multibyte
+characters are stored in the `class` file in big-endian (high byte
+first) order.
+
+There are two differences
+between this format and the "standard" UTF-8 format. First, the null
+character `(char)0` is encoded using the 2-byte
+format rather than the 1-byte format, so that modified UTF-8 strings
+never have embedded nulls. Second, only the 1-byte, 2-byte, and 3-byte
+formats of standard UTF-8 are used. The Java Virtual Machine does not recognize the
+four-byte format of standard UTF-8; it uses its own
+two-times-three-byte format instead.
+
+For more information regarding the standard UTF-8
+format, see Section 3.9  Unicode Encoding Forms
+of  The Unicode Standard, Version 15.0 .
+
+###   4.4.8. The `CONSTANT_MethodHandle_info` Structure
+
+The
+`CONSTANT_MethodHandle_info` structure is used to represent a method
+handle:
+
+```
+
+CONSTANT_MethodHandle_info {
+u1 tag;
+u1 reference_kind;
+u2 reference_index;
+}
+
+```
+
+The items of the
+`CONSTANT_MethodHandle_info` structure are the following:
+
+tag
+
+The `tag` item has the value `CONSTANT_MethodHandle` (15).
+
+reference_kind
+
+The value of the `reference_kind` item must
+be in the range 1 to 9. The value denotes
+the   kind   of this method handle, which
+characterizes its bytecode behavior
+( &sect;5.4.3.5 ).
+
+reference_index
+
+The value of the `reference_index` item must
+be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be as follows:
+
+If the value of the `reference_kind` item
+is 1 (`REF_getField`), 2 (`REF_getStatic`), 3
+(`REF_putField`), or 4 (`REF_putStatic`), then the
+`constant_pool` entry at that index must be a
+`CONSTANT_Fieldref_info` structure
+( &sect;4.4.2 ) representing a field for
+which a method handle is to be created.
+
+If the value of the `reference_kind` item
+is 5 (`REF_invokeVirtual`) or 8 (`REF_newInvokeSpecial`),
+then the `constant_pool` entry at that index must be a
+`CONSTANT_Methodref_info` structure
+( &sect;4.4.2 ) representing a class's
+method or constructor ( &sect;2.9.1 ) for
+which a method handle is to be created.
+
+If the value of the `reference_kind` item
+is 6 (`REF_invokeStatic`) or 7 (`REF_invokeSpecial`), then
+if the `class` file version number is less than 52.0, the
+`constant_pool` entry at that index must be a
+`CONSTANT_Methodref_info` structure representing a class's
+method for which a method handle is to be created; if the
+`class` file version number is 52.0 or above, the
+`constant_pool` entry at that index must be either a
+`CONSTANT_Methodref_info` structure or a
+`CONSTANT_InterfaceMethodref_info` structure
+( &sect;4.4.2 ) representing a class's or
+interface's method for which a method handle is to be
+created.
+
+If the value of the `reference_kind` item
+is 9 (`REF_invokeInterface`), then the `constant_pool`
+entry at that index must be a
+`CONSTANT_InterfaceMethodref_info` structure representing
+an interface's method for which a method handle is to be
+created.
+
+If the value of the `reference_kind` item is
+5 (`REF_invokeVirtual`), 6 (`REF_invokeStatic`), 7
+(`REF_invokeSpecial`), or 9 (`REF_invokeInterface`), the name
+of the method represented by a `CONSTANT_Methodref_info`
+structure or a `CONSTANT_InterfaceMethodref_info` structure
+must not be `<init>` or `<clinit>`.
+
+If the value is 8 (`REF_newInvokeSpecial`), the name of the
+method represented by a `CONSTANT_Methodref_info` structure
+must be `<init>`.
+
+###   4.4.9. The `CONSTANT_MethodType_info` Structure
+
+The
+`CONSTANT_MethodType_info` structure is used to represent a method
+type:
+
+```
+
+CONSTANT_MethodType_info {
+u1 tag;
+u2 descriptor_index;
+}
+
+```
+
+The items of the
+`CONSTANT_MethodType_info` structure are as follows:
+
+tag
+
+The `tag` item has the value `CONSTANT_MethodType` (16).
+
+descriptor_index
+
+The value of the `descriptor_index` item must
+be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing a method descriptor
+( &sect;4.3.3 ).
+
+###   4.4.10. The `CONSTANT_Dynamic_info` and `CONSTANT_InvokeDynamic_info` Structures
+
+Most structures in the `constant_pool` table represent entities
+directly, by combining names, descriptors, and values recorded
+statically in the table. In contrast, the `CONSTANT_Dynamic_info` and
+`CONSTANT_InvokeDynamic_info` structures represent entities
+indirectly, by pointing to code which computes an entity
+dynamically. The code, called a   bootstrap method  ,
+is invoked by the Java Virtual Machine during resolution of symbolic references
+derived from these structures ( &sect;5.1 ,
+&sect;5.4.3.6 ). Each structure specifies a bootstrap
+method as well as an auxiliary name and type that characterize the
+entity to be computed. In more detail:
+
+The `CONSTANT_Dynamic_info` structure is used to represent a
+dynamically-computed constant  , an arbitrary
+value that is produced by invocation of a bootstrap method in
+the course of an   ldc   instruction
+( &sect;  ldc   ), among others. The auxiliary
+type specified by the structure constrains the type of the
+dynamically-computed constant.
+
+The `CONSTANT_InvokeDynamic_info` structure is used to represent a
+dynamically-computed call site  , an instance
+of `java.lang.invoke.CallSite` that is produced by invocation of a bootstrap
+method in the course of an   invokedynamic   instruction
+( &sect;  invokedynamic   ). The auxiliary type
+specified by the structure constrains the method type of the
+dynamically-computed call site.
+
+```
+
+CONSTANT_Dynamic_info {
+u1 tag;
+u2 bootstrap_method_attr_index;
+u2 name_and_type_index;
+}
+
+CONSTANT_InvokeDynamic_info {
+u1 tag;
+u2 bootstrap_method_attr_index;
+u2 name_and_type_index;
+}
+
+```
+
+The items of these structures are as follows:
+
+tag
+
+The `tag` item of a `CONSTANT_Dynamic_info` structure
+has the value `CONSTANT_Dynamic` (17).
+
+The `tag` item of a `CONSTANT_InvokeDynamic_info` structure
+has the value `CONSTANT_InvokeDynamic` (18).
+
+bootstrap_method_attr_index
+
+The value of the `bootstrap_method_attr_index`
+item must be a valid index into	the
+`bootstrap_methods` array of the bootstrap
+method table of this `class` file ( &sect;4.7.23 ).
+
+`CONSTANT_Dynamic_info` structures are unique
+in that they are syntactically allowed to refer to themselves
+via the bootstrap method table. Rather than mandating that
+such cycles are detected when classes are loaded (a
+potentially expensive check), we permit cycles initially but
+mandate a failure at resolution ( &sect;5.4.3.6 ).
+
+name_and_type_index
+
+The value of the `name_and_type_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_NameAndType_info` structure ( &sect;4.4.6 ).
+This `constant_pool` entry indicates a name and descriptor.
+
+In a `CONSTANT_Dynamic_info` structure, the indicated descriptor
+must be a field descriptor ( &sect;4.3.2 ).
+
+In a `CONSTANT_InvokeDynamic_info` structure, the indicated descriptor
+must be a method descriptor ( &sect;4.3.3 ).
+
+###   4.4.11. The `CONSTANT_Module_info` Structure
+
+The `CONSTANT_Module_info` structure is used to represent a module:
+
+```
+
+CONSTANT_Module_info {
+u1 tag;
+u2 name_index;
+}
+
+```
+
+The items of the `CONSTANT_Module_info` structure are as follows:
+
+tag
+
+The `tag` item has the value `CONSTANT_Module` (19).
+
+name_index
+
+The value of the `name_index` item must be a
+valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing a valid module name ( &sect;4.2.3 ).
+
+A `CONSTANT_Module_info` structure is permitted only in the constant
+pool of a `class` file that declares a module, that is, a `ClassFile`
+structure where the `access_flags` item has the `ACC_MODULE` flag
+set. In all other `class` files, a `CONSTANT_Module_info` structure is
+illegal.
+
+###   4.4.12. The `CONSTANT_Package_info` Structure
+
+The `CONSTANT_Package_info` structure is used to represent a package
+exported or opened by a module:
+
+```
+
+CONSTANT_Package_info {
+u1 tag;
+u2 name_index;
+}
+
+```
+
+The items of the `CONSTANT_Package_info` structure are as follows:
+
+tag
+
+The `tag` item has the value `CONSTANT_Package` (20).
+
+name_index
+
+The value of the `name_index` item must be a
+valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing a valid package name encoded in internal form
+( &sect;4.2.3 ).
+
+A `CONSTANT_Package_info` structure is permitted only in the constant
+pool of a `class` file that declares a module, that is, a `ClassFile`
+structure where the `access_flags` item has the `ACC_MODULE` flag
+set. In all other `class` files, a `CONSTANT_Package_info` structure
+is illegal.
+
+##   4.5. Fields
+
+Each field is described by a `field_info` structure.
+
+No two fields in one `class` file may have the same name and
+descriptor ( &sect;4.3.2 ).
+
+The structure has the following format:
+
+```
+
+field_info {
+u2             access_flags;
+u2             name_index;
+u2             descriptor_index;
+u2             attributes_count;
+attribute_info attributes[attributes_count];
+}
+
+```
+
+The items of the `field_info` structure are as follows:
+
+access_flags
+
+The value of the `access_flags` item is a mask of flags used
+to denote access permission to and properties of this
+field. The interpretation of each flag, when set, is specified
+in  Table 4.5-A .
+
+Table 4.5-A. Field access and property flags
+
+Flag Name
+Value
+Interpretation
+
+`ACC_PUBLIC`
+0x0001
+Declared `public`; may be accessed from outside its
+package.
+
+`ACC_PRIVATE`
+0x0002
+
+Declared `private`; accessible only within the
+defining class and other classes belonging to the
+same nest ( &sect;5.4.4 ).
+
+`ACC_PROTECTED`
+0x0004
+Declared `protected`; may be accessed within
+subclasses.
+
+`ACC_STATIC`
+0x0008
+Declared `static`.
+
+`ACC_FINAL`
+0x0010
+Declared `final`; never directly assigned to
+after object construction (JLS &sect;17.5).
+
+`ACC_VOLATILE`
+0x0040
+Declared `volatile`; cannot be cached.
+
+`ACC_TRANSIENT`
+0x0080
+Declared `transient`; not written or read by a
+persistent object manager.
+
+`ACC_SYNTHETIC`
+0x1000
+Declared synthetic; not present in the source
+code.
+
+`ACC_ENUM`
+0x4000
+Declared as an element of an `enum` class.
+
+Fields of classes may set any of the flags in
+Table 4.5-A . However, each field of a
+class may have at most one of its `ACC_PUBLIC`, `ACC_PRIVATE`,
+and `ACC_PROTECTED` flags set (JLS &sect;8.3.1), and must not have
+both its `ACC_FINAL` and `ACC_VOLATILE` flags set (JLS
+&sect;8.3.1.4).
+
+Fields of interfaces must have their `ACC_PUBLIC`,
+`ACC_STATIC`, and `ACC_FINAL` flags set; they may have their
+`ACC_SYNTHETIC` flag set and must not have any of the other
+flags in  Table 4.5-A  set (JLS
+&sect;9.3).
+
+The `ACC_SYNTHETIC` flag indicates that this field was
+generated by a compiler and does not appear in source
+code.
+
+The `ACC_ENUM` flag indicates that this field is used to hold
+an element of an enum class (JLS &sect;8.9).
+
+All bits of the `access_flags` item not assigned in
+Table 4.5-A  are reserved for future
+use. They should be set to zero in generated `class` files and
+should be ignored by Java Virtual Machine implementations.
+
+name_index
+
+The value of the
+`name_index` item must be a valid index into
+the `constant_pool` table. The `constant_pool` entry at that
+index must be a `CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ) which represents a valid
+unqualified name denoting a field
+( &sect;4.2.2 ).
+
+descriptor_index
+
+The value of the
+`descriptor_index` item must be a valid index
+into the `constant_pool` table. The `constant_pool` entry at
+that index must be a `CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ) which represents a valid field
+descriptor ( &sect;4.3.2 ).
+
+attributes_count
+
+The value of the `attributes_count` item
+indicates the number of additional attributes of this
+field.
+
+attributes[]
+
+Each value of the `attributes` table must be an
+`attribute_info` structure ( &sect;4.7 ).
+
+A field can have any number of optional attributes associated
+with it.
+
+The attributes defined by this specification as appearing in
+the `attributes` table of a `field_info` structure are listed
+in  Table 4.7-C .
+
+The rules concerning attributes defined to appear in the
+`attributes` table of a `field_info` structure are given in
+&sect;4.7 .
+
+The rules concerning non-predefined attributes in the
+`attributes` table of a `field_info` structure are given in
+&sect;4.7.1 .
+
+##   4.6. Methods
+
+Each method, including each instance initialization method
+( &sect;2.9.1 ) and the class or interface
+initialization method ( &sect;2.9.2 ), is described by
+a `method_info` structure.
+
+No two methods in one `class` file may have the same name and
+descriptor ( &sect;4.3.3 ).
+
+The structure has the following format:
+
+```
+
+method_info {
+u2             access_flags;
+u2             name_index;
+u2             descriptor_index;
+u2             attributes_count;
+attribute_info attributes[attributes_count];
+}
+
+```
+
+The items of the `method_info` structure are as follows:
+
+access_flags
+
+The value of the `access_flags` item is a mask of flags used
+to denote access permission to and properties of this
+method. The interpretation of each flag, when set, is
+specified in  Table 4.6-A .
+
+Table 4.6-A. Method access and property flags
+
+Flag Name
+Value
+Interpretation
+
+`ACC_PUBLIC`
+0x0001
+Declared `public`; may be accessed from outside its
+package.
+
+`ACC_PRIVATE`
+0x0002
+
+Declared `private`; accessible only within the
+defining class and other classes belonging to the
+same nest ( &sect;5.4.4 ).
+
+`ACC_PROTECTED`
+0x0004
+Declared `protected`; may be accessed within
+subclasses.
+
+`ACC_STATIC`
+0x0008
+Declared `static`.
+
+`ACC_FINAL`
+0x0010
+Declared `final`; must not be overridden
+( &sect;5.4.5 ).
+
+`ACC_SYNCHRONIZED`
+0x0020
+Declared `synchronized`; invocation is wrapped by a
+monitor use.
+
+`ACC_BRIDGE`
+0x0040
+A bridge method, generated by the compiler.
+
+`ACC_VARARGS`
+0x0080
+Declared with variable number of arguments.
+
+`ACC_NATIVE`
+0x0100
+Declared `native`; implemented in a language other
+than the Java programming language.
+
+`ACC_ABSTRACT`
+0x0400
+Declared `abstract`; no implementation is
+provided.
+
+`ACC_STRICT`
+0x0800
+
+In a `class` file whose major version number is
+at least 46 and at most 60: Declared `strictfp`.
+
+`ACC_SYNTHETIC`
+0x1000
+Declared synthetic; not present in the source
+code.
+
+The value 0x0800 is interpreted as the `ACC_STRICT` flag only
+in a `class` file whose major version number is at least 46
+and at most 60. For methods in such a `class` file, the rules
+below determine whether the `ACC_STRICT` flag may be set in
+combination with other flags. (Setting the `ACC_STRICT` flag
+constrained a method's floating-point instructions in Java SE
+1.2 through 16 ( &sect;2.8 ).) For methods in a
+`class` file whose major version number is less than 46 or
+greater than 60, the value 0x0800 is not interpreted as the
+`ACC_STRICT` flag, but rather is unassigned; it is not
+meaningful to "set the `ACC_STRICT` flag" in such a `class`
+file.
+
+Methods of classes may have any of the flags in
+Table 4.6-A  set. However, each method
+of a class may have at most one of its `ACC_PUBLIC`,
+`ACC_PRIVATE`, and `ACC_PROTECTED` flags set (JLS
+&sect;8.4.3).
+
+Methods of interfaces may have any of the flags in
+Table 4.6-A  set except `ACC_PROTECTED`,
+`ACC_FINAL`, `ACC_SYNCHRONIZED`, and `ACC_NATIVE` (JLS
+&sect;9.4). In a `class` file whose version number is less than
+52.0, each method of an interface must have its `ACC_PUBLIC`
+and `ACC_ABSTRACT` flags set; in a `class` file whose version
+number is 52.0 or above, each method of an interface must have
+exactly one of its `ACC_PUBLIC` and `ACC_PRIVATE` flags
+set.
+
+If a method of a class or interface has its `ACC_ABSTRACT`
+flag set, it must not have any of its `ACC_PRIVATE`,
+`ACC_STATIC`, `ACC_FINAL`, `ACC_SYNCHRONIZED`, or `ACC_NATIVE`
+flags set, nor (in a `class` file whose major version number
+is at least 46 and at most 60) have its `ACC_STRICT` flag set.
+
+An instance initialization method ( &sect;2.9.1 ) may have at most one of its
+`ACC_PUBLIC`, `ACC_PRIVATE`, and `ACC_PROTECTED` flags set,
+and may also have its `ACC_VARARGS` and `ACC_SYNTHETIC` flags
+set, and may also (in a `class` file whose major version
+number is at least 46 and at most 60) have its `ACC_STRICT`
+flag set, but must not have any of the other flags in  Table 4.6-A  set.
+
+In a `class` file whose version number is 51.0 or above, a
+method whose name is `<clinit>` must have its `ACC_STATIC` flag
+set.
+
+A class or interface initialization method ( &sect;2.9.2 ) is called implicitly by the Java Virtual Machine. The
+value of its `access_flags` item is ignored except for the
+setting of the `ACC_STATIC` flag and (in a `class` file whose
+major version number is at least 46 and at most 60) the
+`ACC_STRICT` flag, and the method is exempt from the preceding
+rules about legal combinations of flags.
+
+The `ACC_BRIDGE` flag is used to indicate a bridge method
+generated by a compiler for the Java programming language.
+
+The `ACC_VARARGS` flag indicates that this method takes a
+variable number of arguments at the source code level. A
+method declared to take a variable number of arguments must be
+compiled with the `ACC_VARARGS` flag set to 1. All other
+methods must be compiled with the `ACC_VARARGS` flag set to
+0.
+
+The `ACC_SYNTHETIC` flag indicates that this method was
+generated by a compiler and does not appear in source code,
+unless it is one of the methods named in
+&sect;4.7.8 .
+
+All bits of the `access_flags` item not assigned in  Table 4.6-A  are reserved for future
+use. (This includes the bit corresponding to 0x0800 in a
+`class` file whose major version number is less than 46 or
+greater than 60.) They should be set to zero in generated
+`class` files and should be ignored by Java Virtual Machine
+implementations.
+
+name_index
+
+The value of the `name_index` item must be a
+valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing either a valid unqualified name denoting a method
+( &sect;4.2.2 ), or  (if this method is in a class rather than an interface)
+the special method name `<init>`, or the special method name
+`<clinit>`.
+
+descriptor_index
+
+The value of the `descriptor_index` item must
+be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure representing a valid method
+descriptor ( &sect;4.3.3 ). Furthermore:
+
+If this method is in a class rather than an
+interface, and the name of the method is `<init>`, then the
+descriptor must denote a `void` method.
+
+If the name of the method is `<clinit>`, then the descriptor
+must denote a `void` method, and, in a `class` file whose
+version number is 51.0 or above, a method that takes no
+arguments.
+
+A future edition of this specification may
+require that the last parameter descriptor of the method
+descriptor is an array type if the `ACC_VARARGS` flag is set
+in the `access_flags` item.
+
+attributes_count
+
+The value of the `attributes_count` item
+indicates the number of additional attributes of this
+method.
+
+attributes[]
+
+Each value of the
+`attributes` table must be an `attribute_info` structure
+( &sect;4.7 ).
+
+A method can have
+any number of optional attributes associated with it.
+
+The attributes defined by this specification as appearing in
+the `attributes` table of a `method_info` structure are listed
+in  Table 4.7-C .
+
+The rules concerning attributes defined to appear in the
+`attributes` table of a `method_info` structure are given in
+&sect;4.7 .
+
+The rules concerning non-predefined attributes in the
+`attributes` table of a `method_info` structure are given in
+&sect;4.7.1 .
+
+##   4.7. Attributes
+
+Attributes   are used in the `ClassFile`,
+`field_info`, `method_info`, `Code_attribute`, and
+`record_component_info` structures of the
+`class` file format ( &sect;4.1 ,
+&sect;4.5 ,  &sect;4.6 ,
+&sect;4.7.3 ,  &sect;4.7.30 ).
+
+All attributes have the following general format:
+
+```
+
+attribute_info {
+u2 attribute_name_index;
+u4 attribute_length;
+u1 info[attribute_length];
+}
+
+```
+
+For all attributes, the `attribute_name_index` item
+must be a valid unsigned 16-bit index into the constant pool of the
+class. The `constant_pool` entry
+at `attribute_name_index` must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the name of the attribute. The value of the
+`attribute_length` item indicates the length of the
+subsequent information in bytes. The length does not include the
+initial six bytes that contain
+the `attribute_name_index`
+and `attribute_length` items.
+
+30 attributes are predefined by this specification. They are listed
+three times, for ease of navigation:
+
+Table 4.7-A  is ordered by the attributes'
+section numbers in this chapter. Each attribute is shown with
+the first version of the `class` file format in which it was
+defined. Also shown is the version of the Java SE Platform which
+introduced that version of the `class` file format
+( &sect;4.1 ).
+
+Table 4.7-B  is ordered by the first version of
+the `class` file format in which each attribute was defined.
+
+Table 4.7-C  is ordered by the location in a
+`class` file where each attribute is defined to appear.
+
+Within the context of their use in this specification, that is, in the
+`attributes` tables of the `class` file structures in which they
+appear, the names of these predefined attributes are reserved.
+
+Any conditions on the presence of a predefined attribute in an
+`attributes` table are specified explicitly in the section which
+describes the attribute. If no conditions are specified, then the
+attribute may appear any number of times in an `attributes`
+table.
+
+The predefined attributes are categorized into three groups according
+to their purpose:
+
+Seven attributes are critical to correct interpretation of the
+`class` file by the Java Virtual Machine:
+
+`ConstantValue`
+
+`Code`
+
+`StackMapTable`
+
+`BootstrapMethods`
+
+`NestHost`
+
+`NestMembers`
+
+`PermittedSubclasses`
+
+In a `class` file whose version number is   v  , each of these
+attributes must be recognized and correctly read by an
+implementation of the Java Virtual Machine if the implementation supports
+version   v   of the `class` file format, and the attribute was
+first defined in version   v   or earlier of the `class` file
+format, and the attribute appears in a location where it is
+defined to appear.
+
+Ten attributes are not critical to correct interpretation of
+the `class` file by the Java Virtual Machine, but are either critical to
+correct interpretation of the `class` file by the class
+libraries of the Java SE Platform, or are useful for tools (in which
+case the section that specifies an attribute describes it as
+"optional"):
+
+`Exceptions`
+
+`InnerClasses`
+
+`EnclosingMethod`
+
+`Synthetic`
+
+`Signature`
+
+`Record`
+
+`SourceFile`
+
+`LineNumberTable`
+
+`LocalVariableTable`
+
+`LocalVariableTypeTable`
+
+In a `class` file whose version number is   v  , each of these
+attributes must be recognized and correctly read by an
+implementation of the
+Java Virtual Machine if the implementation supports version   v   of the
+`class` file format, and the attribute was first defined in
+version   v   or earlier of the `class` file format, and the
+attribute appears in a location where it is defined to
+appear.
+
+Thirteen attributes are not critical to correct interpretation of the
+`class` file by the Java Virtual Machine, but contain metadata about the
+`class` file that is either exposed by the class libraries of
+the Java SE Platform, or made available by tools (in which case the
+section that specifies an attribute describes it as "optional"):
+
+`SourceDebugExtension`
+
+`Deprecated`
+
+`RuntimeVisibleAnnotations`
+
+`RuntimeInvisibleAnnotations`
+
+`RuntimeVisibleParameterAnnotations`
+
+`RuntimeInvisibleParameterAnnotations`
+
+`RuntimeVisibleTypeAnnotations`
+
+`RuntimeInvisibleTypeAnnotations`
+
+`AnnotationDefault`
+
+`MethodParameters`
+
+`Module`
+
+`ModulePackages`
+
+`ModuleMainClass`
+
+An implementation of the Java Virtual Machine may use the information that
+these attributes contain, or otherwise must silently ignore
+these attributes.
+
+Table 4.7-A. Predefined `class` file attributes (by section)
+
+Attribute
+Section
+`class` file
+
+Java SE
+
+`ConstantValue`
+&sect;4.7.2
+45.3
+1.0.2
+
+`Code`
+&sect;4.7.3
+45.3
+1.0.2
+
+`StackMapTable`
+&sect;4.7.4
+50.0
+6
+
+`Exceptions`
+&sect;4.7.5
+45.3
+1.0.2
+
+`InnerClasses`
+&sect;4.7.6
+45.3
+1.1
+
+`EnclosingMethod`
+&sect;4.7.7
+49.0
+5.0
+
+`Synthetic`
+&sect;4.7.8
+45.3
+1.1
+
+`Signature`
+&sect;4.7.9
+49.0
+5.0
+
+`SourceFile`
+&sect;4.7.10
+45.3
+1.0.2
+
+`SourceDebugExtension`
+&sect;4.7.11
+49.0
+5.0
+
+`LineNumberTable`
+&sect;4.7.12
+45.3
+1.0.2
+
+`LocalVariableTable`
+&sect;4.7.13
+45.3
+1.0.2
+
+`LocalVariableTypeTable`
+&sect;4.7.14
+49.0
+5.0
+
+`Deprecated`
+&sect;4.7.15
+45.3
+1.1
+
+`RuntimeVisibleAnnotations`
+&sect;4.7.16
+49.0
+5.0
+
+`RuntimeInvisibleAnnotations`
+&sect;4.7.17
+49.0
+5.0
+
+`RuntimeVisibleParameterAnnotations`
+&sect;4.7.18
+49.0
+5.0
+
+`RuntimeInvisibleParameterAnnotations`
+&sect;4.7.19
+49.0
+5.0
+
+`RuntimeVisibleTypeAnnotations`
+&sect;4.7.20
+52.0
+8
+
+`RuntimeInvisibleTypeAnnotations`
+&sect;4.7.21
+52.0
+8
+
+`AnnotationDefault`
+&sect;4.7.22
+49.0
+5.0
+
+`BootstrapMethods`
+&sect;4.7.23
+51.0
+7
+
+`MethodParameters`
+&sect;4.7.24
+52.0
+8
+
+`Module`
+
+&sect;4.7.25
+53.0
+9
+
+`ModulePackages`
+
+&sect;4.7.26
+53.0
+9
+
+`ModuleMainClass`
+
+&sect;4.7.27
+53.0
+9
+
+`NestHost`
+
+&sect;4.7.28
+55.0
+11
+
+`NestMembers`
+
+&sect;4.7.29
+55.0
+11
+
+`Record`
+
+&sect;4.7.30
+60.0
+16
+
+`PermittedSubclasses`
+
+&sect;4.7.31
+61.0
+17
+
+Table 4.7-B. Predefined `class` file attributes (by `class` file format)
+
+Attribute
+`class` file
+
+Java SE
+Section
+
+`ConstantValue`
+45.3
+1.0.2
+&sect;4.7.2
+
+`Code`
+45.3
+1.0.2
+&sect;4.7.3
+
+`Exceptions`
+45.3
+1.0.2
+&sect;4.7.5
+
+`SourceFile`
+45.3
+1.0.2
+&sect;4.7.10
+
+`LineNumberTable`
+45.3
+1.0.2
+&sect;4.7.12
+
+`LocalVariableTable`
+45.3
+1.0.2
+&sect;4.7.13
+
+`InnerClasses`
+45.3
+1.1
+&sect;4.7.6
+
+`Synthetic`
+45.3
+1.1
+&sect;4.7.8
+
+`Deprecated`
+45.3
+1.1
+&sect;4.7.15
+
+`EnclosingMethod`
+49.0
+5.0
+&sect;4.7.7
+
+`Signature`
+49.0
+5.0
+&sect;4.7.9
+
+`SourceDebugExtension`
+49.0
+5.0
+&sect;4.7.11
+
+`LocalVariableTypeTable`
+49.0
+5.0
+&sect;4.7.14
+
+`RuntimeVisibleAnnotations`
+49.0
+5.0
+&sect;4.7.16
+
+`RuntimeInvisibleAnnotations`
+49.0
+5.0
+&sect;4.7.17
+
+`RuntimeVisibleParameterAnnotations`
+49.0
+5.0
+&sect;4.7.18
+
+`RuntimeInvisibleParameterAnnotations`
+49.0
+5.0
+&sect;4.7.19
+
+`AnnotationDefault`
+49.0
+5.0
+&sect;4.7.22
+
+`StackMapTable`
+50.0
+6
+&sect;4.7.4
+
+`BootstrapMethods`
+51.0
+7
+&sect;4.7.23
+
+`RuntimeVisibleTypeAnnotations`
+52.0
+8
+&sect;4.7.20
+
+`RuntimeInvisibleTypeAnnotations`
+52.0
+8
+&sect;4.7.21
+
+`MethodParameters`
+52.0
+8
+&sect;4.7.24
+
+`Module`
+
+53.0
+9
+&sect;4.7.25
+
+`ModulePackages`
+
+53.0
+9
+&sect;4.7.26
+
+`ModuleMainClass`
+
+53.0
+9
+&sect;4.7.27
+
+`NestHost`
+
+55.0
+11
+&sect;4.7.28
+
+`NestMembers`
+
+55.0
+11
+&sect;4.7.29
+
+`Record`
+
+60.0
+16
+&sect;4.7.30
+
+`PermittedSubclasses`
+
+61.0
+17
+&sect;4.7.31
+
+Table 4.7-C. Predefined `class` file attributes (by location)
+
+Attribute
+Location
+`class` file
+
+`SourceFile`
+`ClassFile`
+45.3
+
+`InnerClasses`
+`ClassFile`
+45.3
+
+`EnclosingMethod`
+`ClassFile`
+49.0
+
+`SourceDebugExtension`
+`ClassFile`
+49.0
+
+`BootstrapMethods`
+`ClassFile`
+51.0
+
+`Module`, `ModulePackages`, `ModuleMainClass`
+
+`ClassFile`
+53.0
+
+`NestHost`, `NestMembers`
+
+`ClassFile`
+55.0
+
+`Record`
+
+`ClassFile`
+60.0
+
+`PermittedSubclasses`
+
+`ClassFile`
+61.0
+
+`ConstantValue`
+`field_info`
+45.3
+
+`Code`
+`method_info`
+45.3
+
+`Exceptions`
+`method_info`
+45.3
+
+`RuntimeVisibleParameterAnnotations`, `RuntimeInvisibleParameterAnnotations`
+`method_info`
+49.0
+
+`AnnotationDefault`
+`method_info`
+49.0
+
+`MethodParameters`
+`method_info`
+52.0
+
+Table 4.7-C (cont.). Predefined `class` file attributes (by location)
+
+Attribute
+Location
+`class` file
+
+`Synthetic`
+`ClassFile`, `field_info`, `method_info`
+45.3
+
+`Deprecated`
+`ClassFile`, `field_info`, `method_info`
+45.3
+
+`Signature`
+
+`ClassFile`, `field_info`, `method_info`, `record_component_info`
+
+49.0
+
+`RuntimeVisibleAnnotations`, `RuntimeInvisibleAnnotations`
+
+`ClassFile`, `field_info`, `method_info`, `record_component_info`
+
+49.0
+
+`LineNumberTable`
+`Code`
+45.3
+
+`LocalVariableTable`
+`Code`
+45.3
+
+`LocalVariableTypeTable`
+`Code`
+49.0
+
+`StackMapTable`
+`Code`
+50.0
+
+`RuntimeVisibleTypeAnnotations`, `RuntimeInvisibleTypeAnnotations`
+
+`ClassFile`, `field_info`, `method_info`, `Code`, `record_component_info`
+
+52.0
+
+###   4.7.1. Defining and Naming New Attributes
+
+Compilers are permitted to define and emit `class` files containing
+new attributes in the `attributes` tables of `class` file structures,
+`field_info` structures, `method_info` structures, and `Code`
+attributes ( &sect;4.7.3 ). Java Virtual Machine implementations are
+permitted to recognize and use new attributes found in these
+`attributes` tables. However, any attribute not defined as part of
+this specification must not affect the semantics of the `class`
+file. Java Virtual Machine implementations are required to silently ignore attributes
+they do not recognize.
+
+For instance, defining a new attribute to support vendor-specific
+debugging is permitted. Because Java Virtual Machine implementations are required to
+ignore attributes they do not recognize, `class` files intended for
+that particular Java Virtual Machine implementation will be usable by other
+implementations even if those implementations cannot make use of the
+additional debugging information that the `class` files contain.
+
+Java Virtual Machine implementations are specifically prohibited from throwing an
+exception or otherwise refusing to use `class` files simply because of
+the presence of some new attribute. Of course, tools operating on
+`class` files may not run correctly if given `class` files that do not
+contain all the attributes they require.
+
+Two attributes that are intended to be distinct, but that happen to
+use the same attribute name and are of the same length, will conflict
+on implementations that recognize either attribute. Attributes defined
+other than in this specification should have names chosen
+according to the package naming convention described in  The Java Language Specification, Java SE 21 Edition  (JLS &sect;6.1).
+
+Future versions of this specification may define additional
+attributes.
+
+###   4.7.2. The `ConstantValue` Attribute
+
+The `ConstantValue` attribute is a fixed-length attribute in the
+`attributes` table of a `field_info` structure
+( &sect;4.5 ). A `ConstantValue` attribute represents
+the value of  a constant expression (JLS
+&sect;15.28), and is used as follows:
+
+If the `ACC_STATIC` flag in the `access_flags` item of the
+`field_info` structure is set, then the  field
+represented by the `field_info` structure is assigned the value
+represented by its `ConstantValue` attribute as part of the
+initialization of the class or interface declaring
+the  field ( &sect;5.5 ). This
+occurs prior to the invocation of the class or interface
+initialization method of that class or interface
+( &sect;2.9.2 ).
+
+Otherwise, the Java Virtual Machine must silently ignore the attribute.
+
+There may be at most one `ConstantValue` attribute in the `attributes`
+table of a `field_info` structure.
+
+The `ConstantValue` attribute has the following format:
+
+```
+
+ConstantValue_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u2 constantvalue_index;
+}
+
+```
+
+The items of the `ConstantValue_attribute` structure
+are as follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the string "`ConstantValue`".
+
+attribute_length
+
+The value of the `attribute_length` item must
+be two.
+
+constantvalue_index
+
+The value of the `constantvalue_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index gives the value
+represented by this attribute. The `constant_pool` entry must
+be of a type appropriate to the field, as specified in
+Table 4.7.2-A .
+
+Table 4.7.2-A. Constant value attribute types
+
+Field Type
+Entry Type
+
+`int`, `short`, `char`, `byte`, `boolean`
+`CONSTANT_Integer`
+
+`float`
+`CONSTANT_Float`
+
+`long`
+`CONSTANT_Long`
+
+`double`
+`CONSTANT_Double`
+
+`String`
+`CONSTANT_String`
+
+###   4.7.3. The `Code` Attribute
+
+The `Code` attribute is a variable-length attribute in the
+`attributes` table of a `method_info` structure
+( &sect;4.6 ). A `Code` attribute contains the Java Virtual Machine
+instructions and auxiliary information for a method, including an
+instance initialization method and a class or interface
+initialization method ( &sect;2.9.1 ,
+&sect;2.9.2 ).
+
+If the method is either `native` or `abstract`, and is not a class
+or interface initialization method, then its `method_info` structure
+must not have a `Code` attribute in its `attributes` table. Otherwise,
+its `method_info` structure must have exactly one `Code` attribute in
+its `attributes` table.
+
+The `Code` attribute has the following format:
+
+```
+
+Code_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u2 max_stack;
+u2 max_locals;
+u4 code_length;
+u1 code[code_length];
+u2 exception_table_length;
+{   u2 start_pc;
+u2 end_pc;
+u2 handler_pc;
+u2 catch_type;
+} exception_table[exception_table_length];
+u2 attributes_count;
+attribute_info attributes[attributes_count];
+}
+
+```
+
+The items of the
+`Code_attribute` structure are as follows:
+
+attribute_name_index
+
+The value of the
+`attribute_name_index` item must be a valid
+index into the `constant_pool` table. The `constant_pool` entry
+at that index must be a `CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ) representing the string
+"`Code`".
+
+attribute_length
+
+The value of the
+`attribute_length` item indicates the length of
+the attribute, excluding the initial six bytes.
+
+max_stack
+
+The value of the
+`max_stack` item gives the maximum depth of the
+operand stack of this method ( &sect;2.6.2 ) at
+any point during execution of the method.
+
+max_locals
+
+The value of the
+`max_locals` item gives the number of local
+variables in the local variable array allocated upon invocation
+of this method ( &sect;2.6.1 ), including the
+local variables used to pass parameters to the method on its
+invocation.
+
+The greatest local
+variable index for a value of type `long` or `double` is
+`max_locals - 2`. The greatest local variable
+index for a value of any other type is `max_locals -
+1`.
+
+code_length
+
+The value of the
+`code_length` item gives the number of bytes
+in the `code` array for this method.
+
+The
+value of `code_length` must be greater than
+zero (as the `code` array must not be empty) and less than
+65536.
+
+code[]
+
+The `code` array
+gives the actual bytes of Java Virtual Machine code that implement the
+method.
+
+When
+the `code` array is read into memory on a
+byte-addressable machine, if the first byte of the array is
+aligned on a 4-byte boundary, the   tableswitch   and
+lookupswitch   32-bit offsets will be 4-byte aligned. (Refer to
+the descriptions of those instructions for more information on
+the consequences of `code` array
+alignment.)
+
+The detailed
+constraints on the contents of the `code` array
+are extensive and are given in a separate section
+( &sect;4.9 ).
+
+exception_table_length
+
+The value of the
+`exception_table_length` item gives the number
+of entries in the `exception_table` array.
+
+exception_table[]
+
+Each entry in the
+`exception_table` array describes one exception
+handler in the `code` array. The order of the handlers in
+the `exception_table` array is significant
+( &sect;2.10 ).
+
+Each
+`exception_table` entry contains the following
+four items:
+
+start_pc, end_pc
+
+The values
+of the two items `start_pc`
+and `end_pc` indicate the ranges in the
+`code` array at which the exception handler is active. The
+value of `start_pc` must be a valid index
+into the `code` array of the opcode of an instruction. The
+value of `end_pc` either must be a valid
+index into the `code` array of the opcode of an
+instruction or must be equal
+to `code_length`, the length of the
+`code` array. The value of `start_pc`
+must be less than the value
+of `end_pc`.
+
+The
+`start_pc` is inclusive
+and `end_pc` is exclusive; that is, the
+exception handler must be active while the program counter
+is within the interval
+[`start_pc`, `end_pc`).
+
+The fact that `end_pc`
+is exclusive is a historical mistake in the design of the
+Java Virtual Machine: if the Java Virtual Machine code for a method is exactly 65535
+bytes long and ends with an instruction that is 1 byte
+long, then that instruction cannot be protected by an
+exception handler. A compiler writer can work around this
+bug by limiting the maximum size of the generated Java Virtual Machine
+code for any method, instance initialization method, or
+static initializer (the size of any code array) to 65534
+bytes.
+
+handler_pc
+
+The value
+of the `handler_pc` item indicates the
+start of the exception handler. The value of the item must
+be a valid index into the `code` array and must be the
+index of the opcode of an instruction.
+
+catch_type
+
+If the
+value of the `catch_type` item is
+nonzero, it must be a valid index into the
+`constant_pool` table. The `constant_pool` entry at that
+index must be a `CONSTANT_Class_info` structure
+( &sect;4.4.1 ) representing a class of
+exceptions that this exception handler is designated to
+catch. The exception handler will be called only if the
+thrown exception is an instance of the given class or
+one of its subclasses.
+
+The verifier checks that the class is
+`Throwable` or a subclass of `Throwable`
+( &sect;4.9.2 ).
+
+If the
+value of the `catch_type` item is zero,
+this exception handler is called for all
+exceptions.
+
+This is used to implement `finally`
+( &sect;3.13 ).
+
+attributes_count
+
+The value of the `attributes_count` item
+indicates the number of attributes of the `Code`
+attribute.
+
+attributes[]
+
+Each value of the
+`attributes` table must be an `attribute_info` structure
+( &sect;4.7 ).
+
+A `Code` attribute
+can have any number of optional attributes associated with
+it.
+
+The attributes defined by this specification as appearing in
+the `attributes` table of a `Code` attribute are listed in
+Table 4.7-C .
+
+The rules concerning attributes defined to appear in the
+`attributes` table of a `Code` attribute are given in
+&sect;4.7 .
+
+The rules concerning non-predefined attributes in the
+`attributes` table of a `Code` attribute are given in
+&sect;4.7.1 .
+
+###   4.7.4. The `StackMapTable` Attribute
+
+The `StackMapTable`
+attribute is a variable-length attribute in the `attributes` table of
+a `Code` attribute ( &sect;4.7.3 ). A `StackMapTable`
+attribute is used during the process of verification by type checking
+( &sect;4.10.1 ).
+
+There may be at most one
+`StackMapTable` attribute in the `attributes` table of a `Code`
+attribute.
+
+In a `class` file whose
+version number is 50.0 or above, if a method's `Code` attribute does
+not have a `StackMapTable` attribute, it has an
+implicit stack map attribute
+( &sect;4.10.1 ). This implicit stack map attribute is
+equivalent to a `StackMapTable` attribute with
+`number_of_entries` equal to zero.
+
+The `StackMapTable`
+attribute has the following format:
+
+```
+
+StackMapTable_attribute {
+u2              attribute_name_index;
+u4              attribute_length;
+u2              number_of_entries;
+stack_map_frame entries[number_of_entries];
+}
+
+```
+
+The items of the
+`StackMapTable_attribute` structure are as
+follows:
+
+attribute_name_index
+
+The value of the
+`attribute_name_index` item must be a valid
+index into the `constant_pool` table. The `constant_pool` entry
+at that index must be a `CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ) representing the string
+"`StackMapTable`".
+
+attribute_length
+
+The value of the
+`attribute_length` item indicates the length of
+the attribute, excluding the initial six bytes.
+
+number_of_entries
+
+The value of the
+`number_of_entries` item gives the number of
+`stack_map_frame` entries in
+the `entries` table.
+
+entries[]
+
+Each entry in
+the `entries` table describes one stack map
+frame of the method. The order of the stack map frames in
+the `entries` table is significant.
+
+A   stack map frame
+specifies (either explicitly or implicitly) the bytecode offset at
+which it applies, and the verification types of local variables and
+operand stack entries for that offset.
+
+Each stack map frame
+described in the `entries` table relies on the
+previous frame for some of its semantics. The first stack map frame of
+a method is implicit, and computed from the method descriptor by the
+type checker ( &sect;4.10.1.6 ). The
+`stack_map_frame` structure
+at `entries[0]` therefore describes the second stack
+map frame of the method.
+
+The   bytecode offset   at which a stack map frame
+applies is calculated by taking the value `offset_delta` specified in
+the frame (either explicitly or implicitly), and
+adding `offset_delta + 1` to the bytecode offset of
+the previous frame, unless the previous frame is the initial frame of
+the method. In that case, the bytecode offset at which the stack map
+frame applies is the value `offset_delta` specified in the
+frame.
+
+By using an offset delta rather than storing the
+actual bytecode offset, we ensure, by definition, that stack map
+frames are in the correctly sorted order. Furthermore, by consistently
+using the formula `offset_delta + 1` for all explicit
+frames (as opposed to the implicit first frame), we guarantee the
+absence of duplicates.
+
+We say that an instruction
+in the bytecode has a   corresponding stack map
+frame   if the instruction starts at offset   i   in the
+`code` array of a `Code` attribute, and the `Code` attribute has a
+`StackMapTable` attribute whose `entries` array
+contains a stack map frame that applies at bytecode offset
+i  .
+
+A   verification
+type   specifies the type of either one or two locations,
+where a   location   is either a single local
+variable or a single operand stack entry. A verification type is
+represented by a discriminated union, `verification_type_info`, that
+consists of a one-byte tag, indicating which item of the union is in
+use, followed by zero or more bytes, giving more information about the
+tag.
+
+```
+
+union verification_type_info {
+Top_variable_info;
+Integer_variable_info;
+Float_variable_info;
+Long_variable_info;
+Double_variable_info;
+Null_variable_info;
+UninitializedThis_variable_info;
+Object_variable_info;
+Uninitialized_variable_info;
+}
+
+```
+
+A verification type that
+specifies one location in the local variable array or in the operand
+stack is represented by the following items of the
+`verification_type_info` union:
+
+The
+`Top_variable_info` item indicates that the local variable has
+the verification type `top`.
+
+```
+
+Top_variable_info {
+u1 tag = ITEM_Top; /* 0 */
+}
+
+```
+
+The
+`Integer_variable_info` item indicates that the location has the
+verification type `int`.
+
+```
+
+Integer_variable_info {
+u1 tag = ITEM_Integer; /* 1 */
+}
+
+```
+
+The
+`Float_variable_info` item indicates that the location has the
+verification type `float`.
+
+```
+
+Float_variable_info {
+u1 tag = ITEM_Float; /* 2 */
+}
+
+```
+
+The
+`Null_variable_info` type indicates that the location has the
+verification type `null`.
+
+```
+
+Null_variable_info {
+u1 tag = ITEM_Null; /* 5 */
+}
+
+```
+
+The
+`UninitializedThis_variable_info` item indicates that the
+location has the verification type `uninitializedThis`.
+
+```
+
+UninitializedThis_variable_info {
+u1 tag = ITEM_UninitializedThis; /* 6 */
+}
+
+```
+
+The
+`Object_variable_info` item indicates that the
+location  has the
+verification type which is the class represented by the
+`CONSTANT_Class_info` structure ( &sect;4.4.1 )
+found in the `constant_pool` table at the index given by
+`cpool_index`.
+
+```
+
+Object_variable_info {
+u1 tag = ITEM_Object; /* 7 */
+u2 cpool_index;
+}
+
+```
+
+The
+`Uninitialized_variable_info` item indicates that the location
+has the verification type `uninitialized(Offset)`.
+The `Offset` item indicates the offset, in the
+`code` array of the `Code` attribute that contains this
+`StackMapTable` attribute, of the   new   instruction
+( &sect;  new   ) that created the object being
+stored in the location.
+
+```
+
+Uninitialized_variable_info {
+u1 tag = ITEM_Uninitialized; /* 8 */
+u2 offset;
+}
+
+```
+
+A verification type that
+specifies two locations in the local variable array or in the operand
+stack is represented by the following items of the
+`verification_type_info` union:
+
+The
+`Long_variable_info` item indicates that the first of two
+locations has the verification type `long`.
+
+```
+
+Long_variable_info {
+u1 tag = ITEM_Long; /* 4 */
+}
+
+```
+
+The
+`Double_variable_info` item indicates that the first of two
+locations has the verification type `double`.
+
+```
+
+Double_variable_info {
+u1 tag = ITEM_Double; /* 3 */
+}
+
+```
+
+The
+`Long_variable_info` and `Double_variable_info` items indicate
+the verification type of the second of two locations as
+follows:
+
+If the first of
+the two locations is a local variable, then:
+
+It must
+not be the local variable with the highest index.
+
+The next
+higher numbered local variable has the verification type
+`top`.
+
+If the first of
+the two locations is an operand stack entry, then:
+
+It must
+not be the topmost location of the operand stack.
+
+The next
+location closer to the top of the operand stack has the
+verification type `top`.
+
+A stack map frame is
+represented by a discriminated union,
+`stack_map_frame`, which consists of a one-byte tag,
+indicating which item of the union is in use, followed by zero or more
+bytes, giving more information about the tag.
+
+```
+
+union stack_map_frame {
+same_frame;
+same_locals_1_stack_item_frame;
+same_locals_1_stack_item_frame_extended;
+chop_frame;
+same_frame_extended;
+append_frame;
+full_frame;
+}
+
+```
+
+The tag indicates
+the   frame type   of the stack map frame:
+
+The frame type
+`same_frame` is represented by tags in the range [0-63]. This
+frame type indicates that the frame has exactly the same local
+variables as the previous frame and that the operand stack is
+empty. The `offset_delta` value for the frame is the value of
+the tag item, `frame_type`.
+
+```
+
+same_frame {
+u1 frame_type = SAME; /* 0-63 */
+}
+
+```
+
+The frame type
+`same_locals_1_stack_item_frame` is represented by tags in the
+range [64, 127]. This frame type indicates that the frame has
+exactly the same local variables as the previous frame and that
+the operand stack has one entry. The `offset_delta` value for
+the frame is given by the formula `frame_type -
+64`. The verification type of the one stack entry
+appears after the frame type.
+
+```
+
+same_locals_1_stack_item_frame {
+u1 frame_type = SAME_LOCALS_1_STACK_ITEM; /* 64-127 */
+verification_type_info stack[1];
+}
+
+```
+
+Tags in the range
+[128-246] are reserved for future use.
+
+The frame type
+`same_locals_1_stack_item_frame_extended` is represented by the
+tag 247. This frame type indicates that the frame has exactly
+the same local variables as the previous frame and that the
+operand stack has one entry. The `offset_delta` value for the
+frame is given explicitly, unlike in the frame type
+`same_locals_1_stack_item_frame`. The verification type of the
+one stack entry appears after `offset_delta`.
+
+```
+
+same_locals_1_stack_item_frame_extended {
+u1 frame_type = SAME_LOCALS_1_STACK_ITEM_EXTENDED; /* 247 */
+u2 offset_delta;
+verification_type_info stack[1];
+}
+
+```
+
+The frame type
+`chop_frame` is represented by tags in the range [248-250]. This
+frame type indicates that the frame has the same local variables
+as the previous frame except that the last   k   local
+variables are absent, and that the operand stack is empty. The
+value of   k   is given by the formula `251 -
+frame_type`. The `offset_delta` value for the frame is
+given explicitly.
+
+```
+
+chop_frame {
+u1 frame_type = CHOP; /* 248-250 */
+u2 offset_delta;
+}
+
+```
+
+Assume the verification types of local variables in the previous
+frame are given by `locals`, an array
+structured as in the `full_frame` frame type.
+If `locals[M-1]` in the previous frame
+represented local variable  X  and `locals[M]`
+represented local variable  Y , then the effect of removing one
+local variable is that `locals[M-1]` in the new
+frame represents local variable  X  and
+`locals[M]` is undefined.
+
+It is an error if   k   is larger than the number of local variables
+in `locals` for the previous frame, that is, if
+the number of local variables in the new frame would be less
+than zero.
+
+The frame type
+`same_frame_extended` is represented by the tag 251. This frame
+type indicates that the frame has exactly the same local variables
+as the previous frame and that the operand stack is empty. The
+`offset_delta` value for the frame is given explicitly, unlike in
+the frame type `same_frame`.
+
+```
+
+same_frame_extended {
+u1 frame_type = SAME_FRAME_EXTENDED; /* 251 */
+u2 offset_delta;
+}
+
+```
+
+The frame type
+`append_frame` is represented by tags in the range
+[252-254]. This frame type indicates that the frame has the same
+locals as the previous frame except that   k   additional
+locals are defined, and that the operand stack is empty. The
+value of   k   is given by the formula `frame_type -
+251`. The `offset_delta` value for the frame is given
+explicitly.
+
+```
+
+append_frame {
+u1 frame_type = APPEND; /* 252-254 */
+u2 offset_delta;
+verification_type_info locals[frame_type - 251];
+}
+
+```
+
+The 0th entry in
+`locals` represents the verification type of
+the first additional local
+variable. If `locals[M]` represents local
+variable `N`, then:
+
+`locals[M+1]`
+represents local variable `N+1`
+if `locals[M]` is one of
+`Top_variable_info`, `Integer_variable_info`,
+`Float_variable_info`, `Null_variable_info`,
+`UninitializedThis_variable_info`, `Object_variable_info`,
+or `Uninitialized_variable_info`; and
+
+`locals[M+1]`
+represents local variable `N+2`
+if `locals[M]` is either
+`Long_variable_info` or `Double_variable_info`.
+
+It
+is an error if, for any index   i  ,
+`locals[  i  ]` represents a local variable
+whose index is greater than the maximum number of local
+variables for the method.
+
+The frame type
+`full_frame` is represented by the tag 255. The `offset_delta`
+value for the frame is given explicitly.
+
+```
+
+full_frame {
+u1 frame_type = FULL_FRAME; /* 255 */
+u2 offset_delta;
+u2 number_of_locals;
+verification_type_info locals[number_of_locals];
+u2 number_of_stack_items;
+verification_type_info stack[number_of_stack_items];
+}
+
+```
+
+The 0th entry in
+`locals` represents the verification type of
+local variable 0. If `locals[M]` represents local
+variable `N`, then:
+
+`locals[M+1]`
+represents local variable `N+1`
+if `locals[M]` is one of
+`Top_variable_info`, `Integer_variable_info`,
+`Float_variable_info`, `Null_variable_info`,
+`UninitializedThis_variable_info`, `Object_variable_info`,
+or `Uninitialized_variable_info`; and
+
+`locals[M+1]`
+represents local variable `N+2`
+if `locals[M]` is either
+`Long_variable_info` or `Double_variable_info`.
+
+It
+is an error if, for any index   i  ,
+`locals[  i  ]` represents a local variable
+whose index is greater than the maximum number of local
+variables for the method.
+
+The 0th entry in
+`stack` represents the verification type of the
+bottom of the operand stack, and subsequent entries
+in `stack` represent the verification types of
+stack entries closer to the top of the operand stack. We refer
+to the bottom of the operand stack as stack entry 0, and to
+subsequent entries of the operand stack as stack entry 1, 2,
+etc. If `stack[M]` represents stack
+entry `N`, then:
+
+`stack[M+1]` represents stack
+entry `N+1` if
+`stack[M]` is one of `Top_variable_info`,
+`Integer_variable_info`, `Float_variable_info`,
+`Null_variable_info`, `UninitializedThis_variable_info`,
+`Object_variable_info`, or `Uninitialized_variable_info`;
+and
+
+`stack[M+1]`
+represents stack entry `N+2`
+if `stack[M]` is either
+`Long_variable_info` or `Double_variable_info`.
+
+It
+is an error if, for any index   i  ,
+`stack[  i  ]` represents a stack entry whose
+index is greater than the maximum operand stack size for the
+method.
+
+###   4.7.5. The `Exceptions` Attribute
+
+The `Exceptions` attribute
+is a variable-length attribute in the `attributes` table of a
+`method_info` structure ( &sect;4.6 ). The `Exceptions`
+attribute indicates which checked exceptions a method may throw.
+
+There may be at most one
+`Exceptions` attribute in the `attributes` table of a `method_info`
+structure.
+
+The `Exceptions` attribute
+has the following format:
+
+```
+
+Exceptions_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u2 number_of_exceptions;
+u2 exception_index_table[number_of_exceptions];
+}
+
+```
+
+The items of
+the `Exceptions_attribute` structure are as
+follows:
+
+attribute_name_index
+
+The value of the
+`attribute_name_index` item must be a valid
+index into the `constant_pool` table. The `constant_pool` entry
+at that index must be the `CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ) representing the string
+"`Exceptions`".
+
+attribute_length
+
+The value of
+the `attribute_length` item indicates the
+length of the attribute, excluding the initial six bytes.
+
+number_of_exceptions
+
+The value of the
+`number_of_exceptions` item indicates the
+number of entries in
+the `exception_index_table`.
+
+exception_index_table[]
+
+Each value in
+the `exception_index_table` array must be a
+valid index into the `constant_pool` table. The `constant_pool`
+entry at that index must be a `CONSTANT_Class_info` structure
+( &sect;4.4.1 ) representing a class type that
+this method is declared to throw.
+
+A method should throw an exception only if at least
+one of the following three criteria is met:
+
+The exception is an instance of `RuntimeException`
+or one of its subclasses.
+
+The exception is an instance of `Error` or one
+of its subclasses.
+
+The exception is an instance of one of the
+exception classes specified in
+the `exception_index_table` just described, or
+one of their subclasses.
+
+These requirements are not enforced in the Java Virtual Machine;
+they are enforced only at compile time.
+
+###   4.7.6. The `InnerClasses` Attribute
+
+The `InnerClasses` attribute is a variable-length attribute in the
+`attributes` table of a `ClassFile` structure
+( &sect;4.1 ).
+
+If the constant pool of a class or interface  C  contains  at
+least one `CONSTANT_Class_info` entry ( &sect;4.4.1 )
+which represents a class or interface that is not a member of a
+package, then there must be exactly one `InnerClasses` attribute in
+the `attributes` table of the `ClassFile` structure for  C .
+
+The `InnerClasses` attribute has the following format:
+
+```
+
+InnerClasses_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u2 number_of_classes;
+{   u2 inner_class_info_index;
+u2 outer_class_info_index;
+u2 inner_name_index;
+u2 inner_class_access_flags;
+} classes[number_of_classes];
+}
+
+```
+
+The items of the `InnerClasses_attribute` structure
+are as follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the string "`InnerClasses`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial
+six bytes.
+
+number_of_classes
+
+The value of the `number_of_classes` item
+indicates the number of entries in
+the `classes` array.
+
+classes[]
+
+Every `CONSTANT_Class_info` entry in the `constant_pool` table
+which represents a class or interface  C  that is not a
+package member must have exactly one corresponding entry in
+the `classes` array.
+
+If a class or interface has members that are
+classes or interfaces, its `constant_pool` table (and hence
+its `InnerClasses` attribute) must refer to each such member
+(JLS &sect;13.1), even if that member is not otherwise mentioned by
+the class.
+
+In addition, the `constant_pool` table of every nested class
+and nested interface must refer to its enclosing class, so
+altogether, every nested class and nested interface will have
+`InnerClasses` information for each enclosing class and for
+each of its own nested classes and interfaces.
+
+Each entry in the `classes` array contains
+the following four items:
+
+inner_class_info_index
+
+The value of the `inner_class_info_index`
+item must be a valid index into the `constant_pool`
+table. The `constant_pool` entry at that index must be a
+`CONSTANT_Class_info` structure representing  C .
+
+outer_class_info_index
+
+If  C  is not a member of a class or an interface - that
+is, if  C  is a top-level class or interface (JLS &sect;7.6)
+or a local class (JLS &sect;14.3) or an anonymous class (JLS
+&sect;15.9.5) - then the value of the
+`outer_class_info_index` item must be
+zero.
+
+Otherwise, the value of the
+`outer_class_info_index` item must be a
+valid index into the `constant_pool` table, and the
+entry at that index must be a `CONSTANT_Class_info`
+structure representing the class or interface of which
+C  is a member. The value of
+the `outer_class_info_index` item must
+not equal the the value of
+the `inner_class_info_index`
+item.
+
+inner_name_index
+
+If  C  is anonymous (JLS &sect;15.9.5), the value of
+the `inner_name_index` item must be
+zero.
+
+Otherwise, the value of
+the `inner_name_index` item must be a
+valid index into the `constant_pool` table, and the
+entry at that index must be a `CONSTANT_Utf8_info`
+structure that represents the original simple name of
+C , as given in the source code from which this `class`
+file was compiled.
+
+inner_class_access_flags
+
+The value of the `inner_class_access_flags`
+item is a mask of flags used to denote access
+permissions to and properties of class or interface  C
+as declared in the source code from which this `class`
+file was compiled. It is used by a compiler to recover
+the original information when source code is not
+available. The flags are specified in
+Table 4.7.6-A .
+
+Table 4.7.6-A. Nested class access and property flags
+
+Flag Name
+Value
+Interpretation
+
+`ACC_PUBLIC`
+0x0001
+Marked or implicitly `public` in source.
+
+`ACC_PRIVATE`
+0x0002
+Marked `private` in source.
+
+`ACC_PROTECTED`
+0x0004
+Marked `protected` in source.
+
+`ACC_STATIC`
+0x0008
+Marked or implicitly `static` in source.
+
+`ACC_FINAL`
+0x0010
+Marked or implicitly `final` in source.
+
+`ACC_INTERFACE`
+0x0200
+Was an `interface` in source.
+
+`ACC_ABSTRACT`
+0x0400
+Marked or implicitly `abstract` in source.
+
+`ACC_SYNTHETIC`
+0x1000
+Declared synthetic; not present in the source code.
+
+`ACC_ANNOTATION`
+0x2000
+Declared as an annotation interface.
+
+`ACC_ENUM`
+0x4000
+Declared as an `enum` class.
+
+All bits of the `inner_class_access_flags`
+item not assigned in
+Table 4.7.6-A  are reserved
+for future use. They should be set to zero in generated
+`class` files and should be ignored by Java Virtual Machine
+implementations.
+
+If a `class` file has a version number that is 51.0 or above,
+and has an `InnerClasses` attribute in its `attributes` table,
+then for all entries in the `classes` array
+of the `InnerClasses` attribute, the value of the
+`outer_class_info_index` item must be zero if
+the value of the `inner_name_index` item is
+zero.
+
+Oracle's Java Virtual Machine implementation does not check the
+consistency of an `InnerClasses` attribute against a `class` file
+representing a class or interface referenced by the attribute.
+
+###   4.7.7. The `EnclosingMethod` Attribute
+
+The `EnclosingMethod` attribute is a fixed-length attribute in the
+`attributes` table of a `ClassFile` structure
+( &sect;4.1 ). A class must have an `EnclosingMethod`
+attribute if and only if it represents a local class or an anonymous
+class (JLS &sect;14.3, JLS &sect;15.9.5).
+
+There may be at most one `EnclosingMethod` attribute in the
+`attributes` table of a `ClassFile` structure.
+
+The `EnclosingMethod` attribute has the following format:
+
+```
+
+EnclosingMethod_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u2 class_index;
+u2 method_index;
+}
+
+```
+
+The items of the `EnclosingMethod_attribute`
+structure are as follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the string "`EnclosingMethod`".
+
+attribute_length
+
+The value of the `attribute_length` item must
+be four.
+
+class_index
+
+The value of the `class_index` item must be a
+valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Class_info` structure ( &sect;4.4.1 )
+representing the innermost class that encloses the declaration
+of the current class.
+
+method_index
+
+If the current class is not immediately enclosed by a method
+or constructor, then the value of
+the `method_index` item must be zero.
+
+In particular, `method_index` must be zero if
+the current class was immediately enclosed in source code by
+an instance initializer, static initializer, instance variable
+initializer, or class variable initializer. (The first two
+concern both local classes and anonymous classes, while the
+last two concern anonymous classes declared on the right hand
+side of a field assignment.)
+
+Otherwise, the value of the `method_index`
+item must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_NameAndType_info` structure
+( &sect;4.4.6 ) representing the name and type
+of a method in the class referenced by
+the `class_index` attribute above.
+
+It is the responsibility of a Java compiler to
+ensure that the method identified via
+the `method_index` is indeed the closest
+lexically enclosing method of the class that contains this
+`EnclosingMethod` attribute.
+
+###   4.7.8. The `Synthetic` Attribute
+
+The `Synthetic` attribute is a fixed-length attribute in the
+`attributes` table of a `ClassFile`, `field_info`, or `method_info`
+structure ( &sect;4.1 ,  &sect;4.5 ,
+&sect;4.6 ). A class member that does not appear in
+the source code must be marked using a `Synthetic` attribute, or else
+it must have its `ACC_SYNTHETIC` flag set. The only exceptions to this
+requirement are compiler-generated members which are not considered
+implementation artifacts, namely:
+
+an instance initialization method representing a default
+constructor of the Java programming language ( &sect;2.9.1 )
+
+a class or interface initialization method
+( &sect;2.9.2 )
+
+the implicitly declared members of enum and record classes
+(JLS &sect;8.9.3, JLS &sect;8.10.3)
+
+The `Synthetic` attribute was introduced in JDK 1.1
+to support nested classes and interfaces.
+
+It is a limitation of the `class` file format that only formal
+parameters and modules can be flagged as `ACC_MANDATED` ( &sect;4.7.24 ,  &sect;4.7.25 ) to indicate
+that, despite being compiler-generated, they are not considered
+implementation artifacts. There is no way to flag other
+compiler-generated constructs so that they too are not considered
+implementation artifacts (JLS &sect;13.1). This limitation means that
+reflective APIs of the Java SE Platform may not accurately indicate the
+"mandated" status of such constructs.
+
+The `Synthetic` attribute has the following format:
+
+```
+
+Synthetic_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+}
+
+```
+
+The items of the `Synthetic_attribute` structure are
+as follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the string "`Synthetic`".
+
+attribute_length
+
+The value of the `attribute_length` item must
+be zero.
+
+###   4.7.9. The `Signature` Attribute
+
+The `Signature` attribute is a fixed-length attribute in the
+`attributes` table of a `ClassFile`, `field_info`, `method_info`, or
+`record_component_info` structure ( &sect;4.1 ,  &sect;4.5 ,  &sect;4.6 ,  &sect;4.7.30 ). A `Signature` attribute stores a signature
+( &sect;4.7.9.1 ) for a class, interface, constructor,
+method, field, or record component whose declaration in the Java programming language
+uses type variables or parameterized types. See  The Java Language Specification, Java SE 21 Edition  for details
+about these constructs.
+
+There may be at most one `Signature` attribute in the `attributes`
+table of a `ClassFile`, `field_info`, `method_info`, or
+`record_component_info` structure.
+
+The `Signature` attribute has the following format:
+
+```
+
+Signature_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u2 signature_index;
+}
+
+```
+
+The items of the `Signature_attribute` structure are
+as follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the string "`Signature`".
+
+attribute_length
+
+The value of the `attribute_length` item must
+be two.
+
+signature_index
+
+The value of the `signature_index` item must
+be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing a class signature if this `Signature` attribute
+is an attribute of a `ClassFile` structure; a method signature
+if this `Signature` attribute is an attribute of a
+`method_info` structure; or a field signature
+otherwise.
+
+Oracle's Java Virtual Machine implementation does not check the
+well-formedness of `Signature` attributes during class loading or
+linking. Instead, `Signature` attributes are checked by methods of the
+Java SE Platform class libraries which expose generic signatures of classes,
+interfaces, constructors, methods, and fields. Examples
+include `getGenericSuperclass` in `Class`
+and `toGenericString`
+in `java.lang.reflect.Executable`.
+
+####   4.7.9.1. Signatures
+
+Signatures   encode declarations written in the
+Java programming language that use types outside the type system of the Java Virtual Machine. They
+support reflection and debugging, as well as compilation when only
+`class` files are available.
+
+A Java compiler must emit  a
+signature for any class, interface, constructor, method, field, or
+record component  whose declaration uses
+type variables or parameterized types. Specifically, a Java compiler
+must emit:
+
+A class signature for any class or interface declaration which
+is either generic, or has a parameterized type as a superclass
+or superinterface, or both.
+
+A method signature for any method or constructor declaration
+which is either generic, or has a type variable or parameterized
+type as the return type or a formal parameter type, or has a
+type variable in a `throws` clause, or any combination
+thereof.
+
+If the `throws` clause of a method or constructor declaration
+does not involve type variables, then a compiler may treat the
+declaration as having no `throws` clause for the purpose of
+emitting a method signature.
+
+A field signature for any field, formal parameter, local
+variable, or record component declaration whose type uses a type
+variable or a parameterized type.
+
+Signatures are specified using a grammar which follows the notation of
+&sect;4.3.1 . In addition to that notation:
+
+The syntax   [x]   on the right-hand side of a
+production denotes zero or one occurrences
+of   x  . That is,   x   is
+an   optional symbol  . The alternative which
+contains the optional symbol actually defines two alternatives:
+one that omits the optional symbol and one that includes
+it.
+
+A very long right-hand side may be continued on a second line by
+clearly indenting the second line.
+
+The grammar includes the terminal symbol   Identifier   to denote the
+name of a type, field, method, formal parameter, local variable, or
+type variable, as generated by a Java compiler. Such a name must not
+contain any of the ASCII characters `.` `;` `[` `/`
+`<` `>` `:` (that is, the characters forbidden in method
+names ( &sect;4.2.2 ) and also colon) but may contain
+characters that must not appear in an identifier in the Java programming language
+(JLS &sect;3.8).
+
+Signatures rely on a hierarchy of nonterminals known as   type
+signatures  :
+
+A   Java type signature   represents either a
+reference type or a primitive type of the Java programming language.
+
+JavaTypeSignature:
+
+ReferenceTypeSignature
+
+BaseType
+
+The following production from
+&sect;4.3.2  is repeated here for
+convenience:
+
+BaseType:
+
+(one of)
+
+`B` `C` `D` `F`
+`I` `J` `S` `Z`
+
+A   reference type signature   represents a
+reference type of the Java programming language, that is, a class or interface
+type, a type variable, or an array type.
+
+A   class type signature   represents a
+(possibly parameterized) class or interface type. A class type
+signature must be formulated such that it can be reliably mapped
+to the binary name of the class it denotes by erasing any type
+arguments and converting each `.` character to a `$`
+character.
+
+A   type variable signature   represents a type
+variable.
+
+An   array type signature   represents one
+dimension of an array type.
+
+ReferenceTypeSignature:
+
+ClassTypeSignature
+
+TypeVariableSignature
+
+ArrayTypeSignature
+
+ClassTypeSignature:
+
+`L`
+[ PackageSpecifier ]
+
+SimpleClassTypeSignature
+{ ClassTypeSignatureSuffix }
+`;`
+
+PackageSpecifier:
+
+Identifier `/`
+{ PackageSpecifier }
+
+SimpleClassTypeSignature:
+
+Identifier [ TypeArguments ]
+
+TypeArguments:
+
+`<`
+TypeArgument
+{ TypeArgument }
+`>`
+
+TypeArgument:
+
+[ WildcardIndicator ]
+ReferenceTypeSignature
+
+`*`
+
+WildcardIndicator:
+
+`+`
+`-`
+
+ClassTypeSignatureSuffix:
+
+`.`  SimpleClassTypeSignature
+
+TypeVariableSignature:
+
+`T` Identifier `;`
+
+ArrayTypeSignature:
+
+`[`  JavaTypeSignature
+
+A   class signature   encodes type information about
+a (possibly generic) class or interface declaration. It describes any
+type parameters of the class or interface, and lists its (possibly
+parameterized) direct superclass and direct superinterfaces, if any. A
+type parameter is described by its name, followed by any class bound
+and interface bounds.
+
+ClassSignature:
+
+[ TypeParameters ]
+SuperclassSignature
+{ SuperinterfaceSignature }
+
+TypeParameters:
+
+`<`
+TypeParameter
+{ TypeParameter }
+`>`
+
+TypeParameter:
+
+Identifier
+ClassBound
+{ InterfaceBound }
+
+ClassBound:
+
+`:` [ ReferenceTypeSignature ]
+
+InterfaceBound:
+
+`:`  ReferenceTypeSignature
+
+SuperclassSignature:
+
+ClassTypeSignature
+
+SuperinterfaceSignature:
+
+ClassTypeSignature
+
+A   method signature   encodes type information about
+a (possibly generic) method declaration. It describes any type
+parameters of the method; the (possibly parameterized) types of any
+formal parameters; the (possibly parameterized) return type, if any;
+and the types of any exceptions declared in the method's `throws`
+clause.
+
+MethodSignature:
+
+[ TypeParameters ]
+`(` { JavaTypeSignature } `)`
+Result
+{ ThrowsSignature }
+
+Result:
+
+JavaTypeSignature
+
+VoidDescriptor
+
+ThrowsSignature:
+
+`^`  ClassTypeSignature
+
+`^`  TypeVariableSignature
+
+The following production from
+&sect;4.3.3  is repeated here for convenience:
+
+VoidDescriptor:
+
+`V`
+
+A method signature encoded by the `Signature` attribute may not
+correspond exactly to the method descriptor in the `method_info`
+structure ( &sect;4.3.3 ). In particular, there is no
+assurance that the number of formal parameter types in the method
+signature is the same as the number of parameter descriptors in the
+method descriptor. The numbers are the same for most methods, but
+certain constructors in the Java programming language have an implicitly declared
+parameter which a compiler represents with a parameter descriptor but
+may omit from the method signature. See the note in
+&sect;4.7.18  for a similar situation involving
+parameter annotations.
+
+A   field signature   encodes the (possibly
+parameterized) type of a field, formal parameter, local variable, or
+record component declaration.
+
+FieldSignature:
+
+ReferenceTypeSignature
+
+###   4.7.10. The `SourceFile` Attribute
+
+The `SourceFile` attribute
+is an optional fixed-length attribute in the `attributes` table of a
+`ClassFile` structure ( &sect;4.1 ).
+
+There may be at most one
+`SourceFile` attribute in the `attributes` table of a `ClassFile`
+structure.
+
+The `SourceFile` attribute
+has the following format:
+
+```
+
+SourceFile_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u2 sourcefile_index;
+}
+
+```
+
+The items of
+the `SourceFile_attribute` structure are as
+follows:
+
+attribute_name_index
+
+The value of the
+`attribute_name_index` item must be a valid
+index into the `constant_pool` table. The `constant_pool`
+entry at that index must be a `CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ) representing the string
+"`SourceFile`".
+
+attribute_length
+
+The value of the `attribute_length` item must
+be two.
+
+sourcefile_index
+
+The value of the
+`sourcefile_index` item must be a valid index
+into the `constant_pool` table. The `constant_pool` entry at
+that index must be a `CONSTANT_Utf8_info` structure
+representing a string.
+
+The string referenced by
+the `sourcefile_index` item will be
+interpreted as indicating the name of the source file from
+which this `class` file was compiled. It will not be
+interpreted as indicating the name of a directory containing
+the file or an absolute path name for the file; such
+platform-specific additional information must be supplied by
+the run-time interpreter or development tool at the time the
+file name is actually used.
+
+###   4.7.11. The `SourceDebugExtension` Attribute
+
+The `SourceDebugExtension`
+attribute is an optional attribute in the `attributes` table of a
+`ClassFile` structure ( &sect;4.1 ).
+
+There may be at most one
+`SourceDebugExtension` attribute in the `attributes` table of a
+`ClassFile` structure.
+
+The `SourceDebugExtension`
+attribute has the following format:
+
+```
+
+SourceDebugExtension_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u1 debug_extension[attribute_length];
+}
+
+```
+
+The items of
+the `SourceDebugExtension_attribute` structure are as
+follows:
+
+attribute_name_index
+
+The value of the
+`attribute_name_index` item must be a valid
+index into the `constant_pool` table. The `constant_pool` entry
+at that index must be a `CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ) representing the string
+"`SourceDebugExtension`".
+
+attribute_length
+
+The value of the
+`attribute_length` item indicates the length of
+the attribute, excluding the initial six bytes.
+
+debug_extension[]
+
+The `debug_extension` array holds extended
+debugging information which has no semantic effect on the
+Java Virtual Machine. The information is represented using a modified UTF-8
+string ( &sect;4.4.7 ) with no terminating zero
+byte.
+
+Note that
+the `debug_extension` array may denote a
+string longer than that which can be represented with an
+instance of class `String`.
+
+###   4.7.12. The `LineNumberTable` Attribute
+
+The `LineNumberTable` attribute is an optional variable-length
+attribute in the `attributes` table of a `Code` attribute
+( &sect;4.7.3 ). It may be used by debuggers to
+determine which part of the `code` array corresponds to a given line
+number in the original source file.
+
+If multiple `LineNumberTable` attributes are present in the
+`attributes` table of a `Code` attribute, then they may appear in any
+order.
+
+There may be more than one `LineNumberTable` attribute   per
+line of a source file   in the `attributes` table of a `Code`
+attribute. That is, `LineNumberTable` attributes may together
+represent a given line of a source file, and need not be one-to-one
+with source lines.
+
+The `LineNumberTable` attribute has the following format:
+
+```
+
+LineNumberTable_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u2 line_number_table_length;
+{   u2 start_pc;
+u2 line_number;
+} line_number_table[line_number_table_length];
+}
+
+```
+
+The items of the `LineNumberTable_attribute`
+structure are as follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the string "`LineNumberTable`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial
+six bytes.
+
+line_number_table_length
+
+The value of the `line_number_table_length`
+item indicates the number of entries in
+the `line_number_table` array.
+
+line_number_table[]
+
+Each entry in the `line_number_table` array
+indicates that the line number in the original source file
+changes at a given point in the `code`
+array. Each `line_number_table` entry must
+contain the following two items:
+
+start_pc
+
+The value of the `start_pc` item must
+be a valid index into the `code` array of this `Code`
+attribute. The item indicates the index into the `code`
+array at which the code for a new line in the original
+source file begins.
+
+line_number
+
+The value of the `line_number` item
+gives the corresponding line number in
+the original source file.
+
+###   4.7.13. The `LocalVariableTable` Attribute
+
+The `LocalVariableTable` attribute is an optional variable-length
+attribute in the `attributes` table of a `Code` attribute
+( &sect;4.7.3 ). It may be used by debuggers to
+determine the value of a given local variable during the execution of
+a method.
+
+If multiple `LocalVariableTable` attributes are present in the
+`attributes` table of a `Code` attribute, then they may appear in any
+order.
+
+There may be no more than one `LocalVariableTable`
+attribute   per local variable   in the `attributes`
+table of a `Code` attribute.
+
+The `LocalVariableTable` attribute has the following format:
+
+```
+
+LocalVariableTable_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u2 local_variable_table_length;
+{   u2 start_pc;
+u2 length;
+u2 name_index;
+u2 descriptor_index;
+u2 index;
+} local_variable_table[local_variable_table_length];
+}
+
+```
+
+The items of the `LocalVariableTable_attribute`
+structure are as follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the string "`LocalVariableTable`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial six
+bytes.
+
+local_variable_table_length
+
+The value of the `local_variable_table_length`
+item indicates the number of entries in
+the `local_variable_table` array.
+
+local_variable_table[]
+
+Each entry in the `local_variable_table`
+array indicates a range of `code` array offsets within which a
+local variable has a value, and indicates the index into the
+local variable array of the current frame at which that local
+variable can be found. Each entry must contain the following
+five items:
+
+start_pc, length
+
+The value of the `start_pc` item must
+be a valid index into the `code` array of this `Code`
+attribute and must be the index of the opcode of an
+instruction.
+
+The value of `start_pc + length` must
+either be a valid index into the `code` array of this
+`Code` attribute and be the index of the opcode of an
+instruction, or it must be the first index beyond the
+end of that `code` array.
+
+The `start_pc`
+and `length` items indicate that the
+given local variable  has a value at
+indices into the `code` array in the interval
+[`start_pc`, `start_pc +
+length`), that is,
+between `start_pc` inclusive
+and `start_pc + length`
+exclusive.
+
+name_index
+
+The value of the `name_index` item must
+be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must contain a
+`CONSTANT_Utf8_info` structure representing a valid
+unqualified name denoting a local variable
+( &sect;4.2.2 ).
+
+descriptor_index
+
+The value of the `descriptor_index`
+item must be a valid index into the `constant_pool`
+table. The `constant_pool` entry at that index must
+contain a `CONSTANT_Utf8_info` structure representing a
+field descriptor which encodes the type of a local
+variable in the source program
+( &sect;4.3.2 ).
+
+index
+
+The value of the `index` item must be a
+valid index into the local variable array of the current
+frame. The given local variable  is
+at `index` in the local variable array
+of the current frame.
+
+If the
+given local variable is of type `double` or `long`, it
+occupies both `index`
+and `index + 1`.
+
+###   4.7.14. The `LocalVariableTypeTable` Attribute
+
+The `LocalVariableTypeTable` attribute is an optional variable-length
+attribute in the `attributes` table of a `Code` attribute
+( &sect;4.7.3 ). It may be used by debuggers to
+determine the value of a given local variable during the execution of
+a method.
+
+If multiple `LocalVariableTypeTable` attributes are present in the
+`attributes` table of a given `Code` attribute, then they may appear
+in any order.
+
+There may be no more than one `LocalVariableTypeTable`
+attribute   per local variable   in the `attributes`
+table of a `Code` attribute.
+
+The `LocalVariableTypeTable` attribute differs from
+the `LocalVariableTable` attribute ( &sect;4.7.13 ) in
+that it provides signature information rather than descriptor
+information. This difference is only significant for variables whose
+type uses a type variable or parameterized type. Such variables will
+appear in both tables, while variables of other types will appear only
+in `LocalVariableTable`.
+
+The `LocalVariableTypeTable` attribute has the following
+format:
+
+```
+
+LocalVariableTypeTable_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u2 local_variable_type_table_length;
+{   u2 start_pc;
+u2 length;
+u2 name_index;
+u2 signature_index;
+u2 index;
+} local_variable_type_table[local_variable_type_table_length];
+}
+
+```
+
+The items of the `LocalVariableTypeTable_attribute`
+structure are as follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the string "`LocalVariableTypeTable`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial
+six bytes.
+
+local_variable_type_table_length
+
+The value of the `local_variable_type_table_length`
+item indicates the number of entries in
+the `local_variable_type_table` array.
+
+local_variable_type_table[]
+
+Each entry in the `local_variable_type_table` array
+indicates a range of `code` array offsets within which a local
+variable has a value, and indicates the index into the local
+variable array of the current frame at which that local variable
+can be found. Each entry must contain the following five
+items:
+
+start_pc, length
+
+The value of the `start_pc` item must
+be a valid index into the `code` array of this `Code`
+attribute and must be the index of the opcode of an
+instruction.
+
+The value of `start_pc + length` must
+either be a valid index into the `code` array of this
+`Code` attribute and be the index of the opcode of an
+instruction, or it must be the first index beyond the end
+of that `code` array.
+
+The `start_pc`
+and `length` items indicate that the
+given local variable  has a value at
+indices into the `code` array in the interval
+[`start_pc`, `start_pc +
+length`), that is,
+between `start_pc` inclusive
+and `start_pc + length`
+exclusive.
+
+name_index
+
+The value of the `name_index` item must
+be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must contain a
+`CONSTANT_Utf8_info` structure representing a valid
+unqualified name denoting a local variable
+( &sect;4.2.2 ).
+
+signature_index
+
+The value of the `signature_index` item
+must be a valid index into the `constant_pool`
+table. The `constant_pool` entry at that index must
+contain a `CONSTANT_Utf8_info` structure representing a
+field signature which encodes the type of a local
+variable in the source program
+( &sect;4.7.9.1 ).
+
+index
+
+The value of the `index` item must be a
+valid index into the local variable array of the current
+frame. The given local variable  is
+at `index` in the local variable array
+of the current frame.
+
+If the
+given local variable is of type `double` or `long`, it
+occupies both `index`
+and `index + 1`.
+
+###   4.7.15. The `Deprecated` Attribute
+
+The `Deprecated` attribute
+is an optional fixed-length attribute in the `attributes` table of a
+`ClassFile`, `field_info`, or `method_info` structure
+( &sect;4.1 ,  &sect;4.5 ,
+&sect;4.6 ). A class, interface, method, or field may
+be marked using a `Deprecated` attribute to indicate that the class,
+interface, method, or field has been superseded.
+
+A run-time interpreter or
+tool that reads the `class` file format, such as a compiler, can use
+this marking to advise the user that a superseded class, interface,
+method, or field is being referred to. The presence of a `Deprecated`
+attribute does not alter the semantics of a class or interface.
+
+The `Deprecated` attribute
+has the following format:
+
+```
+
+Deprecated_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+}
+
+```
+
+The items of
+the `Deprecated_attribute` structure are as
+follows:
+
+attribute_name_index
+
+The value of the
+`attribute_name_index` item must be a valid
+index into the `constant_pool` table. The `constant_pool` entry
+at that index must be a `CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ) representing the string
+"`Deprecated`".
+
+attribute_length
+
+The value of the `attribute_length` item must
+be zero.
+
+###   4.7.16. The `RuntimeVisibleAnnotations` Attribute
+
+The `RuntimeVisibleAnnotations` attribute is a variable-length
+attribute in the `attributes` table of a `ClassFile`, `field_info`,
+`method_info`, or `record_component_info` structure ( &sect;4.1 ,  &sect;4.5 ,  &sect;4.6 ,  &sect;4.7.30 ). The
+`RuntimeVisibleAnnotations` attribute stores run-time visible
+annotations on the declaration of the corresponding class, field,
+method, or record component.
+
+There may be at most one `RuntimeVisibleAnnotations` attribute in the
+`attributes` table of a `ClassFile`, `field_info`, `method_info`, or
+`record_component_info` structure.
+
+The `RuntimeVisibleAnnotations` attribute has the following
+format:
+
+```
+
+RuntimeVisibleAnnotations_attribute {
+u2         attribute_name_index;
+u4         attribute_length;
+u2         num_annotations;
+annotation annotations[num_annotations];
+}
+
+```
+
+The items of
+the `RuntimeVisibleAnnotations_attribute` structure
+are as follows:
+
+attribute_name_index
+
+The value of the
+`attribute_name_index` item must be a valid
+index into the `constant_pool` table. The `constant_pool` entry
+at that index must be a `CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ) representing the string
+"`RuntimeVisibleAnnotations`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial
+six bytes.
+
+num_annotations
+
+The value of the
+`num_annotations` item gives the number of
+run-time visible annotations represented by the
+structure.
+
+annotations[]
+
+Each entry in the `annotations` table
+represents a single run-time visible annotation on a
+declaration. The `annotation` structure has
+the following format:
+
+```
+
+annotation {
+u2 type_index;
+u2 num_element_value_pairs;
+{   u2            element_name_index;
+element_value value;
+} element_value_pairs[num_element_value_pairs];
+}
+
+```
+
+The items of the
+`annotation` structure are as follows:
+
+type_index
+
+The value
+of the `type_index` item must be a
+valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ) representing a field
+descriptor ( &sect;4.3.2 ). The field
+descriptor denotes the type of the annotation
+represented by this `annotation`
+structure.
+
+num_element_value_pairs
+
+The value
+of the `num_element_value_pairs` item
+gives the number of element-value pairs of the annotation
+represented by this `annotation`
+structure.
+
+element_value_pairs[]
+
+Each
+value of the `element_value_pairs` table
+represents a single element-value pair in the annotation
+represented by this `annotation`
+structure. Each `element_value_pairs`
+entry contains the following two items:
+
+element_name_index
+
+The value of the
+`element_name_index` item must be
+a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ). The
+`constant_pool` entry denotes the name of the
+element of the element-value pair represented by
+this `element_value_pairs`
+entry.
+
+In other words, the entry denotes
+an element of the annotation interface specified
+by `type_index`.
+
+value
+
+The value of
+the `value` item represents the
+value of the element-value pair represented by this
+`element_value_pairs` entry.
+
+####   4.7.16.1. The `element_value` structure
+
+The  `element_value` structure is a discriminated
+union representing the value of an element-value pair. It has the
+following format:
+
+```
+
+element_value {
+u1 tag;
+union {
+u2 const_value_index;
+
+{   u2 type_name_index;
+u2 const_name_index;
+} enum_const_value;
+
+u2 class_info_index;
+
+annotation annotation_value;
+
+{   u2            num_values;
+element_value values[num_values];
+} array_value;
+} value;
+}
+
+```
+
+The `tag` item uses a single ASCII character to indicate the type of
+the value of the element-value pair. This determines which item of
+the `value` union is in use.
+Table 4.7.16.1-A  shows the valid characters
+for the `tag` item, the type indicated by each character,
+and the item used in the `value` union for each
+character. The table's fourth column is used in the description below
+of one item of the `value` union.
+
+Table 4.7.16.1-A. Interpretation of `tag` values as types
+
+`tag` Item
+
+Type
+`value` Item
+
+Constant Type
+
+`B`
+`byte`
+`const_value_index`
+`CONSTANT_Integer`
+
+`C`
+`char`
+`const_value_index`
+`CONSTANT_Integer`
+
+`D`
+`double`
+`const_value_index`
+`CONSTANT_Double`
+
+`F`
+`float`
+`const_value_index`
+`CONSTANT_Float`
+
+`I`
+`int`
+`const_value_index`
+`CONSTANT_Integer`
+
+`J`
+`long`
+`const_value_index`
+`CONSTANT_Long`
+
+`S`
+`short`
+`const_value_index`
+`CONSTANT_Integer`
+
+`Z`
+`boolean`
+`const_value_index`
+`CONSTANT_Integer`
+
+`s`
+`String`
+`const_value_index`
+`CONSTANT_Utf8`
+
+`e`
+Enum class
+`enum_const_value`
+Not applicable
+
+`c`
+`Class`
+`class_info_index`
+Not applicable
+
+`@`
+Annotation interface
+`annotation_value`
+Not applicable
+
+`[`
+Array type
+`array_value`
+Not applicable
+
+The   value   item represents the value of an element-value
+pair. The item is a union, whose own items are as follows:
+
+const_value_index
+
+The `const_value_index` item denotes
+
+a constant of either a primitive type or the type `String`
+as the value of	this element-value pair.
+
+The value of the `const_value_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be of a type
+appropriate to the `tag` item, as specified in the fourth
+column of  Table 4.7.16.1-A .
+
+enum_const_value
+
+The `enum_const_value` item denotes an enum
+constant as the value of this element-value pair.
+
+The
+`enum_const_value` item consists of the
+following two items:
+
+type_name_index
+
+The value of the `type_name_index` item
+must be a valid index into the `constant_pool`
+table. The `constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ) representing a field
+descriptor ( &sect;4.3.2 ). The
+`constant_pool` entry gives the internal form of the
+binary name of the type of the enum constant represented
+by this `element_value` structure
+( &sect;4.2.1 ).
+
+const_name_index
+
+The value of the `const_name_index`
+item must be a valid index into the `constant_pool`
+table. The `constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ). The `constant_pool`
+entry gives the simple name of the enum constant
+represented by this `element_value`
+structure.
+
+class_info_index
+
+The `class_info_index` item denotes a class
+literal as the value of this element-value pair.
+
+The
+`class_info_index` item must be a valid index
+into the `constant_pool` table. The `constant_pool` entry at
+that index must be a `CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ) representing a return
+descriptor ( &sect;4.3.3 ). The return
+descriptor gives the type corresponding to the class literal
+represented by this `element_value`
+structure. Types correspond to class literals as
+follows:
+
+For a class literal  C `.``class`, where  C  is the name
+of a class, interface, or array type, the corresponding
+type is  C . The return descriptor in the `constant_pool`
+will be an   ObjectType   or
+an   ArrayType  .
+
+For a class literal  p `.``class`,
+where  p  is the name of a primitive type, the
+corresponding type is  p . The return
+descriptor in the `constant_pool` will be
+a   BaseType   character.
+
+For a class literal `void``.``class`, the corresponding
+type is `void`. The return descriptor in the
+`constant_pool` will be   V  .
+
+For example, the class literal
+`Object.class` corresponds to the type
+`Object`, so the `constant_pool` entry
+is `Ljava/lang/Object;`, whereas the class
+literal `int.class` corresponds to the type
+`int`, so the `constant_pool` entry is `I`.
+
+The class literal
+`void.class` corresponds to `void`, so the
+`constant_pool` entry is   V  , whereas the
+class literal `Void.class` corresponds to the
+type `Void`, so the `constant_pool` entry
+is `Ljava/lang/Void;`.
+
+annotation_value
+
+The `annotation_value` item denotes a
+"nested" annotation as the value of this element-value
+pair.
+
+The value of the `annotation_value` item is an
+`annotation` structure
+( &sect;4.7.16 ) that gives the annotation
+represented by this `element_value`
+structure.
+
+array_value
+
+The `array_value` item denotes an array as
+the value of this element-value pair.
+
+The `array_value` item consists of the
+following two items:
+
+num_values
+
+The value of the `num_values` item
+gives the number of elements in the array represented by
+this `element_value` structure.
+
+values[]
+
+Each value in the `values` table gives
+the corresponding element of the array represented by
+this `element_value` structure.
+
+###   4.7.17. The `RuntimeInvisibleAnnotations` Attribute
+
+The `RuntimeInvisibleAnnotations` attribute is a variable-length
+attribute in the `attributes` table of a `ClassFile`, `field_info`,
+`method_info`, or `record_component_info` structure ( &sect;4.1 ,  &sect;4.5 ,  &sect;4.6 ,  &sect;4.7.30 ). The
+`RuntimeInvisibleAnnotations` attribute stores run-time invisible
+annotations on the declaration of the corresponding class, method,
+field, or record component.
+
+There may be at most one `RuntimeInvisibleAnnotations` attribute
+in the `attributes` table of a `ClassFile`, `field_info`, `method_info`,
+or `record_component_info` structure.
+
+The `RuntimeInvisibleAnnotations` attribute is
+similar to the `RuntimeVisibleAnnotations` attribute
+( &sect;4.7.16 ), except that the annotations
+represented by a `RuntimeInvisibleAnnotations` attribute must not be
+made available for return by reflective APIs, unless the Java Virtual Machine has
+been instructed to retain these annotations via some
+implementation-specific mechanism such as a command line flag. In the
+absence of such instructions, the Java Virtual Machine ignores this attribute.
+
+The
+`RuntimeInvisibleAnnotations` attribute has the following
+format:
+
+```
+
+RuntimeInvisibleAnnotations_attribute {
+u2         attribute_name_index;
+u4         attribute_length;
+u2         num_annotations;
+annotation annotations[num_annotations];
+}
+
+```
+
+The items of
+the `RuntimeInvisibleAnnotations_attribute` structure
+are as follows:
+
+attribute_name_index
+
+The value of the
+`attribute_name_index` item must be a valid
+index into the `constant_pool` table. The `constant_pool` entry
+at that index must be a `CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ) representing the string
+"`RuntimeInvisibleAnnotations`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial
+six bytes.
+
+num_annotations
+
+The value of the
+`num_annotations` item gives the number of
+run-time invisible annotations represented by the
+structure.
+
+annotations[]
+
+Each entry in the
+`annotations` table represents a single
+run-time invisible annotation on a
+declaration. The `annotation` structure is
+specified in  &sect;4.7.16 .
+
+###   4.7.18. The `RuntimeVisibleParameterAnnotations` Attribute
+
+The `RuntimeVisibleParameterAnnotations` attribute is a
+variable-length attribute in the `attributes` table of the
+`method_info` structure ( &sect;4.6 ). The
+`RuntimeVisibleParameterAnnotations` attribute stores run-time
+visible annotations on the declarations of formal parameters of the
+corresponding method.
+
+There may be at most one `RuntimeVisibleParameterAnnotations`
+attribute in the `attributes` table of a `method_info` structure.
+
+The `RuntimeVisibleParameterAnnotations` attribute has the following
+format:
+
+```
+
+RuntimeVisibleParameterAnnotations_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u1 num_parameters;
+{   u2         num_annotations;
+annotation annotations[num_annotations];
+} parameter_annotations[num_parameters];
+}
+
+```
+
+The items of
+the `RuntimeVisibleParameterAnnotations_attribute`
+structure are as follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the string
+"`RuntimeVisibleParameterAnnotations`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial
+six bytes.
+
+num_parameters
+
+The value of the `num_parameters` item gives
+the number of  run-time visible parameter annotations represented
+by this structure.
+
+There is no assurance
+that this number is the same as the number of parameter
+descriptors in the method descriptor.
+
+parameter_annotations[]
+
+Each entry in the `parameter_annotations`
+table represents all of the run-time visible annotations on
+the declaration of a single formal parameter. Each
+`parameter_annotations` entry contains the
+following two items:
+
+num_annotations
+
+The value of the `num_annotations` item
+indicates the number of run-time visible annotations on
+the declaration of the formal parameter corresponding to
+the `parameter_annotations` entry.
+
+annotations[]
+
+Each entry in the `annotations` table
+represents a single run-time visible annotation on the
+declaration of the formal parameter corresponding to
+the `parameter_annotations`
+entry. The `annotation` structure is
+specified in  &sect;4.7.16 .
+
+The   i  'th entry in the `parameter_annotations`
+table may, but is not required to, correspond to the   i  'th
+parameter descriptor in the method descriptor
+( &sect;4.3.3 ).
+
+For example, a compiler may choose to create entries in the
+table corresponding only to those parameter descriptors which
+represent explicitly declared parameters in source code. In
+the Java programming language, a constructor of an inner class is specified
+to have an implicitly declared parameter before its explicitly
+declared parameters (JLS &sect;8.8.1), so the corresponding `<init>`
+method in a `class` file has a parameter descriptor
+representing the implicitly declared parameter before any
+parameter descriptors representing explicitly declared
+parameters. If the first explicitly declared parameter is
+annotated in source code, then a compiler may
+create `parameter_annotations[0]` to store
+annotations corresponding to the   second
+parameter descriptor.
+
+###   4.7.19. The `RuntimeInvisibleParameterAnnotations` Attribute
+
+The `RuntimeInvisibleParameterAnnotations` attribute is a
+variable-length attribute in the `attributes` table of a `method_info`
+structure ( &sect;4.6 ). The
+`RuntimeInvisibleParameterAnnotations` attribute stores run-time
+invisible annotations on the declarations of formal parameters of the
+corresponding method.
+
+There may be at most one `RuntimeInvisibleParameterAnnotations`
+attribute in the `attributes` table of a `method_info`
+structure.
+
+The `RuntimeInvisibleParameterAnnotations` attribute
+is similar to the `RuntimeVisibleParameterAnnotations` attribute
+( &sect;4.7.18 ), except that the annotations
+represented by a `RuntimeInvisibleParameterAnnotations` attribute must
+not be made available for return by reflective APIs, unless the Java Virtual Machine
+has specifically been instructed to retain these annotations via some
+implementation-specific mechanism such as a command line flag. In the
+absence of such instructions, the Java Virtual Machine ignores this attribute.
+
+The `RuntimeInvisibleParameterAnnotations` attribute has the following
+format:
+
+```
+
+RuntimeInvisibleParameterAnnotations_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u1 num_parameters;
+{   u2         num_annotations;
+annotation annotations[num_annotations];
+} parameter_annotations[num_parameters];
+}
+
+```
+
+The items of
+the `RuntimeInvisibleParameterAnnotations_attribute`
+structure are as follows:
+
+attribute_name_index
+
+The value of the
+`attribute_name_index` item must be a valid
+index into the `constant_pool` table. The `constant_pool`
+entry at that index must be a `CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ) representing the string
+"`RuntimeInvisibleParameterAnnotations`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial
+six bytes.
+
+num_parameters
+
+The value of the `num_parameters` item gives
+the number of  run-time invisible parameter annotations
+represented by this structure.
+
+There is no assurance
+that this number is the same as the number of parameter
+descriptors in the method descriptor.
+
+parameter_annotations[]
+
+Each entry in the `parameter_annotations`
+table represents all of the run-time invisible annotations on
+the declaration of a single formal parameter. Each
+`parameter_annotations` entry contains the
+following two items:
+
+num_annotations
+
+The value of the `num_annotations` item
+indicates the number of run-time invisible annotations
+on the declaration of the formal parameter corresponding
+to the `parameter_annotations` entry.
+
+annotations[]
+
+Each entry in the `annotations` table
+represents a single run-time invisible annotation on the
+declaration of the formal parameter corresponding to the
+`parameter_annotations`
+entry. The `annotation` structure is
+specified in  &sect;4.7.16 .
+
+The   i  'th entry in
+the `parameter_annotations` table may, but is
+not required to, correspond to the   i  'th parameter
+descriptor in the method descriptor
+( &sect;4.3.3 ).
+
+See the note in  &sect;4.7.18  for an example
+of when `parameter_annotations[0]` does not
+correspond to the first parameter descriptor in the method
+descriptor.
+
+###   4.7.20. The `RuntimeVisibleTypeAnnotations` Attribute
+
+The `RuntimeVisibleTypeAnnotations` attribute is an variable-length
+attribute in the `attributes` table of a `ClassFile`, `field_info`,
+`method_info`, or `record_component_info` structure, or `Code`
+attribute ( &sect;4.1 ,  &sect;4.5 ,
+&sect;4.6 ,  &sect;4.7.30 ,  &sect;4.7.3 ). The `RuntimeVisibleTypeAnnotations` attribute
+stores run-time visible annotations on types used in the declaration
+of the corresponding class, field, method, or record component, or in
+an expression in the corresponding method body. The
+`RuntimeVisibleTypeAnnotations` attribute also stores run-time visible
+annotations on type parameter declarations of generic classes,
+interfaces, methods, and constructors.
+
+There may be at most one `RuntimeVisibleTypeAnnotations` attribute in
+the `attributes` table of a `ClassFile`, `field_info`,
+`method_info`, or `record_component_info` structure, or
+`Code` attribute.
+
+An `attributes` table contains a `RuntimeVisibleTypeAnnotations`
+attribute only if types are annotated in kinds of declaration or
+expression that correspond to the parent structure or attribute of the
+`attributes` table.
+
+For example, all annotations on types in the
+`implements` clause of a class declaration are recorded in the
+`RuntimeVisibleTypeAnnotations` attribute of the class's `ClassFile`
+structure. Meanwhile, all annotations on the type in a field
+declaration are recorded in the `RuntimeVisibleTypeAnnotations`
+attribute of the field's `field_info` structure.
+
+The `RuntimeVisibleTypeAnnotations` attribute has the following
+format:
+
+```
+
+RuntimeVisibleTypeAnnotations_attribute {
+u2              attribute_name_index;
+u4              attribute_length;
+u2              num_annotations;
+type_annotation annotations[num_annotations];
+}
+
+```
+
+The items of
+the `RuntimeVisibleTypeAnnotations_attribute`
+structure are as follows:
+
+attribute_name_index
+
+The value of the
+`attribute_name_index` item must be a valid
+index into the `constant_pool` table. The `constant_pool`
+entry at that index must be a `CONSTANT_Utf8_info` structure
+representing the string "`RuntimeVisibleTypeAnnotations`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial
+six bytes.
+
+num_annotations
+
+The value of the `num_annotations` item gives
+the number of run-time visible type annotations represented by
+the structure.
+
+annotations[]
+
+Each entry in the `annotations` table
+represents a single run-time visible annotation on a type used
+in a declaration or expression. The
+`type_annotation` structure has the following
+format:
+
+```
+
+type_annotation {
+u1 target_type;
+union {
+type_parameter_target;
+supertype_target;
+type_parameter_bound_target;
+empty_target;
+formal_parameter_target;
+throws_target;
+localvar_target;
+catch_target;
+offset_target;
+type_argument_target;
+} target_info;
+type_path target_path;
+u2        type_index;
+u2        num_element_value_pairs;
+{   u2            element_name_index;
+element_value value;
+} element_value_pairs[num_element_value_pairs];
+}
+
+```
+
+The first three items - `target_type`, `target_info`,
+and `target_path` - specify the precise
+location of the annotated type. The last three items
+- `type_index`,
+`num_element_value_pairs`,
+and `element_value_pairs[]` - specify the
+annotation's own type and element-value pairs.
+
+The items of the `type_annotation` structure
+are as follows:
+
+target_type
+
+The value of the `target_type` item denotes the kind of
+target on which the annotation appears. The various
+kinds of target correspond to the   type
+contexts   of the Java programming language where types are
+used in declarations and expressions (JLS &sect;4.11).
+
+The legal values of `target_type` are specified in
+Table 4.7.20-A  and
+Table 4.7.20-B . Each value is a
+one-byte tag indicating which item of the `target_info`
+union follows the `target_type` item to give more
+information about the target.
+
+The kinds of target in
+Table 4.7.20-A  and
+Table 4.7.20-B  correspond to the type
+contexts in JLS &sect;4.11. Namely, `target_type` values
+0x10-0x17 and 0x40-0x42 correspond to type contexts
+1-11, while `target_type` values 0x43-0x4B correspond to
+type contexts 12-17.
+
+The value of the `target_type` item determines whether
+the `type_annotation` structure appears
+in a `RuntimeVisibleTypeAnnotations` attribute in a
+`ClassFile` structure, a `field_info` structure, a
+`method_info` structure, or a `Code`
+attribute.  Table 4.7.20-C  gives the
+location of the `RuntimeVisibleTypeAnnotations`
+attribute for a `type_annotation`
+structure with each legal `target_type` value.
+
+target_info
+
+The value
+of the `target_info` item denotes precisely which type
+in a declaration or expression is annotated.
+
+The
+items of the `target_info` union are specified in
+&sect;4.7.20.1 .
+
+target_path
+
+The value
+of the `target_path` item denotes
+precisely which part of the type indicated by
+`target_info` is annotated.
+
+The
+format of the `type_path` structure is specified in
+&sect;4.7.20.2 .
+
+type_index, num_element_value_pairs,
+element_value_pairs[]
+
+The
+meaning of these items in
+the `type_annotation` structure is the
+same as their meaning in
+the `annotation` structure
+( &sect;4.7.16 ).
+
+Table 4.7.20-A. Interpretation of `target_type` values (Part 1)
+
+Value
+Kind of target
+`target_info` item
+
+0x00
+type parameter declaration of generic class or
+interface
+
+`type_parameter_target`
+
+0x01
+type parameter declaration of generic method or
+constructor
+
+`type_parameter_target`
+
+0x10
+type in `extends` or `implements` clause of class
+declaration (including the direct superclass or direct
+superinterface of an anonymous class declaration), or in
+`extends` clause of interface declaration
+
+`supertype_target`
+
+0x11
+type in bound of type parameter declaration of
+generic class or interface
+
+`type_parameter_bound_target`
+
+0x12
+type in bound of type parameter declaration of
+generic method or constructor
+
+`type_parameter_bound_target`
+
+0x13
+
+type in field or record component declaration
+
+`empty_target`
+
+0x14
+return type of method, or type of newly constructed
+object
+
+`empty_target`
+
+0x15
+receiver type of method or constructor
+`empty_target`
+
+0x16
+type in formal parameter declaration of method,
+constructor, or lambda expression
+
+`formal_parameter_target`
+
+0x17
+type in `throws` clause of method or
+constructor
+
+`throws_target`
+
+Table 4.7.20-B. Interpretation of `target_type` values (Part 2)
+
+Value
+Kind of target
+`target_info` item
+
+0x40
+type in local variable declaration
+`localvar_target`
+
+0x41
+type in resource variable declaration
+`localvar_target`
+
+0x42
+type in exception parameter declaration
+`catch_target`
+
+0x43
+type in   instanceof   expression
+
+`offset_target`
+
+0x44
+type in   new   expression
+
+`offset_target`
+
+0x45
+type in method reference expression using `::`  new
+`offset_target`
+
+0x46
+type in method reference expression using `::`  Identifier
+`offset_target`
+
+0x47
+type in cast expression
+`type_argument_target`
+
+0x48
+type argument for generic constructor in   new
+expression or explicit constructor invocation
+statement
+
+`type_argument_target`
+
+0x49
+type argument for generic method in method invocation
+expression
+
+`type_argument_target`
+
+0x4A
+type argument for generic constructor in method
+reference expression using `::`  new
+`type_argument_target`
+
+0x4B
+type argument for generic method in method reference
+expression using `::`  Identifier
+`type_argument_target`
+
+Table 4.7.20-C. Location of enclosing attribute for `target_type` values
+
+Value
+Kind of target
+Location
+
+0x00
+type parameter declaration of generic class or
+interface
+
+`ClassFile`
+
+0x01
+type parameter declaration of generic method or
+constructor
+
+`method_info`
+
+0x10
+type in `extends` clause of class or interface
+declaration, or in `implements` clause of interface
+declaration
+
+`ClassFile`
+
+0x11
+type in bound of type parameter declaration of
+generic class or interface
+
+`ClassFile`
+
+0x12
+type in bound of type parameter declaration of
+generic method or constructor
+
+`method_info`
+
+0x13
+
+type in field or record component declaration
+
+`field_info`, `record_component_info`
+
+0x14
+return type of method or constructor
+`method_info`
+
+0x15
+receiver type of method or constructor
+`method_info`
+
+0x16
+type in formal parameter declaration of method,
+constructor, or lambda expression
+
+`method_info`
+
+0x17
+type in `throws` clause of method or
+constructor
+
+`method_info`
+
+0x40-0x4B
+types in local variable declarations, resource variable
+declarations, exception parameter declarations,
+expressions
+
+`Code`
+
+####   4.7.20.1. The `target_info` union
+
+The items of the `target_info` union (except for the first) specify
+precisely which type in a declaration or expression is annotated. The
+first item specifies not which type, but rather which declaration of a
+type parameter is annotated. The items are as follows:
+
+The `type_parameter_target` item indicates that an annotation
+appears on the declaration of the   i  'th type parameter of a
+generic class, generic interface, generic method, or generic
+constructor.
+
+```
+
+type_parameter_target {
+u1 type_parameter_index;
+}
+
+```
+
+The value of the `type_parameter_index` item
+specifies which type parameter declaration is
+annotated. A `type_parameter_index` value of
+`0` specifies the first type parameter declaration.
+
+The `supertype_target` item indicates that an annotation appears
+on a type in the `extends` or `implements` clause of a class or
+interface declaration.
+
+```
+
+supertype_target {
+u2 supertype_index;
+}
+
+```
+
+A `supertype_index` value of 65535 specifies
+that the annotation appears on the superclass in an `extends`
+clause of a class declaration.
+
+Any other `supertype_index` value is an index
+into the `interfaces` array of the enclosing
+`ClassFile` structure, and specifies that the annotation appears
+on that superinterface in either the `implements` clause of a
+class declaration or the `extends` clause of an interface
+declaration.
+
+The `type_parameter_bound_target` item indicates that an
+annotation appears on the   i  'th bound of the   j  'th type
+parameter declaration of a generic class, interface, method, or
+constructor.
+
+```
+
+type_parameter_bound_target {
+u1 type_parameter_index;
+u1 bound_index;
+}
+
+```
+
+The value of the of `type_parameter_index` item
+specifies which type parameter declaration has an annotated
+bound. A `type_parameter_index` value of `0`
+specifies the first type parameter declaration.
+
+The value of the `bound_index` item specifies
+which bound of the type parameter declaration indicated
+by `type_parameter_index` is
+annotated. A `bound_index` value of `0`
+specifies the first bound of a type parameter
+declaration.
+
+The `type_parameter_bound_target` item records
+that a bound is annotated, but does not record the type which
+constitutes the bound. The type may be found by inspecting the
+class signature or method signature stored in the appropriate
+`Signature` attribute.
+
+The `empty_target` item indicates that an annotation appears on
+either the type in a field declaration, the type in a record
+component declaration, the return type of a method, the type
+of a newly constructed object, or the receiver type of a
+method or constructor.
+
+```
+
+empty_target {
+}
+
+```
+
+Only one type appears in each of these
+locations, so there is no per-type information to represent in
+the `target_info` union.
+
+The `formal_parameter_target` item indicates that an annotation
+appears on the type in a formal parameter declaration of a
+method, constructor, or lambda expression.
+
+```
+
+formal_parameter_target {
+u1 formal_parameter_index;
+}
+
+```
+
+The value of the `formal_parameter_index` item
+specifies which formal parameter declaration has an annotated
+type. A `formal_parameter_index` value of
+
+i   may, but is not required to, correspond to the   i  'th
+parameter descriptor in the method descriptor
+( &sect;4.3.3 ).
+
+The `formal_parameter_target` item records that a formal
+parameter's type is annotated, but does not record the type
+itself. The type may be found by inspecting the method
+descriptor, although a `formal_parameter_index`
+value of `0` does not always indicate the first parameter
+descriptor in the method descriptor; see the note in
+&sect;4.7.18  for a similar situation involving
+the `parameter_annotations` table.
+
+The `throws_target` item indicates that an annotation appears on
+the   i  'th type in the `throws` clause of a method or
+constructor declaration.
+
+```
+
+throws_target {
+u2 throws_type_index;
+}
+
+```
+
+The value of the `throws_type_index` item is an
+index into the `exception_index_table` array of
+the `Exceptions` attribute of the `method_info` structure
+enclosing the `RuntimeVisibleTypeAnnotations` attribute.
+
+The `localvar_target` item indicates that an annotation appears
+on the type in a local variable declaration, including a
+variable declared as a resource in a `try`-with-resources
+statement.
+
+```
+
+localvar_target {
+u2 table_length;
+{   u2 start_pc;
+u2 length;
+u2 index;
+} table[table_length];
+}
+
+```
+
+The value of the `table_length` item gives the
+number of entries in the `table` array. Each
+entry indicates a range of `code` array offsets within which a
+local variable has a value. It also indicates the index into the
+local variable array of the current frame at which that local
+variable can be found. Each entry contains the following three
+items:
+
+start_pc, length
+
+The given local variable has a value at indices into the
+`code` array in the interval
+[`start_pc`, `start_pc +
+length`), that is,
+between `start_pc` inclusive
+and `start_pc + length` exclusive.
+
+index
+
+The given local variable must be
+at `index` in the local variable array of
+the current frame.
+
+If the local variable at `index` is of
+type `double` or `long`, it occupies
+both `index` and `index +
+1`.
+
+A table is needed to fully specify the local
+variable whose type is annotated, because a single local
+variable may be represented with different local variable
+indices over multiple live ranges. The
+`start_pc`, `length`,
+and `index` items in each table entry specify
+the same information as a `LocalVariableTable` attribute.
+
+The `localvar_target` item records that a local
+variable's type is annotated, but does not record the type
+itself. The type may be found by inspecting the appropriate
+`LocalVariableTable` attribute.
+
+The `catch_target` item indicates that an annotation appears on
+the   i  'th type in an exception parameter declaration.
+
+```
+
+catch_target {
+u2 exception_table_index;
+}
+
+```
+
+The value of the `exception_table_index` item
+is an index into the `exception_table` array of
+the `Code` attribute enclosing the
+`RuntimeVisibleTypeAnnotations` attribute.
+
+The possibility of more than one type in an
+exception parameter declaration arises from the multi-`catch`
+clause of the `try` statement, where the type of the exception
+parameter is a union of types (JLS &sect;14.20). A compiler usually
+creates one `exception_table` entry for each
+type in the union, which allows the `catch_target` item to
+distinguish them. This preserves the correspondence between a
+type and its annotations.
+
+The `offset_target` item indicates that an annotation appears on
+either the type in an   instanceof   expression or a   new
+expression, or the type before the `::` in a method
+reference expression.
+
+```
+
+offset_target {
+u2 offset;
+}
+
+```
+
+The value of the `offset` item specifies the
+`code` array offset of either the  bytecode
+instruction corresponding to the   instanceof   expression, the
+new   bytecode instruction corresponding to the   new
+expression, or the bytecode instruction corresponding to the
+method reference expression.
+
+The `type_argument_target` item indicates that an annotation
+appears either on the   i  'th type in a cast expression, or on
+the   i  'th type argument in the explicit type argument list
+for any of the following: a   new   expression, an explicit
+constructor invocation statement, a method invocation
+expression, or a method reference expression.
+
+```
+
+type_argument_target {
+u2 offset;
+u1 type_argument_index;
+}
+
+```
+
+The value of the `offset` item specifies the
+`code` array offset of either the bytecode instruction
+corresponding to the cast expression, the   new   bytecode
+instruction corresponding to the   new   expression, the bytecode
+instruction corresponding to the explicit constructor invocation
+statement, the bytecode instruction corresponding to the method
+invocation expression, or the bytecode instruction corresponding
+to the method reference expression.
+
+For a cast expression, the value of
+the `type_argument_index` item specifies which
+type in the cast operator is
+annotated. A `type_argument_index` value of
+`0` specifies the first (or only) type in the cast
+operator.
+
+The possibility of more than one type in a cast
+expression arises from a cast to an intersection type.
+
+For an explicit type argument list, the value of
+the `type_argument_index` item specifies which
+type argument is annotated. A
+`type_argument_index` value of `0` specifies
+the first type argument.
+
+####   4.7.20.2. The `type_path` structure
+
+Wherever a type is used
+in a declaration or expression, the `type_path` structure identifies
+which part of the type is annotated. An annotation may appear on the
+type itself, but if the type is a reference type, then there are
+additional locations where an annotation may appear:
+
+If an array type  T`[]`  is used in a
+declaration or expression, then an annotation may appear on any
+component type of the array type, including the element
+type.
+
+If a nested type  T1`.`T2  is used in a declaration
+or expression, then an annotation may appear on the name of the
+
+innermost member type and any enclosing type for which a type
+annotation is admissible (JLS &sect;9.7.4).
+
+If a parameterized type  T`<`A`>`
+or  T`<`? extends A`>`
+or  T`<`? super A`>`  is used in a
+declaration or expression, then an annotation may appear on any
+type argument or on the bound of any wildcard type
+argument.
+
+For example, consider the different parts of
+`String``[]``[]` that are annotated in:
+
+```
+
+@Foo String[][]   // Annotates the class type String
+String @Foo [][]  // Annotates the array type String[][]
+String[] @Foo []  // Annotates the array type String[]
+
+```
+
+or the different parts of the nested
+type `Outer.Middle.Inner` that are annotated
+in:
+
+```
+
+@Foo Outer.Middle.Inner
+Outer.@Foo Middle.Inner
+Outer.Middle.@Foo Inner
+
+```
+
+or the different parts of the parameterized
+types `Map<String,Object>`
+and `List<...>` that are annotated in:
+
+```
+
+@Foo Map<String,Object>
+Map<@Foo String,Object>
+Map<String,@Foo Object>
+
+List<@Foo ? extends String>
+List<? extends @Foo String>
+
+```
+
+The `type_path` structure
+has the following format:
+
+```
+
+type_path {
+u1 path_length;
+{   u1 type_path_kind;
+u1 type_argument_index;
+} path[path_length];
+}
+
+```
+
+The value of
+the `path_length` item gives the number of entries in
+the `path` array:
+
+If the value of `path_length` is `0`,
+and the type being annotated is a nested type,
+then the annotation applies to the outermost part of the type
+for which a type annotation is admissible.
+
+If the value of `path_length` is `0`,
+and the type being annotated is not a nested type,
+then the annotation appears directly on the type itself.
+
+If the value of `path_length` is non-zero, then
+each entry in the `path` array represents an
+iterative, left-to-right step towards the precise location of
+the annotation in an array type, nested type, or parameterized
+type. (In an array type, the iteration visits the array type
+itself, then its component type, then the component type of that
+component type, and so on, until the element type is reached.)
+Each entry contains the following two items:
+
+type_path_kind
+
+The legal values for the `type_path_kind`
+item are listed in  Table 4.7.20.2-A .
+
+Table 4.7.20.2-A. Interpretation of `type_path_kind` values
+
+Value
+Interpretation
+
+`0`
+Annotation is deeper in an array type
+
+`1`
+Annotation is deeper in a nested type
+
+`2`
+Annotation is on the bound of a wildcard type
+argument of a parameterized type
+
+`3`
+Annotation is on a type argument of a
+parameterized type
+
+type_argument_index
+
+If the value of the `type_path_kind` item
+is `0`, `1`, or `2`, then the value of
+the `type_argument_index` item is
+`0`.
+
+If the value of the `type_path_kind` item
+is `3`, then the value of
+the `type_argument_index` item specifies
+which type argument of a parameterized type is annotated,
+where `0` indicates the first type argument of a
+parameterized type.
+
+Table 4.7.20.2-B. `type_path` structures for
+`@A Map<@B ? extends @C String, @D List<@E Object>>`
+
+Annotation
+`path_length`
+`path`
+
+`@A`
+`0`
+`[]`
+
+`@B`
+`1`
+`[{type_path_kind: 3; type_argument_index: 0}]`
+
+`@C`
+`2`
+`[{type_path_kind: 3; type_argument_index: 0}, {type_path_kind: 2; type_argument_index: 0}]`
+
+`@D`
+`1`
+`[{type_path_kind: 3; type_argument_index: 1}]`
+
+`@E`
+`2`
+`[{type_path_kind: 3; type_argument_index: 1}, {type_path_kind: 3; type_argument_index: 0}]`
+
+Table 4.7.20.2-C. `type_path` structures for
+`@I String @F [] @G [] @H []`
+
+Annotation
+`path_length`
+`path`
+
+`@F`
+`0`
+`[]`
+
+`@G`
+`1`
+`[{type_path_kind: 0; type_argument_index: 0}]`
+
+`@H`
+`2`
+`[{type_path_kind: 0; type_argument_index: 0}, {type_path_kind: 0; type_argument_index: 0}]`
+
+`@I`
+`3`
+`[{type_path_kind: 0; type_argument_index: 0}, {type_path_kind: 0; type_argument_index: 0}, {type_path_kind: 0; type_argument_index:
+0}]`
+
+Table 4.7.20.2-D. `type_path` structures for
+`@A List<@B Comparable<@F Object @C [] @D [] @E
+[]>>`
+
+Annotation
+`path_length`
+`path`
+
+`@A`
+`0`
+`[]`
+
+`@B`
+`1`
+`[{type_path_kind: 3; type_argument_index: 0}]`
+
+`@C`
+`2`
+`[{type_path_kind: 3; type_argument_index: 0}, {type_path_kind: 3; type_argument_index: 0}]`
+
+`@D`
+`3`
+`[{type_path_kind: 3; type_argument_index: 0}, {type_path_kind: 3; type_argument_index: 0}, {type_path_kind: 0; type_argument_index:
+0}]`
+
+`@E`
+`4`
+`[{type_path_kind: 3; type_argument_index: 0}, {type_path_kind: 3; type_argument_index: 0}, {type_path_kind: 0; type_argument_index:
+0}, {type_path_kind: 0; type_argument_index: 0}]`
+
+`@F`
+`5`
+`[{type_path_kind: 3; type_argument_index: 0}, {type_path_kind: 3; type_argument_index: 0}, {type_path_kind: 0; type_argument_index:
+0}, {type_path_kind: 0; type_argument_index: 0}, {type_path_kind: 0; type_argument_index: 0}]`
+
+Table 4.7.20.2-E. `type_path` structures for
+`@A Outer . @B Middle . @C Inner`
+
+Assuming:
+
+```
+
+class Outer {
+class Middle {
+class Inner {}
+}
+}
+```
+
+Annotation
+`path_length`
+`path`
+
+`@A`
+`0`
+`[]`
+
+`@B`
+`1`
+`[{type_path_kind: 1; type_argument_index: 0}]`
+
+`@C`
+`2`
+`[{type_path_kind: 1; type_argument_index: 0}, {type_path_kind: 1; type_argument_index: 0}]`
+
+Table 4.7.20.2-F. `type_path` structures for
+`Outer . @A MiddleStatic . @B Inner`
+
+Assuming:
+
+```
+
+class Outer {
+static class MiddleStatic {
+class Inner {}
+}
+}
+```
+
+Annotation
+`path_length`
+`path`
+
+`@A`
+`0`
+`[]`
+
+`@B`
+`1`
+`[{type_path_kind: 1; type_argument_index: 0}]`
+
+In the type `Outer . MiddleStatic . Inner`,
+type annotations on the simple name `Outer`
+are not admissible because the type name to its right,
+`MiddleStatic`, does not refer to an inner
+class of `Outer`.
+
+Table 4.7.20.2-G. `type_path` structures for
+`Outer . MiddleStatic . @A InnerStatic`
+
+Assuming:
+
+```
+
+class Outer {
+static class MiddleStatic {
+static class InnerStatic {}
+}
+}
+```
+
+Annotation
+`path_length`
+`path`
+
+`@A`
+`0`
+`[]`
+
+In the type `Outer . MiddleStatic . InnerStatic`,
+type annotations on the simple name `Outer`
+are not admissible because the type name to its right,
+`MiddleStatic`, does not refer to an inner
+class of `Outer`. Similarly, type annotations
+on the simple name `MiddleStatic` are not admissible
+because the type name to its right, `InnerStatic`,
+does not refer to an inner class of `MiddleStatic`.
+
+Table 4.7.20.2-H. `type_path` structures for
+`Outer . Middle<@A Foo . @B Bar> . Inner<@D String @C []>`
+
+Assuming:
+
+```
+
+class Outer {
+class Middle<T> {
+class Inner<U> {}
+}
+}
+
+```
+
+Annotation
+`path_length`
+`path`
+
+`@A`
+`2`
+`[{type_path_kind: 1; type_argument_index: 0}, {type_path_kind: 3; type_argument_index: 0}]`
+
+`@B`
+`3`
+`[{type_path_kind: 1; type_argument_index: 0}, {type_path_kind: 3; type_argument_index: 0}, {type_path_kind: 1; type_argument_index:
+0}]`
+
+`@C`
+`3`
+`[{type_path_kind: 1; type_argument_index: 0}, {type_path_kind: 1; type_argument_index: 0}, {type_path_kind: 3; type_argument_index:
+0}]`
+
+`@D`
+`4`
+`[{type_path_kind: 1; type_argument_index: 0}, {type_path_kind: 1; type_argument_index: 0}, {type_path_kind: 3; type_argument_index:
+0}, {type_path_kind: 0; type_argument_index: 0}]`
+
+###   4.7.21. The `RuntimeInvisibleTypeAnnotations` Attribute
+
+The `RuntimeInvisibleTypeAnnotations` attribute is an variable-length
+attribute in the `attributes` table of a `ClassFile`, `field_info`,
+`method_info`, or `record_component_info` structure, or `Code`
+attribute ( &sect;4.1 ,  &sect;4.5 ,
+&sect;4.6 ,  &sect;4.7.30 ,  &sect;4.7.3 ). The `RuntimeInvisibleTypeAnnotations`
+attribute stores run-time invisible annotations on types used in the
+corresponding declaration of a class, field, method, or record
+component, or in an expression in the corresponding method body. The
+`RuntimeInvisibleTypeAnnotations` attribute also stores annotations on
+type parameter declarations of generic classes, interfaces, methods,
+and constructors.
+
+There may be at most one `RuntimeInvisibleTypeAnnotations` attribute
+in the `attributes` table of a `ClassFile`, `field_info`, `method_info`,
+or `record_component_info` structure, or `Code` attribute.
+
+An `attributes` table contains a
+`RuntimeInvisibleTypeAnnotations` attribute only if types are
+annotated in kinds of declaration or expression that correspond to the
+parent structure or attribute of the `attributes` table.
+
+The
+`RuntimeInvisibleTypeAnnotations` attribute has the following
+format:
+
+```
+
+RuntimeInvisibleTypeAnnotations_attribute {
+u2              attribute_name_index;
+u4              attribute_length;
+u2              num_annotations;
+type_annotation annotations[num_annotations];
+}
+
+```
+
+The items of
+the `RuntimeInvisibleTypeAnnotations_attribute`
+structure are as follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure representing the string
+"`RuntimeInvisibleTypeAnnotations`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial
+six bytes.
+
+num_annotations
+
+The value of the `num_annotations` item gives
+the number of run-time invisible type annotations represented
+by the structure.
+
+annotations[]
+
+Each entry in the `annotations` table
+represents a single run-time invisible annotation on a type
+used in a declaration or expression. The
+`type_annotation` structure is specified in
+&sect;4.7.20 .
+
+###   4.7.22. The `AnnotationDefault` Attribute
+
+The `AnnotationDefault` attribute is a variable-length attribute in
+the `attributes` table of certain `method_info` structures
+( &sect;4.6 ), namely those representing elements of
+annotation interfaces (JLS &sect;9.6.1). The `AnnotationDefault` attribute
+records the default value (JLS &sect;9.6.2) for the element represented by
+the `method_info` structure.
+
+There may be at most one `AnnotationDefault` attribute in the
+`attributes` table of a `method_info` structure which represents an
+element of an annotation interface.
+
+The `AnnotationDefault`
+attribute has the following format:
+
+```
+
+AnnotationDefault_attribute {
+u2            attribute_name_index;
+u4            attribute_length;
+element_value default_value;
+}
+
+```
+
+The items of
+the `AnnotationDefault_attribute` structure are as
+follows:
+
+attribute_name_index
+
+The value of the
+`attribute_name_index` item must be a valid
+index into the `constant_pool` table. The `constant_pool`
+entry at that index must be a `CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ) representing the string
+"`AnnotationDefault`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial
+six bytes.
+
+default_value
+
+The
+`default_value` item represents the default
+value of the annotation interface element represented by the
+`method_info` structure enclosing this `AnnotationDefault`
+attribute.
+
+###   4.7.23. The `BootstrapMethods` Attribute
+
+The `BootstrapMethods` attribute is a variable-length attribute in the
+`attributes` table of a `ClassFile` structure ( &sect;4.1 ).
+The `BootstrapMethods` attribute records bootstrap methods used to
+produce dynamically-computed constants and dynamically-computed
+call sites ( &sect;4.4.10 ).
+
+There must be exactly one `BootstrapMethods` attribute in the
+`attributes` table of a `ClassFile` structure if the `constant_pool`
+table of the `ClassFile` structure has at least one
+`CONSTANT_Dynamic_info` or `CONSTANT_InvokeDynamic_info` entry.
+
+There may be at most one `BootstrapMethods` attribute in the
+`attributes` table of a `ClassFile` structure.
+
+The `BootstrapMethods` attribute has the following format:
+
+```
+
+BootstrapMethods_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u2 num_bootstrap_methods;
+{   u2 bootstrap_method_ref;
+u2 num_bootstrap_arguments;
+u2 bootstrap_arguments[num_bootstrap_arguments];
+} bootstrap_methods[num_bootstrap_methods];
+}
+
+```
+
+The items of the `BootstrapMethods_attribute`
+structure are as follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the string "`BootstrapMethods`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial
+six bytes.
+
+num_bootstrap_methods
+
+The value of the `num_bootstrap_methods` item
+determines the number of bootstrap method specifiers in
+the `bootstrap_methods` array.
+
+bootstrap_methods[]
+
+Each entry in the `bootstrap_methods` table
+contains an index to a `CONSTANT_MethodHandle_info` structure
+which specifies a bootstrap method, and a sequence (perhaps
+empty) of indexes to   static arguments   for
+the bootstrap method.
+
+Each `bootstrap_methods` entry must contain
+the following three items:
+
+bootstrap_method_ref
+
+The value of the `bootstrap_method_ref`
+item must be a valid index into the `constant_pool`
+table. The `constant_pool` entry at that index must be a
+`CONSTANT_MethodHandle_info` structure
+( &sect;4.4.8 ).
+
+The method handle will be resolved during resolution of
+a dynamically-computed constant or call site
+( &sect;5.4.3.6 ), and then invoked as if
+by invocation of `invokeWithArguments` in
+`java.lang.invoke.MethodHandle`. The method handle must be able to accept
+the array of arguments described in
+&sect;5.4.3.6 , or resolution will
+fail.
+
+num_bootstrap_arguments
+
+The value of the `num_bootstrap_arguments`
+item gives the number of items in
+the `bootstrap_arguments` array.
+
+bootstrap_arguments[]
+
+Each entry in the `bootstrap_arguments`
+array must be a valid index into the `constant_pool`
+table. The `constant_pool` entry at that index must be
+loadable ( &sect;4.4 ).
+
+###   4.7.24. The `MethodParameters` Attribute
+
+The `MethodParameters`
+attribute is a variable-length attribute in the `attributes` table of
+a `method_info` structure ( &sect;4.6 ). A
+`MethodParameters` attribute records information about the formal
+parameters of a method, such as their names.
+
+There may be at most one
+`MethodParameters` attribute in the `attributes` table of a
+`method_info` structure.
+
+The `MethodParameters`
+attribute has the following format:
+
+```
+
+MethodParameters_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u1 parameters_count;
+{   u2 name_index;
+u2 access_flags;
+} parameters[parameters_count];
+}
+
+```
+
+The items of
+the `MethodParameters_attribute` structure are as
+follows:
+
+attribute_name_index
+
+The value of the
+`attribute_name_index` item must be a valid
+index into the `constant_pool` table. The `constant_pool`
+entry at that index must be a `CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ) representing the string
+"`MethodParameters`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial
+six bytes.
+
+parameters_count
+
+The value of
+the `parameters_count` item indicates the
+number of parameter descriptors in the method descriptor
+( &sect;4.3.3 ) referenced by
+the `descriptor_index` of the attribute's
+enclosing `method_info` structure.
+
+This is not a constraint which a Java Virtual Machine
+implementation must enforce during format checking
+( &sect;4.8 ). The task of matching parameter
+descriptors in a method descriptor against the items in
+the `parameters` array below is done by the
+reflection libraries of the Java SE Platform.
+
+parameters[]
+
+Each entry in the
+`parameters` array contains the following
+pair of items:
+
+name_index
+
+The value
+of the `name_index` item must either be
+zero or a valid index into the `constant_pool`
+table.
+
+If the
+value of the `name_index` item is zero,
+then this `parameters` element
+indicates a formal parameter with no name.
+
+If the
+value of the `name_index` item is
+nonzero, the `constant_pool` entry at that index must be
+a `CONSTANT_Utf8_info` structure representing a valid
+unqualified name denoting a formal parameter
+( &sect;4.2.2 ).
+
+access_flags
+
+The value
+of the `access_flags` item is as
+follows:
+
+0x0010 (`ACC_FINAL`)
+
+Indicates that the formal parameter was declared
+`final`.
+
+0x1000 (`ACC_SYNTHETIC`)
+
+Indicates that the formal parameter was not
+explicitly or implicitly declared in source code,
+according to the specification of the language in
+which the source code was written (JLS
+&sect;13.1). (The formal parameter is an implementation
+artifact of the compiler which produced this
+`class` file.)
+
+0x8000 (`ACC_MANDATED`)
+
+Indicates that the formal parameter was implicitly
+declared in source code, according to the
+specification of the language in which the source
+code was written (JLS &sect;13.1). (The formal
+parameter is mandated by a language specification,
+so all compilers for the language must emit
+it.)
+
+The   i  'th entry in the
+`parameters` array corresponds to the   i  'th
+parameter descriptor in the enclosing method's descriptor. (The
+`parameters_count` item is one byte because a method
+descriptor is limited to 255 parameters.) Effectively, this means
+the `parameters` array stores information for all the
+parameters of the method. One could imagine other schemes, where
+entries in the `parameters` array specify their
+corresponding parameter descriptors, but it would unduly complicate
+the `MethodParameters` attribute.
+
+The   i  'th entry in
+the `parameters` array may or may not correspond to
+the   i  'th type in the enclosing method's `Signature` attribute (if
+present), or to the   i  'th annotation in the enclosing method's
+parameter annotations.
+
+###   4.7.25. The `Module` Attribute
+
+The `Module` attribute is a variable-length attribute in the
+`attributes` table of a `ClassFile` structure
+( &sect;4.1 ). The `Module` attribute indicates the
+modules required by a module; the packages exported and opened by a
+module; and the services used and provided by a module.
+
+There may be at most one `Module` attribute in the `attributes` table
+of a `ClassFile` structure.
+
+The `Module` attribute has the following format:
+
+```
+
+Module_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+
+u2 module_name_index;
+u2 module_flags;
+u2 module_version_index;
+
+u2 requires_count;
+{   u2 requires_index;
+u2 requires_flags;
+u2 requires_version_index;
+} requires[requires_count];
+
+u2 exports_count;
+{   u2 exports_index;
+u2 exports_flags;
+u2 exports_to_count;
+u2 exports_to_index[exports_to_count];
+} exports[exports_count];
+
+u2 opens_count;
+{   u2 opens_index;
+u2 opens_flags;
+u2 opens_to_count;
+u2 opens_to_index[opens_to_count];
+} opens[opens_count];
+
+u2 uses_count;
+u2 uses_index[uses_count];
+
+u2 provides_count;
+{   u2 provides_index;
+u2 provides_with_count;
+u2 provides_with_index[provides_with_count];
+} provides[provides_count];
+}
+
+```
+
+The items of the `Module_attribute` structure are as follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the string "`Module`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial
+six bytes.
+
+module_name_index
+
+The value of the `module_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Module_info` structure ( &sect;4.4.11 )
+denoting the current module.
+
+module_flags
+
+The value of the `module_flags` item is as follows:
+
+0x0020 (`ACC_OPEN`)
+
+Indicates that this module is open.
+
+0x1000 (`ACC_SYNTHETIC`)
+
+Indicates that this module was not explicitly or
+implicitly declared.
+
+0x8000 (`ACC_MANDATED`)
+
+Indicates that this module was implicitly declared.
+
+module_version_index
+
+The value of the `module_version_index` item
+must be either zero or a valid index into the `constant_pool`
+table. If the value of the item is zero, then no version
+information about the current module is present. If the value
+of the item is nonzero, then the `constant_pool` entry at that
+index must be a `CONSTANT_Utf8_info` structure representing
+the version of the current module.
+
+requires_count
+
+The value of the `requires_count` item
+indicates the number of entries in
+the `requires` table.
+
+If the current module is `java.base`,
+then `requires_count` must be zero.
+
+If the current module is not `java.base`,
+then `requires_count` must be at least	one.
+
+requires[]
+
+Each entry in the `requires` table specifies
+a dependence of the current module.  The items in each entry
+are as follows:
+
+requires_index
+
+The value of the `requires_index` item
+must be a valid index into the `constant_pool`
+table. The `constant_pool` entry at that index must be a
+`CONSTANT_Module_info` structure denoting a module on
+which the current module depends.
+
+At most one entry in the `requires`
+table may specify a module of a given name with its
+`requires_index` item.
+
+requires_flags
+
+The value of the `requires_flags` item
+is as follows:
+
+0x0020 (`ACC_TRANSITIVE`)
+
+Indicates that any module which depends on the
+current module, implicitly declares a dependence
+on the module indicated by this entry.
+
+0x0040 (`ACC_STATIC_PHASE`)
+
+Indicates that this dependence is mandatory in the
+static phase, i.e., at compile time, but is
+optional in the dynamic phase, i.e., at run time.
+
+0x1000 (`ACC_SYNTHETIC`)
+
+Indicates that this dependence was not explicitly
+or implicitly declared in the source of the module
+declaration.
+
+0x8000 (`ACC_MANDATED`)
+
+Indicates that this dependence was implicitly
+declared in the source of the module declaration.
+
+requires_version_index
+
+The value of the `requires_version_index`
+item must be either zero or a valid index into the
+`constant_pool` table. If the value of the item is zero,
+then no version information about the dependence is
+present. If the value of the item is nonzero, then the
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure representing the version
+of the module specified
+by `requires_index`.
+
+Unless the current module is `java.base`, exactly one entry in the
+`requires` table must have all of the following:
+
+A `requires_index` item that indicates `java.base`.
+
+A `requires_flags` item that has the
+`ACC_SYNTHETIC` flag not set. (The `ACC_MANDATED` flag may
+be set.)
+
+If the `class` file version number is 54.0 or above,
+a `requires_flags` item that has both
+the `ACC_TRANSITIVE` and `ACC_STATIC_PHASE` flags not set.
+
+exports_count
+
+The value of the `exports_count` item
+indicates the number of entries in
+the `exports` table.
+
+exports[]
+
+Each entry in the `exports` table specifies a
+package exported by the current module, such that `public` and
+`protected` types in the package, and their `public` and
+`protected` members, may be accessed from outside the current
+module, possibly from a limited set of "friend"	modules.
+
+The items in each entry are as follows:
+
+exports_index
+
+The value of the `exports_index` item
+must be a valid index into the `constant_pool`
+table. The `constant_pool` entry at that index must be a
+`CONSTANT_Package_info` structure
+( &sect;4.4.12 ) representing a package
+exported by the current module.
+
+At most one entry in the `exports`
+table may specify a package of a given name with
+its `exports_index` item.
+
+exports_flags
+
+The value of the `exports_flags` item
+is as follows:
+
+0x1000 (`ACC_SYNTHETIC`)
+
+Indicates that this export was not explicitly or
+implicitly declared in the source of the module
+declaration.
+
+0x8000 (`ACC_MANDATED`)
+
+Indicates that this export was implicitly declared
+in the source of the module declaration.
+
+exports_to_count
+
+The value of the `exports_to_count`
+indicates the number of entries in
+the `exports_to_index` table.
+
+If `exports_to_count` is zero, then
+this package is exported by the current module in
+an   unqualified   fashion; code in any
+other module may access the types and members in the
+package.
+
+If `exports_to_count` is nonzero, then
+this package is exported by the current module in
+a   qualified   fashion; only code in
+the modules listed in the
+`exports_to_index` table may access the
+types and members in the package.
+
+exports_to_index[]
+
+The value of each entry in
+the `exports_to_index` table must be a
+valid index into the `constant_pool` table.  The
+`constant_pool` entry at that index must be a
+`CONSTANT_Module_info` structure denoting a module whose
+code can access the types and members in this exported
+package.
+
+For each entry in the `exports` table,
+at most one entry in its
+`exports_to_index` table may specify a
+module of a given name.
+
+opens_count
+
+The value of the `opens_count` item indicates
+the number of entries in the `opens`
+table.
+
+`opens_count` must be zero if the current
+module is open.
+
+opens[]
+
+Each entry in the `opens` table specifies a
+package opened by the current module, such that all types in
+the package, and all their members, may be accessed from
+outside the current module via the reflection libraries of the
+Java SE Platform, possibly from a limited set of "friend" modules.
+
+The items in each entry are as follows:
+
+opens_index
+
+The value of the `opens_index` item
+must be a valid index into the `constant_pool`
+table. The `constant_pool` entry at that index must be a
+`CONSTANT_Package_info` structure representing a package
+opened by the current module.
+
+At most one entry in the `opens` table
+may specify a package of a given name with
+its `opens_index` item.
+
+opens_flags
+
+The value of the `opens_flags` item is
+as follows:
+
+0x1000 (`ACC_SYNTHETIC`)
+
+Indicates that this opening was not explicitly or
+implicitly declared in the source of the module
+declaration.
+
+0x8000 (`ACC_MANDATED`)
+
+Indicates that this opening was implicitly
+declared in the source of the module declaration.
+
+opens_to_count
+
+The value of the `opens_to_count`
+indicates the number of entries in
+the `opens_to_index` table.
+
+If `opens_to_count` is zero, then this
+package is opened by the current module in
+an   unqualified   fashion; code in
+any other module may reflectively access the types and
+members in the package.
+
+If `opens_to_count` is nonzero, then
+this package is opened by the current module in
+a   qualified   fashion; only code in
+the modules listed in the `opens_to_index`
+table may reflectively access the types and members in the
+package.
+
+opens_to_index[]
+
+The value of each entry in
+the `opens_to_index` table must be a
+valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Module_info` structure denoting a module whose
+code can access the types and members in this opened
+package.
+
+For each entry in the `opens` table, at
+most one entry in its `opens_to_index`
+table may specify a module of a given name.
+
+uses_count
+
+The value of the `uses_count` item indicates
+the number of entries in the `uses_index`
+table.
+
+uses_index[]
+
+The value of each entry in the `uses_index`
+table must be a valid index into the `constant_pool`
+table. The `constant_pool` entry at that index must be a
+`CONSTANT_Class_info` structure ( &sect;4.4.1 )
+representing a service interface which the current module may
+discover via `java.util.ServiceLoader`.
+
+At most one entry in the `uses_index` table
+may specify a service interface of a given name.
+
+provides_count
+
+The value of the `provides_count` item
+indicates the number of entries in
+the `provides` table.
+
+provides[]
+
+Each entry in the `provides` table represents
+a service implementation for a given service interface.
+
+The items in each entry are as follows:
+
+provides_index
+
+The value of the `provides_index` item
+must be a valid index into the `constant_pool`
+table. The `constant_pool` entry at that index must be a
+`CONSTANT_Class_info` structure representing a service
+interface for which the current module provides a
+service implementation.
+
+At most one entry in the `provides`
+table may specify a service interface of a given name
+with its `provides_index` item.
+
+provides_with_count
+
+The value of the `provides_with_count`
+indicates the number of entries in
+the `provides_with_index` table.
+
+`provides_with_count` must be nonzero.
+
+provides_with_index[]
+
+The value of each entry in
+the `provides_with_index` table must be
+a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Class_info` structure representing a service
+implementation for the service interface specified
+by `provides_index`.
+
+For each entry in the `provides` table,
+at most one entry in
+its `provides_with_index` table may
+specify a service implementation of a given name.
+
+###   4.7.26. The `ModulePackages` Attribute
+
+The `ModulePackages` attribute is a variable-length attribute in the
+`attributes` table of a `ClassFile` structure ( &sect;4.1 ).
+The `ModulePackages` attribute indicates all the packages of a module
+that are exported or opened by the `Module` attribute, as well as all
+the packages of the service implementations recorded in the `Module`
+attribute. The `ModulePackages` attribute may also indicate packages
+in the module that are neither exported nor opened nor contain service
+implementations.
+
+There may be at most one `ModulePackages` attribute in the
+`attributes` table of a `ClassFile` structure.
+
+The `ModulePackages` attribute has the following format:
+
+```
+
+ModulePackages_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u2 package_count;
+u2 package_index[package_count];
+}
+
+```
+
+The items of the `ModulePackages_attribute` structure
+are as follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the string "`ModulePackages`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial
+six bytes.
+
+package_count
+
+The value of the `package_count` item
+indicates the number of entries in
+the `package_index` table.
+
+package_index[]
+
+The value of each entry in
+the `package_index` table must be a valid
+index into the `constant_pool` table. The `constant_pool`
+entry at that index must be a `CONSTANT_Package_info`
+structure ( &sect;4.4.12 ) representing a
+package in the current module.
+
+At most one entry in the `package_index`
+table may specify a package of a given name.
+
+###   4.7.27. The `ModuleMainClass` Attribute
+
+The `ModuleMainClass` attribute is a fixed-length attribute in the
+`attributes` table of a `ClassFile` structure ( &sect;4.1 .
+The `ModuleMainClass` attribute indicates the main class of a module.
+
+There may be at most one `ModuleMainClass` attribute in the
+`attributes` table of a `ClassFile` structure.
+
+The `ModuleMainClass` attribute has the following format:
+
+```
+
+ModuleMainClass_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u2 main_class_index;
+}
+
+```
+
+The items of the `ModuleMainClass_attribute` structure
+are as follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the string "`ModuleMainClass`".
+
+attribute_length
+
+The value of the `attribute_length` item must
+be two.
+
+main_class_index
+
+The value of the `main_class_index` item must
+be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Class_info` structure ( &sect;4.4.1 )
+representing the main class of the current module.
+
+###   4.7.28. The `NestHost` Attribute
+
+The `NestHost` attribute is a fixed-length attribute in the
+`attributes` table of a `ClassFile` structure. The `NestHost`
+attribute records the nest host of the nest to which the current class
+or interface claims to belong ( &sect;5.4.4 ).
+
+There may be at most one `NestHost` attribute in the `attributes`
+table of a `ClassFile` structure.
+
+The `NestHost` attribute has the following format:
+
+```
+
+NestHost_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u2 host_class_index;
+}
+
+```
+
+The items of the `NestHost_attribute` structure
+are as follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the string "`NestHost`".
+
+attribute_length
+
+The value of the `attribute_length` item must
+be two.
+
+host_class_index
+
+The value of the `host_class_index` item must
+be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Class_info` structure ( &sect;4.4.1 )
+representing a class or interface which is the nest host for
+the current class or interface.
+
+If the nest host cannot be loaded, or is not
+in the same run-time package as the current class or
+interface, or does not authorize nest membership for the
+current class or interface, then an error may occur during
+access control ( &sect;5.4.4 ).
+
+###   4.7.29. The `NestMembers` Attribute
+
+The `NestMembers` attribute is a variable-length attribute in the
+`attributes` table of a `ClassFile` structure ( &sect;4.1 ).
+The `NestMembers` attribute records the classes and interfaces that
+are authorized to claim membership in the nest hosted by the current
+class or interface ( &sect;5.4.4 ).
+
+There may be at most one `NestMembers` attribute in the `attributes`
+table of a `ClassFile` structure.
+
+The `attributes` table of a `ClassFile` structure must not contain
+both a `NestMembers` attribute and a `NestHost` attribute.
+
+This rule prevents a nest host from claiming
+membership in a different nest. It is implicitly a member of the nest
+that it hosts.
+
+The `NestMembers` attribute has the following format:
+
+```
+
+NestMembers_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u2 number_of_classes;
+u2 classes[number_of_classes];
+}
+
+```
+
+The items of the `NestMembers_attribute` structure
+are as follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the string "`NestMembers`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial
+six bytes.
+
+number_of_classes
+
+The value of the `number_of_classes` item
+indicates the number of entries in
+the `classes` array.
+
+classes[]
+
+Each value in the `classes` array must be a
+valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Class_info` structure ( &sect;4.4.1 )
+representing a class or interface which is a member of the
+nest hosted by the current class or interface.
+
+The `classes` array is
+consulted by access control ( &sect;5.4.4 ). It
+should consist of references to other classes and interfaces
+that are in the same run-time package and have `NestHost`
+attributes which reference the current class or
+interface. Array items that do not meet these criteria are
+ignored by access control.
+
+###   4.7.30. The `Record` Attribute
+
+The `Record` attribute is a variable-length attribute in the
+`attributes` table of a `ClassFile` structure ( &sect;4.1 ). The `Record` attribute indicates that the
+current class is a record class (JLS &sect;8.10), and stores information
+about the record components of the record class (JLS &sect;8.10.1).
+
+There may be at most one `Record` attribute in the `attributes`
+table of a `ClassFile` structure.
+
+The `Record` attribute has the following format:
+
+```
+
+Record_attribute {
+u2                    attribute_name_index;
+u4                    attribute_length;
+u2                    components_count;
+record_component_info components[components_count];
+}
+
+```
+
+The items of the `Record_attribute` structure are as
+follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the string "`Record`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial
+six bytes.
+
+components_count
+
+The value of the `components_count` item
+indicates the number of entries in the
+`components` table.
+
+components[]
+
+Each entry in the `components` table
+specifies a record component of the current class,
+in the order the record components were declared. The
+`record_component_info` structure has the following
+format:
+
+```
+
+record_component_info {
+u2             name_index;
+u2             descriptor_index;
+u2             attributes_count;
+attribute_info attributes[attributes_count];
+}
+
+```
+
+The items of the
+`record_component_info` structure are as follows:
+
+name_index
+
+The value of the `name_index` item must
+be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 ) representing a valid unqualified
+name denoting the record component ( &sect;4.2.2 ).
+
+descriptor_index
+
+The value of the `descriptor_index`
+item must be a valid index into the `constant_pool`
+table. The `constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 ) representing a field descriptor
+which encodes the type of the record component ( &sect;4.3.2 ).
+
+attributes_count
+
+The value of the `attributes_count`
+item indicates the number of additional attributes of
+this record component.
+
+attributes[]
+
+Each value of the `attributes` table must be an
+`attribute_info` structure ( &sect;4.7 ).
+
+A record component can have any number of optional
+attributes associated with it.
+
+The attributes defined by this specification as
+appearing in the `attributes` table of a
+`record_component_info` structure are listed in  Table 4.7-C .
+
+The rules concerning attributes defined to appear in the
+`attributes` table of a `record_component_info` structure are
+given in  &sect;4.7 .
+
+The rules concerning non-predefined attributes in the
+`attributes` table of a `record_component_info` structure are
+given in  &sect;4.7.1 .
+
+###   4.7.31. The `PermittedSubclasses` Attribute
+
+The `PermittedSubclasses` attribute is a variable-length attribute in
+the `attributes` table of a `ClassFile` structure ( &sect;4.1 ).  The `PermittedSubclasses` attribute records
+the classes and interfaces that are authorized to directly extend or
+implement the current class or interface ( &sect;5.3.5 ).
+
+The Java programming language uses the modifier `sealed` to
+indicate a class or interface that limits its direct subclasses or
+direct subinterfaces. One might suppose that this modifier would
+correspond to an `ACC_SEALED` flag in a `class` file,
+since the related modifier `final` corresponds to the `ACC_FINAL`
+flag. In fact, a `sealed` class or interface is indicated in a `class`
+file by the presence of the `PermittedSubclasses` attribute.
+
+There may be at most one `PermittedSubclasses` attribute in the
+`attributes` table of a `ClassFile` structure whose `access_flags` item
+does not have the `ACC_FINAL` flag set.
+
+There must be no `PermittedSubclasses` attribute in the `attributes` table
+of a `ClassFile` structure whose `access_flags` item has the `ACC_FINAL`
+flag set.
+
+`sealed` is distinct from `final`: a `sealed` class
+has a list of authorized subclasses, which a `final` class has no
+subclasses. Thus, a `ClassFile` structure may have a
+`PermittedSubclasses` attribute, or have its `ACC_FINAL` flag set, but
+not both.
+
+The `PermittedSubclasses` attribute has the following format:
+
+```
+
+PermittedSubclasses_attribute {
+u2 attribute_name_index;
+u4 attribute_length;
+u2 number_of_classes;
+u2 classes[number_of_classes];
+}
+
+```
+
+The items of the `PermittedSubclasses_attribute` structure
+are as follows:
+
+attribute_name_index
+
+The value of the `attribute_name_index` item
+must be a valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Utf8_info` structure ( &sect;4.4.7 )
+representing the string "`PermittedSubclasses`".
+
+attribute_length
+
+The value of the `attribute_length` item
+indicates the length of the attribute, excluding the initial
+six bytes.
+
+number_of_classes
+
+The value of the `number_of_classes` item
+indicates the number of entries in
+the `classes` array.
+
+classes[]
+
+Each value in the `classes` array must be a
+valid index into the `constant_pool` table. The
+`constant_pool` entry at that index must be a
+`CONSTANT_Class_info` structure ( &sect;4.4.1 )
+representing a class or interface which is authorized to
+directly extend or implement the current class or interface.
+
+The `classes` array is
+consulted when a class or interface is created that attempts to
+directly extend or implement the current class or interface
+( &sect;5.3.5 ). Array items that represent
+classes or interfaces which do not attempt to directly extend
+or implement the current class or interface are ignored.
+
+##   4.8. Format Checking
+
+When a prospective `class` file is loaded by the Java Virtual Machine
+( &sect;5.3 ), the Java Virtual Machine first ensures that the file
+has the basic format of a `class` file ( &sect;4.1 ).
+This process is known as   format checking  . The
+checks are as follows:
+
+The first four bytes must contain the right magic number.
+
+All predefined attributes ( &sect;4.7 ) must be
+of the proper length, except for `StackMapTable`,
+`RuntimeVisibleAnnotations`, `RuntimeInvisibleAnnotations`,
+`RuntimeVisibleParameterAnnotations`,
+`RuntimeInvisibleParameterAnnotations`,
+`RuntimeVisibleTypeAnnotations`,
+`RuntimeInvisibleTypeAnnotations`, and
+`AnnotationDefault`.
+
+The `class` file must not be truncated or have extra bytes at
+the end.
+
+The constant pool must satisfy the constraints documented
+throughout  &sect;4.4 .
+
+For example, each `CONSTANT_Class_info`
+structure in the constant pool must contain in
+its `name_index` item a valid constant pool
+index for a `CONSTANT_Utf8_info` structure.
+
+All field references and method references in the constant pool
+must have valid names, valid classes, and valid descriptors
+( &sect;4.3 ).
+
+Format checking does not ensure that the given field or method
+actually exists in the given class, nor that the descriptors
+given refer to real classes. Format checking ensures only that
+these items are well formed. More detailed checking is performed
+when the bytecodes themselves are verified, and during
+resolution.
+
+These checks for basic `class`
+file integrity are necessary for any interpretation of the `class`
+file contents. Format checking is distinct from bytecode verification,
+although historically they have been confused because both are a form
+of integrity check.
+
+##   4.9. Constraints on Java Virtual Machine Code
+
+The code for a method,
+instance initialization method ( &sect;2.9.1 ), or
+class or interface initialization method
+( &sect;2.9.2 ) is stored in the `code` array of the
+`Code` attribute of a `method_info` structure of a `class` file
+( &sect;4.7.3 ). This section describes the constraints
+associated with the contents of the `Code_attribute` structure.
+
+###   4.9.1. Static Constraints
+
+The   static constraints   on a `class` file are
+those defining the well-formedness of the file. These constraints have
+been given in the previous sections, except for static constraints on
+the code in the `class` file. The static constraints on the code in a
+`class` file specify how Java Virtual Machine instructions must be laid out in the
+`code` array and what the operands of individual instructions must
+be.
+
+The static constraints on the instructions in the `code` array are as
+follows:
+
+Only instances of the instructions documented in
+&sect;6.5  may appear in the `code`
+array. Instances of instructions using the reserved opcodes
+( &sect;6.2 ) or any opcodes not documented in
+this specification must not appear in the `code` array.
+
+If the `class` file version number is 51.0 or above, then
+instances of instructions using the   jsr  ,   jsr_w  , or   ret   opcodes
+must not appear in the `code` array.
+
+The opcode of the first instruction in the `code` array begins
+at index `0`.
+
+For each instruction in the `code` array except the last, the
+index of the opcode of the next instruction equals the index of
+the opcode of the current instruction plus the length of that
+instruction, including all its operands.
+
+The   wide   instruction is treated like any other instruction for
+these purposes; the opcode specifying the operation that a
+wide   instruction is to modify is treated as one of the
+operands of that   wide   instruction. That opcode must never be
+directly reachable by the computation.
+
+The last byte of the last instruction in the `code` array must
+be the byte at index `code_length - 1`.
+
+The static constraints on the operands of instructions in the `code`
+array are as follows:
+
+The target of each jump and branch instruction (  jsr  ,   jsr_w  ,
+goto  ,   goto_w  ,   ifeq  ,   ifne  ,   ifle  ,   iflt  ,   ifge  ,
+ifgt  ,   ifnull  ,   ifnonnull  ,   if_icmpeq  ,   if_icmpne  ,
+if_icmple  ,   if_icmplt  ,   if_icmpge  ,   if_icmpgt  ,   if_acmpeq  ,
+if_acmpne  ) must be the opcode of an instruction within this
+method.
+
+The target of a jump or branch instruction must never be the
+opcode used to specify the operation to be modified by a   wide
+instruction; a jump or branch target may be the   wide
+instruction itself.
+
+Each target, including the default, of each   tableswitch
+instruction must be the opcode of an instruction within this
+method.
+
+Each   tableswitch   instruction must have a number of entries in
+its jump table that is consistent with the value of
+its   low   and
+high   jump table operands, and
+its   low   value must be less than or equal to
+its   high   value.
+
+No target of a   tableswitch   instruction may be the opcode used
+to specify the operation to be modified by a   wide   instruction;
+a   tableswitch   target may be a   wide   instruction
+itself.
+
+Each target, including the default, of each   lookupswitch
+instruction must be the opcode of an instruction within this
+method.
+
+Each   lookupswitch   instruction must have a number
+of   match-offset   pairs that is consistent
+with the value of its   npairs   operand. The
+match-offset   pairs must be sorted in
+increasing numerical order by signed match value.
+
+No target of a   lookupswitch   instruction may be the opcode used
+to specify the operation to be modified by a   wide   instruction;
+a   lookupswitch   target may be a   wide   instruction itself.
+
+The operands of each   ldc   instruction and each   ldc_w
+instruction must represent a valid index into the
+`constant_pool` table. The constant pool entry referenced by
+that index must be loadable ( &sect;4.4 ), and
+not any of the following:
+
+An entry of kind `CONSTANT_Long` or `CONSTANT_Double`.
+
+An entry of kind `CONSTANT_Dynamic` that references a
+`CONSTANT_NameAndType_info` structure which indicates a
+descriptor of `J` (denoting `long`) or `D`
+(denoting `double`).
+
+The operands of each   ldc2_w   instruction must represent a valid
+index into the `constant_pool` table. The constant pool entry
+referenced by that index must be loadable, and in particular one
+of the following:
+
+An entry of kind `CONSTANT_Long` or `CONSTANT_Double`.
+
+An entry of kind `CONSTANT_Dynamic` that references a
+`CONSTANT_NameAndType_info` structure which indicates a
+descriptor of `J` (denoting `long`) or `D`
+(denoting `double`).
+
+The subsequent constant pool index must also be a valid index
+into the constant pool, and the constant pool entry at that
+index must not be used.
+
+The operands of each   getfield  ,   putfield  ,   getstatic  , and
+putstatic   instruction must represent a valid index into the
+`constant_pool` table. The constant pool entry referenced by
+that index must be of kind `CONSTANT_Fieldref`.
+
+The   indexbyte   operands of each
+invokevirtual   instruction must represent a valid index into
+the `constant_pool` table. The constant pool entry referenced by
+that index must be of kind `CONSTANT_Methodref`.
+
+The   indexbyte   operands of each
+invokespecial   and   invokestatic   instruction must represent a
+valid index into the `constant_pool` table. If the `class` file
+version number is less than 52.0, the constant pool entry
+referenced by that index must be of kind `CONSTANT_Methodref`;
+if the `class` file version number is 52.0 or above, the
+constant pool entry referenced by that index must be of kind
+`CONSTANT_Methodref` or `CONSTANT_InterfaceMethodref`.
+
+The   indexbyte   operands of each
+invokeinterface   instruction must represent a valid index into
+the `constant_pool` table. The constant pool entry referenced by
+that index must be of kind `CONSTANT_InterfaceMethodref`.
+
+The value of the   count   operand of each
+invokeinterface   instruction must reflect the number of local
+variables necessary to store the arguments to be passed to the
+interface method, as implied by the descriptor of the
+`CONSTANT_NameAndType_info` structure referenced by the
+`CONSTANT_InterfaceMethodref` constant pool entry.
+
+The fourth operand byte of each   invokeinterface   instruction
+must have the value zero.
+
+The   indexbyte   operands of each
+invokedynamic   instruction must represent a valid index into
+the `constant_pool` table. The constant pool entry referenced by
+that index must be of kind `CONSTANT_InvokeDynamic`.
+
+The third and fourth operand bytes of each   invokedynamic
+instruction must have the value zero.
+
+Only the   invokespecial   instruction is allowed to invoke an
+instance initialization method
+( &sect;2.9.1 ).
+
+No other method whose name begins with the character '`<`'
+('`\u003c`') may be called by the method
+invocation instructions. In particular, the class or interface
+initialization method specially named `<clinit>` is never called
+explicitly from Java Virtual Machine instructions, but only implicitly by the
+Java Virtual Machine itself.
+
+The operands of each   instanceof  ,   checkcast  ,   new  , and
+anewarray   instruction, and the   indexbyte
+operands of each   multianewarray   instruction, must represent a
+valid index into the `constant_pool` table. The constant pool
+entry referenced by that index must be of kind `CONSTANT_Class`.
+
+No   new   instruction may reference a constant pool entry of kind
+`CONSTANT_Class` that represents an array type
+( &sect;4.3.2 ). The   new   instruction cannot be
+used to create an array.
+
+No   anewarray   instruction may be used to create an array of
+more than 255 dimensions.
+
+A   multianewarray   instruction must be used only to create an
+array of a type that has at least as many dimensions as the
+value of its   dimensions   operand. That is,
+while a   multianewarray   instruction is not required to create
+all of the dimensions of the array type referenced by
+its   indexbyte   operands, it must not attempt
+to create more dimensions than are in the array type.
+
+The   dimensions   operand of each
+multianewarray   instruction must not be zero.
+
+The   atype   operand of each   newarray
+instruction must take one of the values `T_BOOLEAN` (4),
+`T_CHAR` (5), `T_FLOAT` (6), `T_DOUBLE` (7), `T_BYTE` (8),
+`T_SHORT` (9), `T_INT` (10), or `T_LONG` (11).
+
+The   index   operand of each   iload  ,   fload  ,
+aload  ,   istore  ,   fstore  ,   astore  ,   iinc  , and   ret
+instruction must be a non-negative integer no greater
+than `max_locals - 1`.
+
+The implicit index of each   iload_<n>  ,   fload_<n>  ,   aload_<n>  ,
+istore_<n>  ,   fstore_<n>  , and   astore_<n>   instruction must be no
+greater than `max_locals - 1`.
+
+The   index   operand of each   lload  ,   dload  ,
+lstore  , and   dstore   instruction must be no greater
+than `max_locals - 2`.
+
+The implicit index of each   lload_<n>  ,   dload_<n>  ,   lstore_<n>  , and
+dstore_<n>   instruction must be no greater
+than `max_locals - 2`.
+
+The   indexbyte   operands of each   wide
+instruction modifying an   iload  ,   fload  ,   aload  ,   istore  ,
+fstore  ,   astore  ,   iinc  , or   ret   instruction must represent
+a non-negative integer no greater than
+`max_locals - 1`.
+
+The   indexbyte   operands of each   wide
+instruction modifying an   lload  ,   dload  ,   lstore  , or   dstore
+instruction must represent a non-negative integer no greater
+than `max_locals - 2`.
+
+###   4.9.2. Structural Constraints
+
+The structural constraints on the `code` array specify constraints on
+relationships between Java Virtual Machine instructions. The structural constraints
+are as follows:
+
+Each instruction must only be executed with the appropriate type
+and number of arguments in the operand stack and local variable
+array, regardless of the execution path that leads to its
+invocation.
+
+An instruction operating on values of type `int` is also
+permitted to operate on values of type `boolean`, `byte`,
+`char`, and `short`.
+
+As noted in  &sect;2.3.4  and
+&sect;2.11.1 , the Java Virtual Machine internally converts
+values of types `boolean`, `byte`, `short`, and `char` to type
+`int`.)
+
+If an instruction can be executed along several different
+execution paths, the operand stack must have the same depth
+( &sect;2.6.2 ) prior to the execution of the
+instruction, regardless of the path taken.
+
+At no point during execution can the operand stack grow to a
+depth greater than that implied by
+the `max_stack` item.
+
+At no point during execution can more values be popped from the
+operand stack than it contains.
+
+At no point during execution can the order of the local variable
+pair holding a value of type `long` or `double` be reversed or
+the pair split up. At no point can the local variables of such a
+pair be operated on individually.
+
+No local variable (or local variable pair, in the case of a
+value of type `long` or `double`) can be accessed before it is
+assigned a value.
+
+Each   invokespecial   instruction must name one of the following:
+
+an instance initialization method ( &sect;2.9.1 )
+
+a method in the current class or interface
+
+a method in a superclass of the current class
+
+a method in a direct superinterface of the current class or interface
+
+a method in `Object`
+
+If an   invokespecial   instruction names an instance
+initialization method, then the target reference on the operand
+stack must be an uninitialized class instance.  An instance initialization method must
+never be invoked on an initialized class instance. In
+addition:
+
+If the target reference on the operand stack is   an
+uninitialized class instance for the current
+class  , then   invokespecial   must name an instance
+initialization method from the current class or its direct
+superclass.
+
+If an   invokespecial   instruction names an instance
+initialization method  and the target reference
+on the operand stack is   a class instance created
+by an earlier   new   instruction  , then
+invokespecial   must name an instance initialization method
+from the class of that class instance.
+
+If an   invokespecial   instruction names a method which is not an
+instance initialization method, then the target reference on the
+operand stack must be a class instance whose type is assignment
+compatible with the current class (JLS &sect;5.2).
+
+The general rule for   invokespecial   is that the class or
+interface named by   invokespecial   must be be "above" the caller
+class or interface, while the receiver object targeted by
+invokespecial   must be "at" or "below" the caller class or
+interface. The latter clause is especially important: a class or
+interface can only perform invokespecial on its own objects. See
+&sect;  invokespecial    for an explanation
+of how the latter clause is implemented in Prolog.
+
+Each instance initialization method, except for the instance
+initialization method derived from the constructor of class
+`Object`, must call either another instance initialization
+method of `this` or an instance initialization method of its
+direct superclass `super` before its instance members
+are   accessed  .
+
+However, instance fields of `this` that are declared in the
+current class may be   assigned   by   putfield
+before calling any instance initialization method.
+
+When any instance method is invoked or when any instance
+variable is accessed, the class instance that contains the
+instance method or instance variable must already be
+initialized.
+
+If there is an uninitialized class instance in a local variable
+in code protected by an exception handler, then (i) if the
+handler is inside an `<init>` method, the handler must throw an
+exception or loop forever; and (ii) if the handler is not inside
+an `<init>` method, the uninitialized class instance must remain
+uninitialized.
+
+There must never be an uninitialized class instance on the
+operand stack or in a local variable when a   jsr   or   jsr_w
+instruction is executed.
+
+The type of every class instance that is the target of a method
+invocation instruction (that is, the type of the target
+reference on the operand stack) must be assignment compatible
+with the class or interface type specified in the
+instruction.
+
+The types of the arguments to each method invocation must be
+method invocation compatible with the method descriptor (JLS
+&sect;5.3,  &sect;4.3.3 ).
+
+Each return instruction must match its method's return type:
+
+If the method returns a `boolean`, `byte`, `char`, `short`,
+or `int`, only the   ireturn   instruction may be used.
+
+If the method returns a `float`, `long`, or `double`, only
+an   freturn  ,   lreturn  , or   dreturn   instruction,
+respectively, may be used.
+
+If the method returns a `reference` type, only an   areturn
+instruction may be used, and the type of the returned value
+must be assignment compatible with the return descriptor of
+the method ( &sect;4.3.3 ).
+
+All instance initialization methods, class or interface
+initialization methods, and methods declared to return
+`void` must use only the   return   instruction.
+
+The type of every class instance accessed by a   getfield
+instruction or modified by a   putfield   instruction (that is,
+the type of the target reference on the operand stack) must be
+assignment compatible with the class type specified in the
+instruction.
+
+The type of every value stored by a   putfield   or   putstatic
+instruction must be compatible with the descriptor of the field
+( &sect;4.3.2 ) of the class instance or class
+being stored into:
+
+If the descriptor type is `boolean`, `byte`, `char`,
+`short`, or `int`, then the value must be an `int`.
+
+If the descriptor type is `float`, `long`, or `double`, then
+the value must be a `float`, `long`, or `double`,
+respectively.
+
+If the descriptor type is a `reference` type, then the value must
+be of a type that is assignment compatible with the
+descriptor type.
+
+The type of every value stored into an array by an   aastore
+instruction must be a `reference` type.
+
+The component type of the array being stored into by the
+aastore   instruction must also be a `reference` type.
+
+Each   athrow   instruction must throw only values that are
+instances of class `Throwable` or of subclasses of
+`Throwable`.
+
+Each class mentioned in a `catch_type` item of
+the `exception_table` array of the method's
+`Code_attribute` structure must be `Throwable` or a subclass of
+`Throwable`.
+
+If   getfield   or   putfield   is used to access a `protected`
+field declared in a superclass that is a member of a different
+run-time package than the current class, then the type of the
+class instance being accessed (that is, the type of the target
+reference on the operand stack) must be assignment compatible
+with the current class.
+
+If   invokevirtual   or   invokespecial   is used to access a
+`protected` method declared in a superclass that is a member of
+a different run-time package than the current class, then the
+type of the class instance being accessed (that is, the type of
+the target reference on the operand stack) must be assignment
+compatible with the current class.
+
+Execution never falls off the bottom of the `code` array.
+
+No return address (a value of type `returnAddress`) may be
+loaded from a local variable.
+
+The instruction following each   jsr   or   jsr_w   instruction may
+be returned to only by a single   ret   instruction.
+
+No   jsr   or   jsr_w   instruction that is returned to may be used
+to recursively call a subroutine if that subroutine is already
+present in the subroutine call chain. (Subroutines can be nested
+when using `try`-`finally` constructs from within a `finally`
+clause.)
+
+Each instance of type `returnAddress` can be returned to at most
+once.
+
+If a   ret   instruction returns to a point in the subroutine call
+chain above the   ret   instruction corresponding to a given
+instance of type `returnAddress`, then that instance can never
+be used as a return address.
+
+##   4.10. Verification of `class` Files
+
+Even though a compiler for the Java programming language must only produce `class`
+files that satisfy all the static and structural constraints in the
+previous sections, the Java Virtual Machine has no guarantee that any file it is
+asked to load was generated by that compiler or is properly
+formed. Applications such as web browsers do not download source code,
+which they then compile; these applications download already-compiled
+`class` files. The browser needs to determine whether the `class` file
+was produced by a trustworthy compiler or by an adversary attempting
+to exploit the Java Virtual Machine.
+
+An additional problem with compile-time checking is
+version skew. A user may have successfully compiled a class,
+say `PurchaseStockOptions`, to be a subclass
+of `TradingClass`. But the definition of
+`TradingClass` might have changed since the time the
+class was compiled in a way that is not compatible with pre-existing
+binaries. Methods might have been deleted or had their return types or
+modifiers changed. Fields might have changed types or changed from
+instance variables to class variables. The access modifiers of a
+method or variable may have changed from `public` to `private`. For a
+discussion of these issues, see Chapter 13, "Binary Compatibility," in
+The Java Language Specification, Java SE 21 Edition .
+
+Because of these potential problems, the Java Virtual Machine needs to verify for
+itself that the desired constraints are satisfied by the `class` files
+it attempts to incorporate. A Java Virtual Machine implementation verifies that each
+`class` file satisfies the necessary constraints at linking time
+( &sect;5.4 ).
+
+Link-time verification enhances the performance of the run-time
+interpreter. Expensive checks that would otherwise have to be
+performed to verify constraints at run time for each interpreted
+instruction can be eliminated. The Java Virtual Machine can assume that these checks
+have already been performed. For example, the Java Virtual Machine will already know
+the following:
+
+There are no operand stack overflows or underflows.
+
+All local variable uses and stores are valid.
+
+The arguments to all the Java Virtual Machine instructions are of valid types.
+
+There are two strategies that Java Virtual Machine implementations may use for
+verification:
+
+Verification by type checking must be used to verify `class`
+files whose version number is greater than or equal to
+50.0.
+
+Verification by type inference must be supported by all Java Virtual Machine
+implementations, except those conforming to the Java ME CLDC and
+Java Card profiles, in order to verify `class` files whose
+version number is less than 50.0.
+
+Verification on Java Virtual Machine implementations supporting the Java ME
+CLDC and Java Card profiles is governed by their respective
+specifications.
+
+In both strategies, verification is mainly concerned with enforcing
+the static and structural constraints from  &sect;4.9
+on the `code` array of the `Code` attribute
+( &sect;4.7.3 ). However, there are three additional
+checks outside the `Code` attribute which must be performed during
+verification:
+
+Ensuring that `final` classes are not subclassed.
+
+Ensuring that `final` methods are not overridden
+( &sect;5.4.5 ).
+
+Checking that every class (except `Object`) has a direct
+superclass.
+
+###   4.10.1. Verification by Type Checking
+
+A `class` file whose
+version number is 50.0 or above ( &sect;4.1 ) must be
+verified using the type checking rules given in this section.
+
+If, and only if, a `class`
+file's version number equals 50.0, then if the type checking fails, a
+Java Virtual Machine implementation may choose to attempt to perform verification by
+type inference ( &sect;4.10.2 ).
+
+This is a pragmatic adjustment, designed to ease the
+transition to the new verification discipline. Many tools that
+manipulate `class` files may alter the bytecodes of a method in a
+manner that requires adjustment of the method's stack map frames. If a
+tool does not make the necessary adjustments to the stack map frames,
+type checking may fail even though the bytecode is in principle valid
+(and would consequently verify under the old type inference
+scheme). To allow implementors time to adapt their tools, Java Virtual Machine
+implementations may fall back to the older verification discipline,
+but only for a limited time.
+
+In cases where type checking fails but type inference
+is invoked and succeeds, a certain performance penalty is
+expected. Such a penalty is unavoidable. It also should serve as a
+signal to tool vendors that their output needs to be adjusted, and
+provides vendors with additional incentive to make these
+adjustments.
+
+In summary, failover to verification by type
+inference supports both the gradual addition of stack map frames to
+the Java SE Platform (if they are not present in a version 50.0 `class`
+file, failover is allowed) and the gradual removal of the   jsr   and
+jsr_w   instructions from the Java SE Platform (if they are present in a
+version 50.0 `class` file, failover is allowed).
+
+If a Java Virtual Machine implementation
+ever attempts to perform verification by type inference on version
+50.0 class files, it must do so in all cases where verification by
+type checking fails.
+
+This means that a Java Virtual Machine implementation cannot choose
+to resort to type inference in once case and not in another. It must
+either reject `class` files that do not verify via type checking, or
+else consistently failover to the type inferencing verifier whenever
+type checking fails.
+
+The type checker enforces
+type rules that are specified by means of Prolog clauses. English
+language text is used to describe the type rules in an informal way,
+while the Prolog clauses provide a formal specification.
+
+The type checker requires a
+list of stack map frames for each method with a `Code` attribute
+( &sect;4.7.3 ). A list of stack map frames is given by
+the `StackMapTable` attribute ( &sect;4.7.4 ) of a
+`Code` attribute. The intent is that a stack map frame must appear at
+the beginning of each basic block in a method. The stack map frame
+specifies the verification type of each operand stack entry and of
+each local variable at the start of each basic block. The type checker
+reads the stack map frames for each method with a `Code` attribute and
+uses these maps to generate a proof of the type safety of the
+instructions in the `Code` attribute.
+
+A class is type safe if all its methods are type
+safe, and it does not subclass a `final` class.
+
+```
+
+classIsTypeSafe(Class) :-
+classClassName(Class, Name),
+classDefiningLoader(Class, L),
+superclassChain(Name, L, Chain),
+Chain \= [],
+classSuperClassName(Class, SuperclassName),
+loadedClass(SuperclassName, L, Superclass),
+classIsNotFinal(Superclass),
+classMethods(Class, Methods),
+checklist(methodIsTypeSafe(Class), Methods).
+
+```
+
+```
+
+classIsTypeSafe(Class) :-
+classClassName(Class, 'java/lang/Object'),
+classDefiningLoader(Class, L),
+isBootstrapLoader(L),
+classMethods(Class, Methods),
+checklist(methodIsTypeSafe(Class), Methods).
+
+```
+
+The Prolog
+predicate `classIsTypeSafe` assumes
+that `Class` is a Prolog term representing a binary
+class that has been successfully parsed and loaded. This specification
+does not mandate the precise structure of this term, but does require
+that certain predicates be defined upon it.
+
+For example, we assume a predicate
+`classMethods(Class, Methods)` that, given a term
+representing a class as described above as its first argument, binds
+its second argument to a list comprising all the methods of the class,
+represented in a convenient form described later.
+
+Iff the
+predicate `classIsTypeSafe` is not true, the type
+checker must throw the exception `VerifyError` to indicate that the `class`
+file is malformed. Otherwise, the `class` file has type checked
+successfully and bytecode verification has completed
+successfully.
+
+The rest of this section
+explains the process of type checking in detail:
+
+First, we give Prolog
+predicates for core Java Virtual Machine artifacts like classes and methods
+( &sect;4.10.1.1 ).
+
+Second, we specify
+the type system known to the type checker
+( &sect;4.10.1.2 ).
+
+Third, we specify the
+Prolog representation of instructions and stack map frames
+( &sect;4.10.1.3 ,
+&sect;4.10.1.4 ).
+
+Fourth, we specify
+how a method is type checked, for methods without code
+( &sect;4.10.1.5 ) and methods with code
+( &sect;4.10.1.6 ).
+
+Fifth, we discuss
+type checking issues common to all load and store instructions
+( &sect;4.10.1.7 ), and also issues of access to
+`protected` members ( &sect;4.10.1.8 ).
+
+Finally, we specify
+the rules to type check each instruction
+( &sect;4.10.1.9 ).
+
+####   4.10.1.1. Accessors for Java Virtual Machine Artifacts
+
+We stipulate the
+existence of 28 Prolog predicates ("accessors") that have certain
+expected behavior but whose formal definitions are not given in this
+specification.
+
+classClassName(Class, ClassName)
+
+Extracts the name, `ClassName`, of the
+class `Class`.
+
+classIsInterface(Class)
+
+True iff the class, `Class`, is an
+interface.
+
+classIsNotFinal(Class)
+
+True iff the class, `Class`, is not a `final`
+class.
+
+classSuperClassName(Class, SuperClassName)
+
+Extracts the name, `SuperClassName`, of the
+superclass of class `Class`.
+
+classInterfaces(Class, Interfaces)
+
+Extracts a list, `Interfaces`, of the direct
+superinterfaces of the class `Class`.
+
+classMethods(Class, Methods)
+
+Extracts a list, `Methods`, of the methods
+declared in the class `Class`.
+
+classDeclaresMember(Class, MemberName, MemberDescriptor)
+
+Asserts that a class, `Class`, declares
+a field or method with name `MemberName` and descriptor
+`MemberDescriptor`. This assertion does not consider
+members declared in the superclasses or superinterfaces of
+`Class`.
+
+classDefiningLoader(Class, Loader)
+
+Extracts the defining class loader, `Loader`,
+of the class `Class`.
+
+isBootstrapLoader(Loader)
+
+True iff the class loader `Loader` is the
+bootstrap class loader.
+
+loadedClass(Name, InitiatingLoader, ClassDefinition)
+
+True iff there exists a class named `Name`
+whose representation (in accordance with this specification)
+when loaded by the class
+loader `InitiatingLoader`
+is `ClassDefinition`.
+
+methodName(Method, Name)
+
+Extracts the name, `Name`, of the
+method `Method`.
+
+methodAccessFlags(Method, AccessFlags)
+
+Extracts the access flags, `AccessFlags`, of
+the method `Method`.
+
+methodDescriptor(Method, Descriptor)
+
+Extracts the descriptor, `Descriptor`, of the
+method `Method`.
+
+methodAttributes(Method, Attributes)
+
+Extracts a list, `Attributes`, of the
+attributes of the method `Method`.
+
+Each attribute is represented as a functor application of the form
+`attribute(AttributeName, AttributeContents)`, where
+`AttributeName` is the name of the attribute. The format of
+the attribute's contents is unspecified.
+
+isInit(Method)
+
+True iff `Method` (regardless of class) is `<init>`.
+
+isNotInit(Method)
+
+True iff `Method` (regardless of class) is not `<init>`.
+
+isNotFinal(Method, Class)
+
+True iff `Method` in
+class `Class` is not `final`.
+
+isStatic(Method, Class)
+
+True iff `Method` in
+class `Class` is `static`.
+
+isNotStatic(Method, Class)
+
+True iff `Method` in
+class `Class` is not `static`.
+
+isPrivate(Method, Class)
+
+True iff `Method` in
+class `Class` is `private`.
+
+isNotPrivate(Method, Class)
+
+True iff `Method` in
+class `Class` is not `private`.
+
+isProtected(MemberClass, MemberName, MemberDescriptor)
+
+True iff there is a member named `MemberName`
+with descriptor `MemberDescriptor` in the
+class `MemberClass` and it is
+`protected`.
+
+isNotProtected(MemberClass, MemberName, MemberDescriptor)
+
+True iff there is a member named `MemberName`
+with descriptor `MemberDescriptor` in the
+class `MemberClass` and it is not
+`protected`.
+
+parseFieldDescriptor(Descriptor, Type)
+
+Converts a field descriptor, `Descriptor`,
+into the corresponding verification type `Type`
+( &sect;4.10.1.2 ).
+
+parseMethodDescriptor(Descriptor, ArgTypeList, ReturnType)
+
+Converts a method descriptor, `Descriptor`,
+into a list of verification
+types, `ArgTypeList`, corresponding to the
+method argument types, and a verification
+type, `ReturnType`, corresponding to the
+return type.
+
+parseCodeAttribute(Class, Method, FrameSize, MaxStack, ParsedCode, Handlers, StackMap)
+
+Extracts the instruction
+stream, `ParsedCode`, of the method
+`Method` in `Class`, as well
+as the maximum operand stack
+size, `MaxStack`, the maximal number of local
+variables, `FrameSize`, the exception
+handlers, `Handlers`, and the stack
+map `StackMap`.
+
+The representation of the instruction stream and stack map
+attribute must be as specified in
+&sect;4.10.1.3  and
+&sect;4.10.1.4 .
+
+samePackageName(Class1, Class2)
+
+True iff the package names of `Class1`
+and `Class2` are the same.
+
+differentPackageName(Class1, Class2)
+
+True iff the package names of `Class1`
+and `Class2` are different.
+
+When type checking a
+method's body, it is convenient to access information about the
+method. For this purpose, we define
+an   environment  , a six-tuple consisting of:
+
+a class
+
+a method
+
+the declared return type of the method
+
+the instructions in a method
+
+the maximal size of the operand stack
+
+a list of exception handlers
+
+We specify accessors to
+extract information from the environment.
+
+```
+
+allInstructions(Environment, Instructions) :-
+Environment = environment(_Class, _Method, _ReturnType,
+Instructions, _, _).
+
+exceptionHandlers(Environment, Handlers) :-
+Environment = environment(_Class, _Method, _ReturnType,
+_Instructions, _, Handlers).
+
+maxOperandStackLength(Environment, MaxStack) :-
+Environment = environment(_Class, _Method, _ReturnType,
+_Instructions, MaxStack, _Handlers).
+
+thisClass(Environment, class(ClassName, L)) :-
+Environment = environment(Class, _Method, _ReturnType,
+_Instructions, _, _),
+classDefiningLoader(Class, L),
+classClassName(Class, ClassName).
+
+thisMethodReturnType(Environment, ReturnType) :-
+Environment = environment(_Class, _Method, ReturnType,
+_Instructions, _, _).
+
+```
+
+We specify additional predicates to extract
+higher-level information from the environment.
+
+```
+
+offsetStackFrame(Environment, Offset, StackFrame) :-
+allInstructions(Environment, Instructions),
+member(stackMap(Offset, StackFrame), Instructions).
+
+currentClassLoader(Environment, Loader) :-
+thisClass(Environment, class(_, Loader)).
+
+```
+
+Finally, we specify a
+general predicate used throughout the type rules:
+
+```
+
+notMember(_, []).
+notMember(X, [A | More]) :- X \= A, notMember(X, More).
+
+```
+
+The principle guiding the determination as to which
+accessors are stipulated and which are fully specified is that we do
+not want to over-specify the representation of the `class`
+file. Providing specific accessors to the `Class`
+or `Method` term would force us to completely specify
+the format for a Prolog term representing the `class` file.
+
+####   4.10.1.2. Verification Type System
+
+The type checker enforces a type system based upon a hierarchy
+of   verification types  , illustrated below.
+
+```
+
+Verification type hierarchy:
+
+top
+____________/\____________
+/                          \
+/                            \
+oneWord                       twoWord
+/   |   \                     /       \
+/    |    \                   /         \
+int  float  reference        long        double
+/     \
+/       \_____________
+/                      \
+/                        \
+uninitialized                    +------------------+
+/         \                     |  Java reference  |
+/           \                    |  type hierarchy  |
+uninitializedThis  uninitialized(Offset)    +------------------+
+|
+|
+null
+
+```
+
+Most verification types have a direct correspondence with the
+primitive and reference types represented by field descriptors in
+Table 4.3-A :
+
+The primitive types `double`, `float`, `int`, and `long` (field
+descriptors `D`, `F`, `I`,
+`J`) each correspond to the verification type of the
+same name.
+
+The primitive types `byte`, `char`, `short`, and `boolean`
+(field descriptors `B`, `C`, `S`,
+`Z`) all correspond to the verification type
+`int`.
+
+Class and interface types (field descriptors
+beginning `L`) correspond to verification types
+that use the functor `class`. The verification
+type
+`class(  N  ,   L  )`
+represents the class whose binary name
+is `  N  ` as loaded by the
+loader `  L  `. Note
+that `  L  ` is an initiating
+loader ( &sect;5.3 ) of the class represented
+by `class(  N  ,   L  )`
+and may, or may not, be the class's defining loader.
+
+For example, the class type `Object` would be
+represented as `class('java/lang/Object', BL)`,
+where `BL` is the bootstrap loader.
+
+Array types (field descriptors beginning `[`) correspond to
+verification types that use the
+functor `arrayOf`. Note that the primitive
+types `byte`, `char`, `short`, and `boolean` do not correspond
+to verification types, but an array type whose element type is
+`byte`, `char`, `short`, or `boolean`   does
+correspond to a verification type; such verification types
+support the   baload  ,   bastore  ,   caload  ,   castore  ,   saload  ,
+sastore  , and   newarray   instructions.
+
+The verification type
+`arrayOf(  T  )`
+represents the array type whose component type is the
+verification type
+`  T  `.
+
+The verification type `arrayOf(byte)`
+represents the array type whose element type is
+`byte`.
+
+The verification type `arrayOf(char)`
+represents the array type whose element type is
+`char`.
+
+The verification type `arrayOf(short)`
+represents the array type whose element type is
+`short`.
+
+The verification type `arrayOf(boolean)`
+represents the array type whose element type is
+`boolean`.
+
+For example, the array
+types `int[]` and `Object[]`
+would be represented by the verification
+types `arrayOf(int)` and
+`arrayOf(class('java/lang/Object', BL))`
+respectively. The array types `byte``[]` and
+`boolean``[]``[]` would be represented by the
+verification types `arrayOf(byte)` and
+`arrayOf(arrayOf(boolean))`
+respectively.
+
+The remaining verification types are described as follows:
+
+The verification types `top`, `oneWord`,
+`twoWord`, and `reference` are
+represented in Prolog as atoms whose name denotes the
+verification type in question.
+
+The verification type `uninitialized(Offset)` is represented by
+applying the functor `uninitialized` to an
+argument representing the numerical value of
+the `Offset`.
+
+The subtyping rules for verification types are as
+follows.
+
+Subtyping is reflexive.
+
+```
+
+isAssignable(X, X).
+
+```
+
+The verification types which are not
+reference types in the Java programming language have subtype rules of the
+form:
+
+```
+
+isAssignable(v, X) :- isAssignable(the_direct_supertype_of_v, X).
+
+```
+
+That is, `v` is a subtype
+of `X` if the direct supertype
+of `v` is a subtype of `X`. The
+rules are:
+
+```
+
+isAssignable(oneWord, top).
+isAssignable(twoWord, top).
+
+isAssignable(int, X)    :- isAssignable(oneWord, X).
+isAssignable(float, X)  :- isAssignable(oneWord, X).
+isAssignable(long, X)   :- isAssignable(twoWord, X).
+isAssignable(double, X) :- isAssignable(twoWord, X).
+
+isAssignable(reference, X)   :- isAssignable(oneWord, X).
+isAssignable(class(_, _), X) :- isAssignable(reference, X).
+isAssignable(arrayOf(_), X)  :- isAssignable(reference, X).
+
+isAssignable(uninitialized, X)     :- isAssignable(reference, X).
+isAssignable(uninitializedThis, X) :- isAssignable(uninitialized, X).
+isAssignable(uninitialized(_), X)  :- isAssignable(uninitialized, X).
+
+isAssignable(null, class(_, _)).
+isAssignable(null, arrayOf(_)).
+isAssignable(null, X) :- isAssignable(class('java/lang/Object', BL), X),
+isBootstrapLoader(BL).
+
+```
+
+These subtype rules are not necessarily the most
+obvious formulation of subtyping. There is a clear split between
+subtyping rules for reference types in the Java programming language, and rules for
+the remaining verification types. The split allows us to state general
+subtyping relations between Java programming language reference types and other
+verification types. These relations hold independently of a Java
+reference type's position in the type hierarchy, and help to prevent
+excessive class loading by a Java Virtual Machine implementation. For example, we do
+not want to start climbing the Java superclass hierarchy in response
+to a query of the form `class(foo, L) <:
+twoWord`.
+
+We also have a rule that says subtyping is
+reflexive, so together these rules cover most verification types that
+are not reference types in the Java programming language.
+
+Subtype rules for the reference types in the
+Java programming language are specified recursively  with
+`isJavaAssignable`.
+
+```
+
+isAssignable(class(X, Lx), class(Y, Ly)) :-
+isJavaAssignable(class(X, Lx), class(Y, Ly)).
+
+isAssignable(arrayOf(X), class(Y, L)) :-
+isJavaAssignable(arrayOf(X), class(Y, L)).
+
+isAssignable(arrayOf(X), arrayOf(Y)) :-
+isJavaAssignable(arrayOf(X), arrayOf(Y)).
+
+```
+
+For assignments, interfaces are treated like
+`Object`.
+
+```
+
+isJavaAssignable(class(_, _), class(To, L)) :-
+loadedClass(To, L, ToClass),
+classIsInterface(ToClass).
+
+isJavaAssignable(From, To) :-
+isJavaSubclassOf(From, To).
+
+```
+
+Array types are subtypes of `Object`. The intent is
+also that array types are subtypes of `Cloneable` and
+`java.io.Serializable`.
+
+```
+
+isJavaAssignable(arrayOf(_), class('java/lang/Object', BL)) :-
+isBootstrapLoader(BL).
+
+isJavaAssignable(arrayOf(_), X) :-
+isArrayInterface(X).
+
+isArrayInterface(class('java/lang/Cloneable', BL)) :-
+isBootstrapLoader(BL).
+
+isArrayInterface(class('java/io/Serializable', BL)) :-
+isBootstrapLoader(BL).
+
+```
+
+Subtyping between arrays of primitive type is the
+identity relation.
+
+```
+
+isJavaAssignable(arrayOf(X), arrayOf(Y)) :-
+atom(X),
+atom(Y),
+X = Y.
+
+```
+
+Subtyping between arrays of reference type is
+covariant.
+
+```
+
+isJavaAssignable(arrayOf(X), arrayOf(Y)) :-
+compound(X), compound(Y), isJavaAssignable(X, Y).
+
+```
+
+Subclassing is reflexive.
+
+```
+
+isJavaSubclassOf(class(SubclassName, L), class(SubclassName, L)).
+
+```
+
+```
+
+isJavaSubclassOf(class(SubclassName, LSub), class(SuperclassName, LSuper)) :-
+superclassChain(SubclassName, LSub, Chain),
+member(class(SuperclassName, L), Chain),
+loadedClass(SuperclassName, L, Sup),
+loadedClass(SuperclassName, LSuper, Sup).
+
+superclassChain(ClassName, L, [class(SuperclassName, Ls) | Rest]) :-
+loadedClass(ClassName, L, Class),
+classSuperClassName(Class, SuperclassName),
+classDefiningLoader(Class, Ls),
+superclassChain(SuperclassName, Ls, Rest).
+
+superclassChain('java/lang/Object', L, []) :-
+loadedClass('java/lang/Object', L, Class),
+classDefiningLoader(Class, BL),
+isBootstrapLoader(BL).
+
+```
+
+####   4.10.1.3. Instruction Representation
+
+Individual bytecode instructions are represented in Prolog as terms
+whose functor is the name of the instruction and whose arguments are
+its parsed operands.
+
+For example, an   aload   instruction is represented
+as the term `aload(N)`, which includes the
+index `N` that is the operand of the
+instruction.
+
+The instructions as a whole are represented as a list of terms of the
+form:
+
+```
+
+instruction(Offset, AnInstruction)
+
+```
+
+For example, `instruction(21,
+aload(1))`.
+
+The order of instructions in this list must be the same as in the
+`class` file.
+
+Some instructions have operands that refer to entries in the
+`constant_pool` table representing fields, methods, and
+dynamically-computed call sites. Such entries are represented as
+functor applications of the form:
+
+`field(FieldClassName, FieldName, FieldDescriptor)`
+for a constant pool entry that is a `CONSTANT_Fieldref_info`
+structure ( &sect;4.4.2 ).
+
+`FieldClassName` is the name of the class
+referenced by the `class_index` item in the
+structure. `FieldName` and
+`FieldDescriptor` correspond to the name and
+field descriptor referenced by the
+`name_and_type_index` item of the structure.
+
+`method(MethodClassName, MethodName, MethodDescriptor)`
+for a constant pool entry that is a `CONSTANT_Methodref_info`
+structure ( &sect;4.4.2 ).
+
+`MethodClassName` is the name of the
+class referenced by the `class_index` item of
+the structure. `MethodName` and
+`MethodDescriptor` correspond to the name and
+method descriptor referenced by the
+`name_and_type_index` item of the structure.
+
+`imethod(MethodIntfName, MethodName, MethodDescriptor)`
+for a constant pool entry that is a `CONSTANT_InterfaceMethodref_info`
+structure ( &sect;4.4.2 ).
+
+`MethodIntfName` is the name of the interface
+referenced by the `class_index` item of the
+structure. `MethodName` and
+`MethodDescriptor` correspond to the name
+and method descriptor referenced by the
+`name_and_type_index` item of the structure.
+
+`dmethod(CallSiteName, MethodDescriptor)`
+for a constant pool entry that is a `CONSTANT_InvokeDynamic_info`
+structure ( &sect;4.4.10 ).
+
+`CallSiteName` and
+`MethodDescriptor` correspond to the name and
+method descriptor referenced by the
+`name_and_type_index` item of the structure.
+(The `bootstrap_method_attr_index` item is
+irrelevant to verification.)
+
+For clarity, we assume that field and method descriptors
+( &sect;4.3.2 ,  &sect;4.3.3 ) are
+mapped into more readable names: the leading `L` and trailing
+`;` are dropped from class names, and the
+BaseType   characters used for primitive types are
+mapped to the names of those types.
+
+For example, a   getfield   instruction whose operand
+refers to a constant pool entry representing a
+field `foo` of type `F` in
+class `Bar` would be represented
+as `getfield(field('Bar', 'foo', 'F'))`.
+
+The   ldc   instruction, among others, has an operand that refers to
+a   loadable   entry in the `constant_pool`
+table. There are nine kinds of loadable entry (see
+Table 4.4-C ), represented by functor applications
+of the following forms:
+
+`int(Value)` for a constant pool entry that is
+a `CONSTANT_Integer_info` structure ( &sect;4.4.4 ).
+
+`Value` is the `int` constant represented by
+the `bytes` item of the structure.
+
+For example, an   ldc   instruction for loading
+the `int` constant 91 would be represented as
+`ldc(int(91))`.
+
+`float(Value)` for a constant pool entry that is
+a `CONSTANT_Float_info` structure ( &sect;4.4.4 ).
+
+`Value` is the `float` constant represented by
+the `bytes` item of the structure.
+
+`long(Value)` for a constant pool entry that is
+a `CONSTANT_Long_info` structure ( &sect;4.4.5 ).
+
+`Value` is the `long` constant represented by
+the `high_bytes`
+and `low_bytes` items of the structure.
+
+`double(Value)` for a constant pool entry that is
+a `CONSTANT_Double_info` structure ( &sect;4.4.5 ).
+
+`Value` is the `double` constant represented by
+the `high_bytes`
+and `low_bytes` items of the structure.
+
+`class(ClassName)` for a constant pool entry
+that is a `CONSTANT_Class_info` structure
+( &sect;4.4.1 ).
+
+`ClassName` is the name of the class or
+interface referenced by the `name_index` item
+in the structure.
+
+`string(Value)` for a constant pool entry that
+is a `CONSTANT_String_info` structure ( &sect;4.4.3 ).
+
+`Value` is the string referenced by the
+`string_index` item of the structure.
+
+`methodHandle(Kind, Reference)` for a constant
+pool entry that is a `CONSTANT_MethodHandle_info` structure
+( &sect;4.4.8 ).
+
+`Kind` is the value of the
+`reference_kind` item of the structure.
+`Reference` is the value of the
+`reference_index` item of the structure.
+
+`methodType(MethodDescriptor)` for a constant
+pool entry that is a `CONSTANT_MethodType_info` structure
+( &sect;4.4.9 ).
+
+`MethodDescriptor` is the method descriptor
+referenced by the `descriptor_index` item of
+the structure.
+
+`dconstant(ConstantName, FieldDescriptor)` for a
+constant pool entry that is a `CONSTANT_Dynamic_info` structure
+( &sect;4.4.10 ).
+
+`ConstantName`
+and `FieldDescriptor` correspond to the name
+and field descriptor referenced by
+the `name_and_type_index` item of the
+structure. (The `bootstrap_method_attr_index`
+item is irrelevant to verification.)
+
+####   4.10.1.4. Stack Map Frames and Type Transitions
+
+Stack map frames are represented in Prolog as a list of terms of the
+form:
+
+```
+
+stackMap(Offset, TypeState)
+
+```
+
+where:
+
+`Offset` is an integer indicating
+the bytecode offset at which the stack map frame applies
+( &sect;4.7.4 ).
+
+The order of bytecode offsets in this list
+must be the same as in the `class` file.
+
+`TypeState` is the expected incoming type state
+for the instruction at `Offset`.
+
+A   type state   is a mapping from locations in the
+operand stack and local variables of a method to verification
+types. It has the form:
+
+```
+
+frame(Locals, OperandStack, Flags)
+
+```
+
+where:
+
+`Locals` is a list of verification types, such
+that the   i  'th element of the list (with 0-based indexing)
+represents the type of local variable   i  .
+
+Types of size 2 (`long` and `double`) are represented by two
+local variables ( &sect;2.6.1 ), with the first
+local variable being the type itself and the second local
+variable being `top` ( &sect;4.10.1.7 ).
+
+`OperandStack` is a list of verification types,
+such that the first element of the list represents the type of
+the top of the operand stack, and the types of stack entries
+below the top follow in the list in the appropriate
+order.
+
+Types of size 2 (`long` and `double`) are represented by two
+stack entries, with the first entry being `top` and the second
+entry being the type itself.
+
+For example, a stack with a `double` value, an
+`int` value, and a `long` value is represented in a type state
+as a stack with five entries: `top` and `double` entries for the
+`double` value, an `int` entry for the `int` value, and `top`
+and `long` entries for the `long`
+value. Accordingly, `OperandStack` is the
+list `[top, double, int, top, long]`.
+
+`Flags` is a list which may either be empty or
+have the single element `flagThisUninit`.
+
+If any local variable in `Locals` has the type
+`uninitializedThis`, then `Flags` has the
+single element `flagThisUninit`,
+otherwise `Flags` is an empty list.
+
+`flagThisUninit` is used in constructors to mark
+type states where initialization of `this` has not yet been
+completed. In such type states, it is illegal to return from the
+method.
+
+Subtyping of verification types is extended pointwise to type
+states. The local variable array of a method has a fixed length by
+construction (see `methodInitialStackFrame` in
+&sect;4.10.1.6 ), but the operand stack grows and
+shrinks, so we require an explicit check on the length of the operand
+stacks whose assignability is desired for subtyping.
+
+```
+
+frameIsAssignable(frame(Locals1, StackMap1, Flags1),
+frame(Locals2, StackMap2, Flags2)) :-
+length(StackMap1, StackMapLength),
+length(StackMap2, StackMapLength),
+maplist(isAssignable, Locals1, Locals2),
+maplist(isAssignable, StackMap1, StackMap2),
+subset(Flags1, Flags2).
+
+```
+
+Most of the type rules for individual instructions
+( &sect;4.10.1.9 ) depend on the notion of a
+valid   type transition  . A type transition
+is   valid   if one can pop a list of expected types
+off the incoming type state's operand stack and replace them with an
+expected result type, resulting in a new type state where the length
+of the operand stack does not exceed its declared maximum size.
+
+```
+
+validTypeTransition(Environment, ExpectedTypesOnStack, ResultType,
+frame(Locals, InputOperandStack, Flags),
+frame(Locals, NextOperandStack, Flags)) :-
+popMatchingList(InputOperandStack, ExpectedTypesOnStack,
+InterimOperandStack),
+pushOperandStack(InterimOperandStack, ResultType, NextOperandStack),
+operandStackHasLegalLength(Environment, NextOperandStack).
+
+```
+
+Pop a list of types off the stack.
+
+```
+
+popMatchingList(OperandStack, [], OperandStack).
+popMatchingList(OperandStack, [P | Rest], NewOperandStack) :-
+popMatchingType(OperandStack, P, TempOperandStack, _ActualType),
+popMatchingList(TempOperandStack, Rest, NewOperandStack).
+
+```
+
+Pop an individual type off the stack. The exact behavior depends on
+the stack contents. If the logical top of the stack is some subtype of
+the specified type, `Type`, then pop it. If a type occupies two stack
+entries, then the logical top of the stack is really the type just
+below the top, and the top of the stack is the unusable type
+`top`.
+
+```
+
+popMatchingType([ActualType | OperandStack],
+Type, OperandStack, ActualType) :-
+sizeOf(Type, 1),
+isAssignable(ActualType, Type).
+
+popMatchingType([top, ActualType | OperandStack],
+Type, OperandStack, ActualType) :-
+sizeOf(Type, 2),
+isAssignable(ActualType, Type).
+
+sizeOf(X, 2) :- isAssignable(X, twoWord).
+sizeOf(X, 1) :- isAssignable(X, oneWord).
+sizeOf(top, 1).
+
+```
+
+Push a logical type onto the stack. The exact behavior varies with the
+size of the type. If the pushed type is of size 1, we just push it
+onto the stack. If the pushed type is of size 2, we push it, and then
+push `top`.
+
+```
+
+pushOperandStack(OperandStack, 'void', OperandStack).
+pushOperandStack(OperandStack, Type, [Type | OperandStack]) :-
+sizeOf(Type, 1).
+pushOperandStack(OperandStack, Type, [top, Type | OperandStack]) :-
+sizeOf(Type, 2).
+
+```
+
+The length of the operand stack must not exceed the declared maximum
+size.
+
+```
+
+operandStackHasLegalLength(Environment, OperandStack) :-
+length(OperandStack, Length),
+maxOperandStackLength(Environment, MaxStack),
+Length =< MaxStack.
+
+```
+
+The   dup   instructions pop expected types off the incoming type
+state's operand stack and replace them with predefined result types,
+resulting in a new type state. However, these instructions are not
+defined in terms of type transitions because there is no need to match
+types by means of the subtyping relation. Instead, the   dup
+instructions manipulate the operand stack entirely in terms of
+the   category   of types on the stack
+( &sect;2.11.1 ).
+
+Category 1 types occupy a single stack entry. Popping a logical type
+of category 1, `Type`, off the stack is possible if the top of the
+stack is `Type` and `Type` is not `top` (otherwise it could denote the
+upper half of a category 2 type). The result is the incoming stack,
+with the top entry popped off.
+
+```
+
+popCategory1([Type | Rest], Type, Rest) :-
+Type \= top,
+sizeOf(Type, 1).
+
+```
+
+Category 2 types occupy two stack entries. Popping a logical type of
+category 2, `Type`, off the stack is possible if the top of the stack
+is type `top`, and the entry directly below it is `Type`. The result
+is the incoming stack, with the top two entries popped off.
+
+```
+
+popCategory2([top, Type | Rest], Type, Rest) :-
+sizeOf(Type, 2).
+
+```
+
+The   dup   instructions push a list of types onto the stack in
+essentially the same way as when a type is pushed for a valid type
+transition.
+
+```
+
+canSafelyPush(Environment, InputOperandStack, Type, OutputOperandStack) :-
+pushOperandStack(InputOperandStack, Type, OutputOperandStack),
+operandStackHasLegalLength(Environment, OutputOperandStack).
+
+canSafelyPushList(Environment, InputOperandStack, Types,
+OutputOperandStack) :-
+canPushList(InputOperandStack, Types, OutputOperandStack),
+operandStackHasLegalLength(Environment, OutputOperandStack).
+
+canPushList(InputOperandStack, [], InputOperandStack).
+canPushList(InputOperandStack, [Type | Rest], OutputOperandStack) :-
+pushOperandStack(InputOperandStack, Type, InterimOperandStack),
+canPushList(InterimOperandStack, Rest, OutputOperandStack).
+
+```
+
+Many of the type rules for individual instructions use the following
+clause to easily pop a list of types off the stack.
+
+```
+
+canPop(frame(Locals, OperandStack, Flags), Types,
+frame(Locals, PoppedOperandStack, Flags)) :-
+popMatchingList(OperandStack, Types, PoppedOperandStack).
+
+```
+
+Finally, certain array instructions
+( &sect;  aaload   ,
+&sect;  arraylength   ,
+&sect;  baload   ,
+&sect;  bastore   ) peek at types on the operand
+stack in order to check they are array types. The following clause
+accesses the   i  'th element of the operand stack from a type
+state.
+
+```
+
+nth1OperandStackIs(  i  , frame(_Locals, OperandStack, _Flags), Element) :-
+nth1(  i  , OperandStack, Element).
+
+```
+
+####   4.10.1.5. Type Checking Abstract and Native Methods
+
+`abstract` methods and
+`native` methods are considered to be type safe if they do not
+override a `final` method.
+
+```
+
+methodIsTypeSafe(Class, Method) :-
+doesNotOverrideFinalMethod(Class, Method),
+methodAccessFlags(Method, AccessFlags),
+member(abstract, AccessFlags).
+
+methodIsTypeSafe(Class, Method) :-
+doesNotOverrideFinalMethod(Class, Method),
+methodAccessFlags(Method, AccessFlags),
+member(native, AccessFlags).
+
+```
+
+`private` methods and `static`
+methods are orthogonal to dynamic method dispatch, so they never
+override other methods ( &sect;5.4.5 ).
+
+```
+
+doesNotOverrideFinalMethod(class('java/lang/Object', L), Method) :-
+isBootstrapLoader(L).
+
+doesNotOverrideFinalMethod(Class, Method) :-
+isPrivate(Method, Class).
+
+doesNotOverrideFinalMethod(Class, Method) :-
+isStatic(Method, Class).
+
+doesNotOverrideFinalMethod(Class, Method) :-
+isNotPrivate(Method, Class),
+isNotStatic(Method, Class),
+doesNotOverrideFinalMethodOfSuperclass(Class, Method).
+
+doesNotOverrideFinalMethodOfSuperclass(Class, Method) :-
+classSuperClassName(Class, SuperclassName),
+classDefiningLoader(Class, L),
+loadedClass(SuperclassName, L, Superclass),
+classMethods(Superclass, SuperMethodList),
+finalMethodNotOverridden(Method, Superclass, SuperMethodList).
+
+```
+
+`final` methods that are `private`
+and/or `static` are unusual, as `private` methods and `static` methods
+cannot be overridden per se. Therefore, if a `final` `private` method
+or a `final` `static` method is found, it was logically not overridden
+by another method.
+
+```
+
+finalMethodNotOverridden(Method, Superclass, SuperMethodList) :-
+methodName(Method, Name),
+methodDescriptor(Method, Descriptor),
+member(method(_, Name, Descriptor), SuperMethodList),
+isFinal(Method, Superclass),
+isPrivate(Method, Superclass).
+
+finalMethodNotOverridden(Method, Superclass, SuperMethodList) :-
+methodName(Method, Name),
+methodDescriptor(Method, Descriptor),
+member(method(_, Name, Descriptor), SuperMethodList),
+isFinal(Method, Superclass),
+isStatic(Method, Superclass).
+
+```
+
+If a non-`final` `private` method
+or a non-`final` `static` method is found, skip over it because it is
+orthogonal to overriding.
+
+```
+
+finalMethodNotOverridden(Method, Superclass, SuperMethodList) :-
+methodName(Method, Name),
+methodDescriptor(Method, Descriptor),
+member(method(_, Name, Descriptor), SuperMethodList),
+isNotFinal(Method, Superclass),
+isPrivate(Method, Superclass),
+doesNotOverrideFinalMethodOfSuperclass(Superclass, Method).
+
+finalMethodNotOverridden(Method, Superclass, SuperMethodList) :-
+methodName(Method, Name),
+methodDescriptor(Method, Descriptor),
+member(method(_, Name, Descriptor), SuperMethodList),
+isNotFinal(Method, Superclass),
+isStatic(Method, Superclass),
+doesNotOverrideFinalMethodOfSuperclass(Superclass, Method).
+
+```
+
+If a non-`final`, non-`private`,
+non-`static` method is found, then indeed a `final` method was not
+overridden. Otherwise, recurse upwards.
+
+```
+
+finalMethodNotOverridden(Method, Superclass, SuperMethodList) :-
+methodName(Method, Name),
+methodDescriptor(Method, Descriptor),
+member(method(_, Name, Descriptor), SuperMethodList),
+isNotFinal(Method, Superclass),
+isNotStatic(Method, Superclass),
+isNotPrivate(Method, Superclass).
+
+finalMethodNotOverridden(Method, Superclass, SuperMethodList) :-
+methodName(Method, Name),
+methodDescriptor(Method, Descriptor),
+notMember(method(_, Name, Descriptor), SuperMethodList),
+doesNotOverrideFinalMethodOfSuperclass(Superclass, Method).
+
+```
+
+####   4.10.1.6. Type Checking Methods with Code
+
+Non-`abstract`, non-`native` methods are type
+correct if they have code and the code is type correct.
+
+```
+
+methodIsTypeSafe(Class, Method) :-
+doesNotOverrideFinalMethod(Class, Method),
+methodAccessFlags(Method, AccessFlags),
+methodAttributes(Method, Attributes),
+notMember(native, AccessFlags),
+notMember(abstract, AccessFlags),
+member(attribute('Code', _), Attributes),
+methodWithCodeIsTypeSafe(Class, Method).
+
+```
+
+A method with code is type safe if it is possible to
+merge the code and the stack map frames into a single stream such that
+each stack map frame precedes the instruction it corresponds to, and
+the merged stream is type correct. The method's exception
+handlers, if any, must also be legal.
+
+```
+
+methodWithCodeIsTypeSafe(Class, Method) :-
+parseCodeAttribute(Class, Method, FrameSize, MaxStack,
+ParsedCode, Handlers, StackMap),
+mergeStackMapAndCode(StackMap, ParsedCode, MergedCode),
+methodInitialStackFrame(Class, Method, FrameSize, StackFrame, ReturnType),
+Environment = environment(Class, Method, ReturnType, MergedCode,
+MaxStack, Handlers),
+handlersAreLegal(Environment),
+mergedCodeIsTypeSafe(Environment, MergedCode, StackFrame).
+
+```
+
+Let us consider exception handlers first.
+
+An exception handler is represented by a functor
+application of the form:
+
+```
+
+handler(Start, End, Target, ClassName)
+
+```
+
+whose arguments are, respectively, the start and end
+of the range of instructions covered by the handler, the first
+instruction of the handler code, and the name of the exception class
+that this handler is designed to handle.
+
+An exception handler is   legal
+if its start (`Start`) is less than its end
+(`End`), there exists an instruction whose offset is
+equal to `Start`, there exists an instruction whose
+offset equals `End`, and the handler's exception
+class is assignable to the class `Throwable`. The exception class of a
+handler is `Throwable` if the handler's class entry is 0, otherwise it
+is the class named in the handler.
+
+An additional requirement exists for a handler inside an `<init>` method
+if one of the instructions covered by the handler is   invokespecial
+of an `<init>` method. In this case, the fact that a handler is running
+means the object under construction is likely broken, so it is
+important that the handler does not swallow the exception and allow
+the enclosing `<init>` method to return normally to the
+caller. Accordingly, the handler is required to either complete
+abruptly by throwing an exception to the caller of the enclosing
+`<init>` method, or to loop forever.
+
+```
+
+handlersAreLegal(Environment) :-
+exceptionHandlers(Environment, Handlers),
+checklist(handlerIsLegal(Environment), Handlers).
+
+handlerIsLegal(Environment, Handler) :-
+Handler = handler(Start, End, Target, _),
+Start < End,
+allInstructions(Environment, Instructions),
+member(instruction(Start, _), Instructions),
+offsetStackFrame(Environment, Target, _),
+instructionsIncludeEnd(Instructions, End),
+currentClassLoader(Environment, CurrentLoader),
+handlerExceptionClass(Handler, ExceptionClass, CurrentLoader),
+isBootstrapLoader(BL),
+isAssignable(ExceptionClass, class('java/lang/Throwable', BL)),
+initHandlerIsLegal(Environment, Handler).
+
+instructionsIncludeEnd(Instructions, End) :-
+member(instruction(End, _), Instructions).
+instructionsIncludeEnd(Instructions, End) :-
+member(endOfCode(End), Instructions).
+
+handlerExceptionClass(handler(_, _, _, 0),
+class('java/lang/Throwable', BL), _) :-
+isBootstrapLoader(BL).
+
+handlerExceptionClass(handler(_, _, _, Name),
+class(Name, L), L) :-
+Name \= 0.
+
+```
+
+```
+
+initHandlerIsLegal(Environment, Handler) :-
+notInitHandler(Environment, Handler).
+
+notInitHandler(Environment, Handler) :-
+Environment = environment(_Class, Method, _, Instructions, _, _),
+isNotInit(Method).
+
+notInitHandler(Environment, Handler) :-
+Environment = environment(_Class, Method, _, Instructions, _, _),
+isInit(Method),
+member(instruction(_, invokespecial(CP)), Instructions),
+CP = method(MethodClassName, MethodName, Descriptor),
+MethodName \= '`<init>`'.
+
+initHandlerIsLegal(Environment, Handler) :-
+isInitHandler(Environment, Handler),
+sublist(isApplicableInstruction(Target), Instructions,
+HandlerInstructions),
+noAttemptToReturnNormally(HandlerInstructions).
+
+isInitHandler(Environment, Handler) :-
+Environment = environment(_Class, Method, _, Instructions, _, _),
+isInit(Method).
+member(instruction(_, invokespecial(CP)), Instructions),
+CP = method(MethodClassName, '`<init>`', Descriptor).
+
+isApplicableInstruction(HandlerStart, instruction(Offset, _)) :-
+Offset >= HandlerStart.
+
+noAttemptToReturnNormally(Instructions) :-
+notMember(instruction(_, return), Instructions).
+
+noAttemptToReturnNormally(Instructions) :-
+member(instruction(_, athrow), Instructions).
+
+```
+
+Let us now turn to the stream of instructions and
+stack map frames.
+
+Merging instructions and stack map frames into a
+single stream involves four cases:
+
+Merging an empty `StackMap` and
+a list of instructions yields the original list of
+instructions.
+
+```
+
+mergeStackMapAndCode([], CodeList, CodeList).
+
+```
+
+Given a list of stack map frames beginning with
+the type state for the instruction at `Offset`,
+and a list of instructions beginning
+at `Offset`, the merged list is the head of the
+stack map frame list, followed by the head of the instruction
+list, followed by the merge of the tails of the two
+lists.
+
+```
+
+mergeStackMapAndCode([stackMap(Offset, Map) | RestMap],
+[instruction(Offset, Parse) | RestCode],
+[stackMap(Offset, Map),
+instruction(Offset, Parse) | RestMerge]) :-
+mergeStackMapAndCode(RestMap, RestCode, RestMerge).
+
+```
+
+Otherwise, given a list of stack map frames
+beginning with the type state for the instruction
+at `OffsetM`, and a list of instructions
+beginning at `OffsetP`, then,
+if `OffsetP < OffsetM`, the merged list
+consists of the head of the instruction list, followed by the
+merge of the stack map frame list and the tail of the
+instruction list.
+
+```
+
+mergeStackMapAndCode([stackMap(OffsetM, Map) | RestMap],
+[instruction(OffsetP, Parse) | RestCode],
+[instruction(OffsetP, Parse) | RestMerge]) :-
+OffsetP < OffsetM,
+mergeStackMapAndCode([stackMap(OffsetM, Map) | RestMap],
+RestCode, RestMerge).
+
+```
+
+Otherwise, the merge of the two lists is
+undefined. Since the instruction list has monotonically
+increasing offsets, the merge of the two lists is not defined
+unless every stack map frame offset has a corresponding
+instruction offset and the stack map frames are in monotonically
+increasing order.
+
+To determine if the merged stream for a method is
+type correct, we first infer the method's initial type state.
+
+The initial type state of a method consists of an
+empty operand stack and local variable types derived from the type of
+`this` and the arguments, as well as the appropriate flag, depending
+on whether this is an `<init>` method.
+
+```
+
+methodInitialStackFrame(Class, Method, FrameSize, frame(Locals, [], Flags),
+ReturnType):-
+methodDescriptor(Method, Descriptor),
+parseMethodDescriptor(Descriptor, RawArgs, ReturnType),
+expandTypeList(RawArgs, Args),
+methodInitialThisType(Class, Method, ThisList),
+flags(ThisList, Flags),
+append(ThisList, Args, ThisArgs),
+expandToLength(ThisArgs, FrameSize, top, Locals).
+
+```
+
+Given a list of types, the following clause produces
+a list where every type of size 2 has been substituted by two entries:
+one for itself, and one `top` entry. The result then corresponds to
+the representation of the list as 32-bit words in the Java Virtual Machine.
+
+```
+
+expandTypeList([], []).
+expandTypeList([Item | List], [Item | Result]) :-
+sizeOf(Item, 1),
+expandTypeList(List, Result).
+expandTypeList([Item | List], [Item, top | Result]) :-
+sizeOf(Item, 2),
+expandTypeList(List, Result).
+
+```
+
+```
+
+flags([uninitializedThis], [flagThisUninit]).
+flags(X, []) :- X \= [uninitializedThis].
+
+expandToLength(List, Size, _Filler, List) :-
+length(List, Size).
+expandToLength(List, Size, Filler, Result) :-
+length(List, ListLength),
+ListLength < Size,
+Delta is Size - ListLength,
+length(Extra, Delta),
+checklist(=(Filler), Extra),
+append(List, Extra, Result).
+
+```
+
+For the initial type state of an instance method, we
+compute the type of `this` and put it in a list. The type of `this` in
+the `<init>` method of `Object` is `Object`; in other `<init>` methods,
+the type of `this` is `uninitializedThis`; otherwise, the type of
+`this` in an instance method is `class(N, L)`
+where `N` is the name of the class containing the
+method and `L` is its defining class loader.
+
+For the initial type state of a static method,
+`this` is irrelevant, so the list is empty.
+
+```
+
+methodInitialThisType(_Class, Method, []) :-
+methodAccessFlags(Method, AccessFlags),
+member(static, AccessFlags),
+methodName(Method, MethodName),
+MethodName \= '`<init>`'.
+
+methodInitialThisType(Class, Method, [This]) :-
+methodAccessFlags(Method, AccessFlags),
+notMember(static, AccessFlags),
+instanceMethodInitialThisType(Class, Method, This).
+
+instanceMethodInitialThisType(Class, Method, class('java/lang/Object', L)) :-
+methodName(Method, '`<init>`'),
+classDefiningLoader(Class, L),
+isBootstrapLoader(L),
+classClassName(Class, 'java/lang/Object').
+
+instanceMethodInitialThisType(Class, Method, uninitializedThis) :-
+methodName(Method, '`<init>`'),
+classClassName(Class, ClassName),
+classDefiningLoader(Class, CurrentLoader),
+superclassChain(ClassName, CurrentLoader, Chain),
+Chain \= [].
+
+instanceMethodInitialThisType(Class, Method, class(ClassName, L)) :-
+methodName(Method, MethodName),
+MethodName \= '`<init>`',
+classDefiningLoader(Class, L),
+classClassName(Class, ClassName).
+
+```
+
+We now compute whether the merged stream for a
+method is type correct, using the method's initial type state:
+
+If we have a stack map frame and an incoming
+type state, the type state must be assignable to the one in the
+stack map frame. We may then proceed to type check the rest of
+the stream with the type state given in the stack map
+frame.
+
+```
+
+mergedCodeIsTypeSafe(Environment, [stackMap(Offset, MapFrame) | MoreCode],
+frame(Locals, OperandStack, Flags)) :-
+frameIsAssignable(frame(Locals, OperandStack, Flags), MapFrame),
+mergedCodeIsTypeSafe(Environment, MoreCode, MapFrame).
+
+```
+
+A merged code stream is type safe relative to an
+incoming type state `T` if it begins with an
+instruction `I` that is type safe relative
+to `T`,
+and `I`   satisfies   its
+exception handlers (see below), and the tail of the stream is
+type safe given the type state following that execution
+of `I`.
+
+`NextStackFrame` indicates what
+falls through to the following instruction. For an unconditional
+branch instruction, it will have the special value
+`afterGoto`. `ExceptionStackFrame` indicates
+what is passed to exception handlers.
+
+```
+
+mergedCodeIsTypeSafe(Environment, [instruction(Offset, Parse) | MoreCode],
+frame(Locals, OperandStack, Flags)) :-
+instructionIsTypeSafe(Parse, Environment, Offset,
+frame(Locals, OperandStack, Flags),
+NextStackFrame, ExceptionStackFrame),
+instructionSatisfiesHandlers(Environment, Offset, ExceptionStackFrame),
+mergedCodeIsTypeSafe(Environment, MoreCode, NextStackFrame).
+
+```
+
+After an unconditional branch (indicated by an
+incoming type state of `afterGoto`), if we have a stack map
+frame giving the type state for the following instructions, we
+can proceed and type check them using the type state provided by
+the stack map frame.
+
+```
+
+mergedCodeIsTypeSafe(Environment, [stackMap(Offset, MapFrame) | MoreCode],
+afterGoto) :-
+mergedCodeIsTypeSafe(Environment, MoreCode, MapFrame).
+
+```
+
+It is illegal to have code after an
+unconditional branch without a stack map frame being provided
+for it.
+
+```
+
+mergedCodeIsTypeSafe(_Environment, [instruction(_, _) | _MoreCode],
+afterGoto) :-
+write_ln('No stack frame after unconditional branch'),
+fail.
+
+```
+
+If we have an unconditional branch at the end of
+the code, stop.
+
+```
+
+mergedCodeIsTypeSafe(_Environment, [endOfCode(Offset)],
+afterGoto).
+
+```
+
+Branching to a target is type safe if the target has
+an associated stack frame, `Frame`, and the current
+stack frame, `StackFrame`, is assignable
+to `Frame`.
+
+```
+
+targetIsTypeSafe(Environment, StackFrame, Target) :-
+offsetStackFrame(Environment, Target, Frame),
+frameIsAssignable(StackFrame, Frame).
+
+```
+
+An instruction   satisfies its exception
+handlers   if it satisfies every exception handler that is
+applicable to the instruction.
+
+```
+
+instructionSatisfiesHandlers(Environment, Offset, ExceptionStackFrame) :-
+exceptionHandlers(Environment, Handlers),
+sublist(isApplicableHandler(Offset), Handlers, ApplicableHandlers),
+checklist(instructionSatisfiesHandler(Environment, ExceptionStackFrame),
+ApplicableHandlers).
+
+```
+
+An exception handler
+is   applicable   to an instruction if the offset of
+the instruction is greater or equal to the start of the handler's
+range and less than the end of the handler's range.
+
+```
+
+isApplicableHandler(Offset, handler(Start, End, _Target, _ClassName)) :-
+Offset >= Start,
+Offset < End.
+
+```
+
+An instruction   satisfies   an
+exception handler if the instructions's outgoing type state
+is `ExcStackFrame`, and the handler's target (the
+initial instruction of the handler code) is type safe assuming an
+incoming type state `T`. The type
+state `T` is derived
+from `ExcStackFrame` by replacing the operand stack
+with a stack whose sole element is the handler's exception
+class.
+
+```
+
+instructionSatisfiesHandler(Environment, ExcStackFrame, Handler) :-
+Handler = handler(_, _, Target, _),
+currentClassLoader(Environment, CurrentLoader),
+handlerExceptionClass(Handler, ExceptionClass, CurrentLoader),
+/* The stack consists of just the exception. */
+ExcStackFrame = frame(Locals, _, Flags),
+TrueExcStackFrame = frame(Locals, [ ExceptionClass ], Flags),
+operandStackHasLegalLength(Environment, TrueExcStackFrame),
+targetIsTypeSafe(Environment, TrueExcStackFrame, Target).
+
+```
+
+####   4.10.1.7. Type Checking Load and Store Instructions
+
+All load instructions are
+variations on a common pattern, varying the type of the value that the
+instruction loads.
+
+Loading a value of type
+`Type` from local variable `Index` is type safe, if
+the type of that local variable
+is `ActualType`, `ActualType` is
+assignable to `Type`, and pushing `ActualType` onto
+the incoming operand stack is a valid type transition
+( &sect;4.10.1.4 ) that yields a new type
+state `NextStackFrame`. After execution of the load
+instruction, the type state will
+be `NextStackFrame`.
+
+```
+
+loadIsTypeSafe(Environment, Index, Type, StackFrame, NextStackFrame) :-
+StackFrame = frame(Locals, _OperandStack, _Flags),
+nth0(Index, Locals, ActualType),
+isAssignable(ActualType, Type),
+validTypeTransition(Environment, [], ActualType, StackFrame,
+NextStackFrame).
+
+```
+
+All store instructions
+are variations on a common pattern, varying the type of the value that
+the instruction stores.
+
+In general, a store
+instruction is type safe if the local variable it references is of a
+type that is a supertype of `Type`, and the top of the operand stack
+is of a subtype of `Type`, where `Type` is the type the instruction is
+designed to store.
+
+More precisely, the store
+is type safe if one can pop a type `ActualType` that
+"matches" `Type` (that is, is a subtype of `Type`) off the operand
+stack ( &sect;4.10.1.4 ), and then legally assign that
+type the local
+variable `L Index `.
+
+```
+
+storeIsTypeSafe(_Environment, Index, Type,
+frame(Locals, OperandStack, Flags),
+frame(NextLocals, NextOperandStack, Flags)) :-
+popMatchingType(OperandStack, Type, NextOperandStack, ActualType),
+modifyLocalVariable(Index, ActualType, Locals, NextLocals).
+
+```
+
+Given local variables `Locals`,
+modifying `Index` to have type `Type` results in the
+local variable list `NewLocals`. The modifications
+are somewhat involved, because some values (and their corresponding
+types) occupy two local variables. Hence,
+modifying `L N ` may require
+modifying `L N+1 ` (because the
+type will occupy both the `N`
+and `N+1` slots)
+or `L N-1 ` (because
+local `N` used to be the upper half of the two word
+value/type starting at local `N-1`, and so
+local `N-1` must be invalidated), or both. This is
+described further below. We start
+at `L 0 ` and count up.
+
+```
+
+modifyLocalVariable(Index, Type, Locals, NewLocals) :-
+modifyLocalVariable(0, Index, Type, Locals, NewLocals).
+
+```
+
+Given `LocalsRest`, the suffix of
+the local variable list starting at index `I`,
+modifying local variable `Index` to have type `Type`
+results in the local variable list
+suffix `NextLocalsRest`.
+
+If `I < Index-1`, just copy the
+input to the output and recurse forward. If `I =
+Index-1`, the type of local `I` may
+change. This can occur if `L I `
+has a type of size 2. Once we
+set `L I+1 ` to the new type
+(and the corresponding value), the type/value
+of `L I ` will be invalidated,
+as its upper half will be trashed. Then we recurse forward.
+
+```
+
+modifyLocalVariable(I, Index, Type,
+[Locals1 | LocalsRest],
+[Locals1 | NextLocalsRest] ) :-
+I < Index - 1,
+I1 is I + 1,
+modifyLocalVariable(I1, Index, Type, LocalsRest, NextLocalsRest).
+
+modifyLocalVariable(I, Index, Type,
+[Locals1 | LocalsRest],
+[NextLocals1 | NextLocalsRest] ) :-
+I =:= Index - 1,
+modifyPreIndexVariable(Locals1, NextLocals1),
+modifyLocalVariable(Index, Index, Type, LocalsRest, NextLocalsRest).
+
+```
+
+When we find the variable, and it only occupies one
+word, we change it to `Type` and we're done. When we find the
+variable, and it occupies two words, we change its type to `Type` and
+the next word to `top`.
+
+```
+
+modifyLocalVariable(Index, Index, Type,
+[_ | LocalsRest], [Type | LocalsRest]) :-
+sizeOf(Type, 1).
+
+modifyLocalVariable(Index, Index, Type,
+[_, _ | LocalsRest], [Type, top | LocalsRest]) :-
+sizeOf(Type, 2).
+
+```
+
+We refer to a local whose index immediately precedes
+a local whose type will be modified as a   pre-index
+variable  . The future type of a pre-index variable of type
+`InputType` is `Result`. If the
+type, `Type`, of the pre-index local is of size 1, it
+doesn't change. If the type of the pre-index
+local, `Type`, is 2, we need to mark the lower half
+of its two word value as unusable, by setting its type
+to `top`.
+
+```
+
+modifyPreIndexVariable(Type, Type) :- sizeOf(Type, 1).
+modifyPreIndexVariable(Type, top) :- sizeOf(Type, 2).
+
+```
+
+####   4.10.1.8. Type Checking for `protected` Members
+
+All instructions that
+access members must contend with the rules concerning `protected`
+members. This section describes the `protected` check that corresponds
+to JLS &sect;6.6.2.1.
+
+The `protected` check applies only to `protected`
+members of superclasses of the current class.
+`protected` members in other classes will be caught by the access
+checking done at resolution ( &sect;5.4.4 ). There are
+four cases:
+
+If the name of a class is not the name of any superclass, it
+cannot be a superclass, and so it can safely be ignored.
+
+```
+
+passesProtectedCheck(Environment, MemberClassName, MemberName,
+MemberDescriptor, StackFrame) :-
+thisClass(Environment, class(CurrentClassName, CurrentLoader)),
+superclassChain(CurrentClassName, CurrentLoader, Chain),
+notMember(class(MemberClassName, _), Chain).
+
+```
+
+If the `MemberClassName` is the same as the
+name of a superclass, the class being resolved may indeed be a
+superclass. In this case, if no superclass
+named `MemberClassName` in a different run-time
+package has a `protected` member
+named `MemberName` with
+descriptor `MemberDescriptor`, the `protected`
+check does not apply.
+
+This is because the actual class being resolved
+will either be one of these superclasses, in which case we know
+that it is either in the same run-time package, and the access
+is legal; or the member in question is not `protected` and the
+check does not apply; or it will be a subclass, in which case
+the check would succeed anyway; or it will be some other class
+in the same run-time package, in which case the access is legal
+and the check need not take place; or the verifier need not flag
+this as a problem, since it will be caught anyway because
+resolution will per force fail.
+
+```
+
+passesProtectedCheck(Environment, MemberClassName, MemberName,
+MemberDescriptor, StackFrame) :-
+thisClass(Environment, class(CurrentClassName, CurrentLoader)),
+superclassChain(CurrentClassName, CurrentLoader, Chain),
+member(class(MemberClassName, _), Chain),
+classesInOtherPkgWithProtectedMember(
+class(CurrentClassName, CurrentLoader),
+MemberName, MemberDescriptor, MemberClassName, Chain, []).
+
+```
+
+If there does exist a `protected` superclass member in a
+different run-time package, then
+load `MemberClassName`; if the member in
+question is not `protected`, the check does not apply. (Using a
+superclass member that is not `protected` is trivially
+correct.)
+
+```
+
+passesProtectedCheck(Environment, MemberClassName, MemberName,
+MemberDescriptor,
+frame(_Locals, [Target | Rest], _Flags)) :-
+thisClass(Environment, class(CurrentClassName, CurrentLoader)),
+superclassChain(CurrentClassName, CurrentLoader, Chain),
+member(class(MemberClassName, _), Chain),
+classesInOtherPkgWithProtectedMember(
+class(CurrentClassName, CurrentLoader),
+MemberName, MemberDescriptor, MemberClassName, Chain, List),
+List \= [],
+loadedClass(MemberClassName, CurrentLoader, ReferencedClass),
+isNotProtected(ReferencedClass, MemberName, MemberDescriptor).
+
+```
+
+Otherwise, use of a member of an object of
+type `Target` requires
+that `Target` be assignable to the type of the
+current class.
+
+```
+
+passesProtectedCheck(Environment, MemberClassName, MemberName,
+MemberDescriptor,
+frame(_Locals, [Target | Rest], _Flags)) :-
+thisClass(Environment, class(CurrentClassName, CurrentLoader)),
+superclassChain(CurrentClassName, CurrentLoader, Chain),
+member(class(MemberClassName, _), Chain),
+classesInOtherPkgWithProtectedMember(
+class(CurrentClassName, CurrentLoader),
+MemberName, MemberDescriptor, MemberClassName, Chain, List),
+List \= [],
+loadedClass(MemberClassName, CurrentLoader, ReferencedClass),
+isProtected(ReferencedClass, MemberName, MemberDescriptor),
+isAssignable(Target, class(CurrentClassName, CurrentLoader)).
+
+```
+
+The predicate `classesInOtherPkgWithProtectedMember(Class,
+MemberName, MemberDescriptor, MemberClassName, Chain, List)`
+is true if `List` is the set of classes
+in `Chain` with name
+`MemberClassName` that are in a different run-time
+package than `Class` which have a `protected` member
+named `MemberName` with descriptor
+`MemberDescriptor`.
+
+```
+
+classesInOtherPkgWithProtectedMember(_, _, _, _, [], []).
+
+classesInOtherPkgWithProtectedMember(Class, MemberName,
+MemberDescriptor, MemberClassName,
+[class(MemberClassName, L) | Tail],
+[class(MemberClassName, L) | T]) :-
+differentRuntimePackage(Class, class(MemberClassName, L)),
+loadedClass(MemberClassName, L, Super),
+isProtected(Super, MemberName, MemberDescriptor),
+classesInOtherPkgWithProtectedMember(
+Class, MemberName, MemberDescriptor, MemberClassName, Tail, T).
+
+classesInOtherPkgWithProtectedMember(Class, MemberName,
+MemberDescriptor, MemberClassName,
+[class(MemberClassName, L) | Tail],
+T) :-
+differentRuntimePackage(Class, class(MemberClassName, L)),
+loadedClass(MemberClassName, L, Super),
+isNotProtected(Super, MemberName, MemberDescriptor),
+classesInOtherPkgWithProtectedMember(
+Class, MemberName, MemberDescriptor, MemberClassName, Tail, T).
+
+classesInOtherPkgWithProtectedMember(Class, MemberName,
+MemberDescriptor, MemberClassName,
+[class(MemberClassName, L) | Tail],
+T] :-
+sameRuntimePackage(Class, class(MemberClassName, L)),
+classesInOtherPkgWithProtectedMember(
+Class, MemberName, MemberDescriptor, MemberClassName, Tail, T).
+
+sameRuntimePackage(Class1, Class2) :-
+classDefiningLoader(Class1, L),
+classDefiningLoader(Class2, L),
+samePackageName(Class1, Class2).
+
+differentRuntimePackage(Class1, Class2) :-
+classDefiningLoader(Class1, L1),
+classDefiningLoader(Class2, L2),
+L1 \= L2.
+
+differentRuntimePackage(Class1, Class2) :-
+differentPackageName(Class1, Class2).
+
+```
+
+####   4.10.1.9. Type Checking Instructions
+
+In general, the type rule
+for an instruction is given relative to an
+environment `Environment` that defines the class and
+method in which the instruction occurs
+( &sect;4.10.1.1 ), and the
+offset `Offset` within the method at which the
+instruction occurs. The rule states that if the incoming type
+state `StackFrame` fulfills certain requirements,
+then:
+
+The instruction is type safe.
+
+It is provable that the type state after the instruction
+completes normally has a particular form given
+by `NextStackFrame`, and that the type state
+after the instruction completes abruptly is given
+by `ExceptionStackFrame`.
+
+The type state after an instruction completes abruptly is the
+same as the incoming type state, except that the operand stack
+is empty.
+
+```
+
+exceptionStackFrame(StackFrame, ExceptionStackFrame) :-
+StackFrame = frame(Locals, _OperandStack, Flags),
+ExceptionStackFrame = frame(Locals, [], Flags).
+
+```
+
+Many instructions have
+type rules that are completely isomorphic to the rules for other
+instructions. If an instruction `b1` is isomorphic to
+another instruction `b2`, then the type rule
+for `b1` is the same as the type rule
+for `b2`.
+
+```
+
+instructionIsTypeSafe(Instruction, Environment, Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+instructionHasEquivalentTypeRule(Instruction, IsomorphicInstruction),
+instructionIsTypeSafe(IsomorphicInstruction, Environment, Offset,
+StackFrame, NextStackFrame,
+ExceptionStackFrame).
+
+```
+
+The English language
+description of each rule is intended to be readable, intuitive, and
+concise. As such, the description avoids repeating all the contextual
+assumptions given above. In particular:
+
+The description does not explicitly mention the environment.
+
+When the description speaks of the operand stack or local
+variables in the following, it is referring to the operand stack
+and local variable components of a type state: either the
+incoming type state or the outgoing one.
+
+The type state after the instruction completes abruptly is
+almost always identical to the incoming type state. The
+description only discusses the type state after the instruction
+completes abruptly when that is not the case.
+
+The description speaks of popping and pushing types onto the
+operand stack, and does not explicitly discuss issues of stack
+underflow or overflow. The description assumes these operations
+can be completed successfully, but the Prolog clauses for
+operand stack manipulation ensure that the necessary checks are
+made.
+
+The description discusses only the manipulation of logical
+types. In practice, some types take more than one word. The
+description abstracts from these representation details, but the
+Prolog clauses that manipulate data do not.
+
+Any ambiguities can be
+resolved by referring to the formal Prolog clauses.
+
+aaload
+
+An   aaload   instruction is type safe iff one can validly replace types
+matching `int` and an array type with component
+type `ComponentType`
+where `ComponentType` is a subtype of `Object`,
+with `ComponentType` yielding the outgoing type
+state.
+
+```
+
+instructionIsTypeSafe(aaload, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+nth1OperandStackIs(2, StackFrame, ArrayType),
+arrayComponentType(ArrayType, ComponentType),
+isBootstrapLoader(BL),
+validTypeTransition(Environment,
+[int, arrayOf(class('java/lang/Object', BL))],
+ComponentType, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The component type of an array of `X`
+is `X`. We define the component type of `null` to be
+`null`.
+
+```
+
+arrayComponentType(arrayOf(X), X).
+arrayComponentType(null, null).
+
+```
+
+aastore
+
+An   aastore   instruction is type safe iff one can validly pop types
+matching `Object`, `int`, and an array of `Object` off the incoming
+operand stack yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(aastore, _Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+isBootstrapLoader(BL),
+canPop(StackFrame,
+[class('java/lang/Object', BL),
+int,
+arrayOf(class('java/lang/Object', BL))],
+NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+aconst_null
+
+An   aconst_null   instruction is type safe if one can validly push the
+type `null` onto the incoming operand stack yielding the outgoing type
+state.
+
+```
+
+instructionIsTypeSafe(aconst_null, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [], null, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+aload  ,   aload_<n>
+
+An   aload   instruction with operand `Index` is type
+safe and yields an outgoing type
+state `NextStackFrame`, if a load instruction with
+operand `Index` and type `reference` is type safe and
+yields an outgoing type state `NextStackFrame`.
+
+```
+
+instructionIsTypeSafe(aload(Index), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+loadIsTypeSafe(Environment, Index, reference, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The instructions   aload_<n>  , for 0  &#8804;    n    &#8804;  3, are type safe
+iff the equivalent   aload   instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(aload_0, aload(0)).
+instructionHasEquivalentTypeRule(aload_1, aload(1)).
+instructionHasEquivalentTypeRule(aload_2, aload(2)).
+instructionHasEquivalentTypeRule(aload_3, aload(3)).
+
+```
+
+anewarray
+
+An   anewarray   instruction with operand `CP` is type safe iff `CP`
+refers to a constant pool entry denoting a class, interface, or array
+type, and one can legally replace a type matching `int` on the
+incoming operand stack with an array with component type `CP` yielding
+the outgoing type state.
+
+```
+
+instructionIsTypeSafe(anewarray(CP), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+(CP = class(_, _) ; CP = arrayOf(_)),
+validTypeTransition(Environment, [int], arrayOf(CP),
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+areturn
+
+An   areturn   instruction is type safe iff the enclosing method has a
+declared return type, `ReturnType`, that is a `reference`
+type, and one can validly pop a type
+matching `ReturnType` off the incoming operand
+stack.
+
+```
+
+instructionIsTypeSafe(areturn, Environment, _Offset, StackFrame,
+afterGoto, ExceptionStackFrame) :-
+thisMethodReturnType(Environment, ReturnType),
+isAssignable(ReturnType, reference),
+canPop(StackFrame, [ReturnType], _PoppedStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+arraylength
+
+An   arraylength   instruction is type safe iff one can validly replace
+an array type on the incoming operand stack with the type `int`
+yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(arraylength, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+nth1OperandStackIs(1, StackFrame, ArrayType),
+arrayComponentType(ArrayType, _),
+validTypeTransition(Environment, [top], int, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+astore  ,   astore_<n>
+
+An   astore   instruction with operand `Index` is type
+safe and yields an outgoing type
+state `NextStackFrame`, if a store instruction with
+operand `Index` and type `reference` is type safe and
+yields an outgoing type
+state `NextStackFrame`.
+
+```
+
+instructionIsTypeSafe(astore(Index), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+storeIsTypeSafe(Environment, Index, reference, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The instructions   astore_<n>  , for 0  &#8804;    n    &#8804;  3, are type safe
+iff the equivalent   astore   instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(astore_0, astore(0)).
+instructionHasEquivalentTypeRule(astore_1, astore(1)).
+instructionHasEquivalentTypeRule(astore_2, astore(2)).
+instructionHasEquivalentTypeRule(astore_3, astore(3)).
+
+```
+
+athrow
+
+An   athrow   instruction is type safe iff the top of the operand stack
+matches `Throwable`.
+
+```
+
+instructionIsTypeSafe(athrow, _Environment, _Offset, StackFrame,
+afterGoto, ExceptionStackFrame) :-
+isBootstrapLoader(BL),
+canPop(StackFrame, [class('java/lang/Throwable', BL)], _PoppedStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+baload
+
+A   baload   instruction is type safe iff one can validly replace types
+matching `int` and a small array type on the incoming operand stack
+with `int` yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(baload, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :
+nth1OperandStackIs(2, StackFrame, ArrayType),
+isSmallArray(ArrayType),
+validTypeTransition(Environment, [int, top], int,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+An array type is a   small array type   if it is an
+array of `byte`, an array of `boolean`, or a subtype thereof
+(`null`).
+
+```
+
+isSmallArray(arrayOf(byte)).
+isSmallArray(arrayOf(boolean)).
+isSmallArray(null).
+
+```
+
+bastore
+
+A   bastore   instruction is type safe iff one can validly pop types
+matching `int`, `int` and a small array type off the incoming operand
+stack yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(bastore, _Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+nth1OperandStackIs(3, StackFrame, ArrayType),
+isSmallArray(ArrayType),
+canPop(StackFrame, [int, int, top], NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+bipush
+
+A   bipush   instruction is type safe iff the equivalent   sipush
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(bipush(Value), sipush(Value)).
+
+```
+
+caload
+
+A   caload   instruction is type safe iff one can validly replace types
+matching `int` and array of `char` on the incoming operand stack with
+`int` yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(caload, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [int, arrayOf(char)], int,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+castore
+
+A   castore   instruction is type safe iff one can validly pop types
+matching `int`, `int` and array of `char` off the incoming operand
+stack yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(castore, _Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+canPop(StackFrame, [int, int, arrayOf(char)], NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+checkcast
+
+A   checkcast   instruction with operand `CP` is type safe iff `CP`
+refers to a constant pool entry denoting either a class or an array,
+and one can validly replace the type `Object` on top of the incoming
+operand stack with the type denoted by `CP` yielding the outgoing type
+state.
+
+```
+
+instructionIsTypeSafe(checkcast(CP), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+(CP = class(_, _) ; CP = arrayOf(_)),
+isBootstrapLoader(BL),
+validTypeTransition(Environment, [class('java/lang/Object', BL)], CP,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+d2f  ,   d2i  ,   d2l
+
+A   d2f   instruction is type safe if one can validly pop `double` off
+the incoming operand stack and replace it with `float`, yielding the
+outgoing type state.
+
+```
+
+instructionIsTypeSafe(d2f, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [double], float,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+A   d2i   instruction is type safe if one can validly pop `double` off
+the incoming operand stack and replace it with `int`, yielding the
+outgoing type state.
+
+```
+
+instructionIsTypeSafe(d2i, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [double], int,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+A   d2l   instruction is type safe if one can validly pop `double` off
+the incoming operand stack and replace it with `long`, yielding the
+outgoing type state.
+
+```
+
+instructionIsTypeSafe(d2l, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [double], long,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+dadd
+
+A   dadd   instruction is type safe iff one can validly replace types
+matching `double` and `double` on the incoming operand stack with
+`double` yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(dadd, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [double, double], double,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+daload
+
+A   daload   instruction is type safe iff one can validly replace types
+matching `int` and array of `double` on the incoming operand stack
+with `double` yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(daload, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [int, arrayOf(double)], double,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+dastore
+
+A   dastore   instruction is type safe iff one can validly pop types
+matching `double`, `int` and array of `double` off the incoming
+operand stack yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(dastore, _Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+canPop(StackFrame, [double, int, arrayOf(double)], NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+dcmp<op>
+
+A   dcmpg   instruction is type safe iff one can validly replace types
+matching `double` and `double` on the incoming operand stack with
+`int` yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(dcmpg, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [double, double], int,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+A   dcmpl   instruction is type safe iff the equivalent   dcmpg
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(dcmpl, dcmpg).
+
+```
+
+dconst_<d>
+
+A   dconst_0   instruction is type safe if one can validly push the type
+`double` onto the incoming operand stack yielding the outgoing type
+state.
+
+```
+
+instructionIsTypeSafe(dconst_0, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [], double, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+A   dconst_1   instruction is type safe iff the equivalent   dconst_0
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(dconst_1, dconst_0).
+
+```
+
+ddiv
+
+A   ddiv   instruction is type safe iff the equivalent   dadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(ddiv, dadd).
+
+```
+
+dload  ,   dload_<n>
+
+A   dload   instruction with operand `Index` is type
+safe and yields an outgoing type
+state `NextStackFrame`, if a load instruction with
+operand `Index` and type `double` is type safe and
+yields an outgoing type state `NextStackFrame`.
+
+```
+
+instructionIsTypeSafe(dload(Index), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+loadIsTypeSafe(Environment, Index, double, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The instructions   dload_<n>  , for 0  &#8804;    n    &#8804;  3, are typesafe
+iff the equivalent   dload   instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(dload_0, dload(0)).
+instructionHasEquivalentTypeRule(dload_1, dload(1)).
+instructionHasEquivalentTypeRule(dload_2, dload(2)).
+instructionHasEquivalentTypeRule(dload_3, dload(3)).
+
+```
+
+dmul
+
+A   dmul   instruction is type safe iff the equivalent   dadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(dmul, dadd).
+
+```
+
+dneg
+
+A   dneg   instruction is type safe iff there is a type matching
+`double` on the incoming operand stack. The   dneg   instruction does
+not alter the type state.
+
+```
+
+instructionIsTypeSafe(dneg, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [double], double,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+drem
+
+A   drem   instruction is type safe iff the equivalent   dadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(drem, dadd).
+
+```
+
+dreturn
+
+A   dreturn   instruction is type safe if the enclosing method has a
+declared return type of `double`, and one can validly pop a type
+matching `double` off the incoming operand stack.
+
+```
+
+instructionIsTypeSafe(dreturn, Environment, _Offset, StackFrame,
+afterGoto, ExceptionStackFrame) :-
+thisMethodReturnType(Environment, double),
+canPop(StackFrame, [double], _PoppedStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+dstore  ,   dstore_<n>
+
+A   dstore   instruction with operand `Index` is type
+safe and yields an outgoing type
+state `NextStackFrame`, if a store instruction with
+operand `Index` and type `double` is type safe and
+yields an outgoing type state `NextStackFrame`.
+
+```
+
+instructionIsTypeSafe(dstore(Index), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+storeIsTypeSafe(Environment, Index, double, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The instructions   dstore_<n>  , for 0  &#8804;    n    &#8804;  3, are type safe
+iff the equivalent   dstore   instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(dstore_0, dstore(0)).
+instructionHasEquivalentTypeRule(dstore_1, dstore(1)).
+instructionHasEquivalentTypeRule(dstore_2, dstore(2)).
+instructionHasEquivalentTypeRule(dstore_3, dstore(3)).
+
+```
+
+dsub
+
+A   dsub   instruction is type safe iff the equivalent   dadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(dsub, dadd).
+
+```
+
+dup
+
+A   dup   instruction is type safe iff one can validly replace a
+category 1 type, `Type`, with the types `Type`, `Type`, yielding the
+outgoing type state.
+
+```
+
+instructionIsTypeSafe(dup, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+StackFrame = frame(Locals, InputOperandStack, Flags),
+popCategory1(InputOperandStack, Type, _),
+canSafelyPush(Environment, InputOperandStack, Type, OutputOperandStack),
+NextStackFrame = frame(Locals, OutputOperandStack, Flags),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+dup_x1
+
+A   dup_x1   instruction is type safe iff one can validly replace two
+category 1 types, `Type1`, and `Type2`, on the incoming operand stack
+with the types `Type1`, `Type2`, `Type1`, yielding the outgoing type
+state.
+
+```
+
+instructionIsTypeSafe(dup_x1, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+StackFrame = frame(Locals, InputOperandStack, Flags),
+popCategory1(InputOperandStack, Type1, Stack1),
+popCategory1(Stack1, Type2, Rest),
+canSafelyPushList(Environment, Rest, [Type1, Type2, Type1],
+OutputOperandStack),
+NextStackFrame = frame(Locals, OutputOperandStack, Flags),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+dup_x2
+
+A   dup_x2   instruction is type safe iff it is a   type safe
+form   of the   dup_x2   instruction.
+
+```
+
+instructionIsTypeSafe(dup_x2, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+StackFrame = frame(Locals, InputOperandStack, Flags),
+dup_x2FormIsTypeSafe(Environment, InputOperandStack, OutputOperandStack),
+NextStackFrame = frame(Locals, OutputOperandStack, Flags),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+A   dup_x2   instruction is a   type safe form   of the
+dup_x2   instruction iff it is a   type safe form 1
+dup_x2   instruction or a   type safe form 2
+dup_x2   instruction.
+
+```
+
+dup_x2FormIsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+dup_x2Form1IsTypeSafe(Environment, InputOperandStack, OutputOperandStack).
+
+dup_x2FormIsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+dup_x2Form2IsTypeSafe(Environment, InputOperandStack, OutputOperandStack).
+
+```
+
+A   dup_x2   instruction is a   type safe form 1
+dup_x2   instruction iff one can validly replace three category 1
+types, `Type1`, `Type2`, `Type3` on the incoming operand stack with
+the types `Type1`, `Type2`, `Type3`, `Type1`, yielding the outgoing
+type state.
+
+```
+
+dup_x2Form1IsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+popCategory1(InputOperandStack, Type1, Stack1),
+popCategory1(Stack1, Type2, Stack2),
+popCategory1(Stack2, Type3, Rest),
+canSafelyPushList(Environment, Rest, [Type1, Type3, Type2, Type1],
+OutputOperandStack).
+
+```
+
+A   dup_x2   instruction is a   type safe form 2
+dup_x2   instruction iff one can validly replace a category 1 type,
+`Type1`, and a category 2 type, `Type2`, on the incoming operand stack
+with the types `Type1`, `Type2`, `Type1`, yielding the outgoing type
+state.
+
+```
+
+dup_x2Form2IsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+popCategory1(InputOperandStack, Type1, Stack1),
+popCategory2(Stack1, Type2, Rest),
+canSafelyPushList(Environment, Rest, [Type1, Type2, Type1],
+OutputOperandStack).
+
+```
+
+dup2
+
+A   dup2   instruction is type safe iff it is a   type safe
+form   of the   dup2   instruction.
+
+```
+
+instructionIsTypeSafe(dup2, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+StackFrame = frame(Locals, InputOperandStack, Flags),
+dup2FormIsTypeSafe(Environment,InputOperandStack, OutputOperandStack),
+NextStackFrame = frame(Locals, OutputOperandStack, Flags),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+A   dup2   instruction is a   type safe form   of the
+dup2   instruction iff it is a   type safe form 1
+dup2   instruction or a   type safe form 2     dup2
+instruction.
+
+```
+
+dup2FormIsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+dup2Form1IsTypeSafe(Environment,InputOperandStack, OutputOperandStack).
+
+dup2FormIsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+dup2Form2IsTypeSafe(Environment,InputOperandStack, OutputOperandStack).
+
+```
+
+A   dup2   instruction is a   type safe form 1     dup2
+instruction iff one can validly replace two category 1 types, `Type1`
+and `Type2` on the incoming operand stack with the types `Type1`,
+`Type2`, `Type1`, `Type2`, yielding the outgoing type state.
+
+```
+
+dup2Form1IsTypeSafe(Environment, InputOperandStack, OutputOperandStack):-
+popCategory1(InputOperandStack, Type1, TempStack),
+popCategory1(TempStack, Type2, _),
+canSafelyPushList(Environment, InputOperandStack, [Type2, Type1],
+OutputOperandStack).
+
+```
+
+A   dup2   instruction is a   type safe form 2     dup2
+instruction iff one can validly replace a category 2 type, `Type` on
+the incoming operand stack with the types `Type`, `Type`, yielding the
+outgoing type state.
+
+```
+
+dup2Form2IsTypeSafe(Environment, InputOperandStack, OutputOperandStack):-
+popCategory2(InputOperandStack, Type, _),
+canSafelyPush(Environment, InputOperandStack, Type, OutputOperandStack).
+
+```
+
+dup2_x1
+
+A   dup2_x1   instruction is type safe iff it is a   type safe
+form   of the   dup2_x1   instruction.
+
+```
+
+instructionIsTypeSafe(dup2_x1, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+StackFrame = frame(Locals, InputOperandStack, Flags),
+dup2_x1FormIsTypeSafe(Environment, InputOperandStack, OutputOperandStack),
+NextStackFrame = frame(Locals, OutputOperandStack, Flags),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+A   dup2_x1   instruction is a   type safe form   of
+the   dup2_x1   instruction iff it is a   type safe form
+1     dup2_x1   instruction or a
+type safe form 2     dup_x2   instruction.
+
+```
+
+dup2_x1FormIsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+dup2_x1Form1IsTypeSafe(Environment, InputOperandStack, OutputOperandStack).
+
+dup2_x1FormIsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+dup2_x1Form2IsTypeSafe(Environment, InputOperandStack, OutputOperandStack).
+
+```
+
+A   dup2_x1   instruction is a   type safe form 1
+dup2_x1   instruction iff one can validly replace three category 1
+types, `Type1`, `Type2`, `Type3`, on the incoming operand stack with
+the types `Type1`, `Type2`, `Type3`, `Type1`, `Type2`, yielding the
+outgoing type state.
+
+```
+
+dup2_x1Form1IsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+popCategory1(InputOperandStack, Type1, Stack1),
+popCategory1(Stack1, Type2, Stack2),
+popCategory1(Stack2, Type3, Rest),
+canSafelyPushList(Environment, Rest, [Type2, Type1, Type3, Type2, Type1],
+OutputOperandStack).
+
+```
+
+A   dup2_x1   instruction is a   type safe form 2
+dup2_x1   instruction iff one can validly replace a category 2 type,
+`Type1`, and a category 1 type, `Type2`, on the incoming operand stack
+with the types `Type1`, `Type2`, `Type1`, yielding the outgoing type
+state.
+
+```
+
+dup2_x1Form2IsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+popCategory2(InputOperandStack, Type1, Stack1),
+popCategory1(Stack1, Type2, Rest),
+canSafelyPushList(Environment, Rest, [Type1, Type2, Type1],
+OutputOperandStack).
+
+```
+
+dup2_x2
+
+A   dup2_x2   instruction is type safe iff it is a   type safe
+form   of the   dup2_x2   instruction.
+
+```
+
+instructionIsTypeSafe(dup2_x2, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+StackFrame = frame(Locals, InputOperandStack, Flags),
+dup2_x2FormIsTypeSafe(Environment, InputOperandStack, OutputOperandStack),
+NextStackFrame = frame(Locals, OutputOperandStack, Flags),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+A   dup2_x2   instruction is a   type safe form   of
+the   dup2_x2   instruction iff one of the following holds:
+
+it is a   type safe form 1     dup2_x2   instruction.
+
+it is a   type safe form 2     dup2_x2   instruction.
+
+it is a   type safe form 3     dup2_x2   instruction.
+
+it is a   type safe form 4     dup2_x2   instruction.
+
+```
+
+dup2_x2FormIsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+dup2_x2Form1IsTypeSafe(Environment, InputOperandStack, OutputOperandStack).
+
+dup2_x2FormIsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+dup2_x2Form2IsTypeSafe(Environment, InputOperandStack, OutputOperandStack).
+
+dup2_x2FormIsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+dup2_x2Form3IsTypeSafe(Environment, InputOperandStack, OutputOperandStack).
+
+dup2_x2FormIsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+dup2_x2Form4IsTypeSafe(Environment, InputOperandStack, OutputOperandStack).
+
+```
+
+A   dup2_x2   instruction is a   type safe form 1
+dup2_x2   instruction iff one can validly replace four category 1
+types, `Type1`, `Type2`, `Type3`, `Type4`, on the incoming operand
+stack with the types `Type1`, `Type2`, `Type3`, `Type4`, `Type1`,
+`Type2`, yielding the outgoing type state.
+
+```
+
+dup2_x2Form1IsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+popCategory1(InputOperandStack, Type1, Stack1),
+popCategory1(Stack1, Type2, Stack2),
+popCategory1(Stack2, Type3, Stack3),
+popCategory1(Stack3, Type4, Rest),
+canSafelyPushList(Environment, Rest,
+[Type2, Type1, Type4, Type3, Type2, Type1],
+OutputOperandStack).
+
+```
+
+A   dup2_x2   instruction is a   type safe form 2
+dup2_x2   instruction iff one can validly replace a category 2 type,
+`Type1`, and two category 1 types, `Type2`, `Type3`, on the incoming
+operand stack with the types `Type1`, `Type2`, `Type3`, `Type1`,
+yielding the outgoing type state.
+
+```
+
+dup2_x2Form2IsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+popCategory2(InputOperandStack, Type1, Stack1),
+popCategory1(Stack1, Type2, Stack2),
+popCategory1(Stack2, Type3, Rest),
+canSafelyPushList(Environment, Rest,
+[Type1, Type3, Type2, Type1],
+OutputOperandStack).
+
+```
+
+A   dup2_x2   instruction is a   type safe form 3
+dup2_x2   instruction iff one can validly replace two category 1
+types, `Type1`, `Type2`, and a category 2 type, `Type3`, on the
+incoming operand stack with the types `Type1`, `Type2`, `Type3`,
+`Type1`, `Type2`, yielding the outgoing type state.
+
+```
+
+dup2_x2Form3IsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+popCategory1(InputOperandStack, Type1, Stack1),
+popCategory1(Stack1, Type2, Stack2),
+popCategory2(Stack2, Type3, Rest),
+canSafelyPushList(Environment, Rest,
+[Type2, Type1, Type3, Type2, Type1],
+OutputOperandStack).
+
+```
+
+A   dup2_x2   instruction is a   type safe form 4
+dup2_x2   instruction iff one can validly replace two category 2
+types, `Type1`, `Type2`, on the incoming operand stack with the types
+`Type1`, `Type2`, `Type1`, yielding the outgoing type state.
+
+```
+
+dup2_x2Form4IsTypeSafe(Environment, InputOperandStack, OutputOperandStack) :-
+popCategory2(InputOperandStack, Type1, Stack1),
+popCategory2(Stack1, Type2, Rest),
+canSafelyPushList(Environment, Rest, [Type1, Type2, Type1],
+OutputOperandStack).
+
+```
+
+f2d  ,   f2i  ,   f2l
+
+An   f2d   instruction is type safe if one can validly pop `float` off
+the incoming operand stack and replace it with `double`, yielding the
+outgoing type state.
+
+```
+
+instructionIsTypeSafe(f2d, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [float], double,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+An   f2i   instruction is type safe if one can validly pop `float` off
+the incoming operand stack and replace it with `int`, yielding the
+outgoing type state.
+
+```
+
+instructionIsTypeSafe(f2i, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [float], int,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+An   f2l   instruction is type safe if one can validly pop `float` off
+the incoming operand stack and replace it with `long`, yielding the
+outgoing type state.
+
+```
+
+instructionIsTypeSafe(f2l, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [float], long,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+fadd
+
+An   fadd   instruction is type safe iff one can validly replace types
+matching `float` and `float` on the incoming operand stack with
+`float` yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(fadd, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [float, float], float,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+faload
+
+An   faload   instruction is type safe iff one can validly replace types
+matching `int` and array of `float` on the incoming operand stack with
+`float` yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(faload, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [int, arrayOf(float)], float,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+fastore
+
+An   fastore   instruction is type safe iff one can validly pop types
+matching `float`, `int` and array of `float` off the incoming operand
+stack yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(fastore, _Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+canPop(StackFrame, [float, int, arrayOf(float)], NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+fcmp<op>
+
+An   fcmpg   instruction is type safe iff one can validly replace types
+matching `float` and `float` on the incoming operand stack with `int`
+yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(fcmpg, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [float, float], int,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+An   fcmpl   instruction is type safe iff the equivalent   fcmpg
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(fcmpl, fcmpg).
+
+```
+
+fconst_<f>
+
+An   fconst_0   instruction is type safe if one can validly push the
+type `float` onto the incoming operand stack yielding the outgoing
+type state.
+
+```
+
+instructionIsTypeSafe(fconst_0, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [], float, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The rules for the other variants of   fconst   are equivalent.
+
+```
+
+instructionHasEquivalentTypeRule(fconst_1, fconst_0).
+instructionHasEquivalentTypeRule(fconst_2, fconst_0).
+
+```
+
+fdiv
+
+An   fdiv   instruction is type safe iff the equivalent   fadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(fdiv, fadd).
+
+```
+
+fload  ,   fload_<n>
+
+An   fload   instruction with operand `Index` is type
+safe and yields an outgoing type
+state `NextStackFrame`, if a load instruction with
+operand `Index` and type `float` is type safe and
+yields an outgoing type state `NextStackFrame`.
+
+```
+
+instructionIsTypeSafe(fload(Index), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+loadIsTypeSafe(Environment, Index, float, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The instructions   fload_<n>  , for 0  &#8804;    n    &#8804;  3, are typesafe
+iff the equivalent   fload   instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(fload_0, fload(0)).
+instructionHasEquivalentTypeRule(fload_1, fload(1)).
+instructionHasEquivalentTypeRule(fload_2, fload(2)).
+instructionHasEquivalentTypeRule(fload_3, fload(3)).
+
+```
+
+fmul
+
+An   fmul   instruction is type safe iff the equivalent   fadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(fmul, fadd).
+
+```
+
+fneg
+
+An   fneg   instruction is type safe iff there is a type matching
+`float` on the incoming operand stack. The   fneg   instruction does not
+alter the type state.
+
+```
+
+instructionIsTypeSafe(fneg, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [float], float,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+frem
+
+An   frem   instruction is type safe iff the equivalent   fadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(frem, fadd).
+
+```
+
+freturn
+
+An   freturn   instruction is type safe if the enclosing method has a
+declared return type of `float`, and one can validly pop a type
+matching `float` off the incoming operand stack.
+
+```
+
+instructionIsTypeSafe(freturn, Environment, _Offset, StackFrame,
+afterGoto, ExceptionStackFrame) :-
+thisMethodReturnType(Environment, float),
+canPop(StackFrame, [float], _PoppedStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+fstore  ,   fstore_<n>
+
+An   fstore   instruction with operand `Index` is type
+safe and yields an outgoing type
+state `NextStackFrame`, if a store instruction with
+operand `Index` and type `float` is type safe and
+yields an outgoing type
+state `NextStackFrame`.
+
+```
+
+instructionIsTypeSafe(fstore(Index), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+storeIsTypeSafe(Environment, Index, float, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The instructions   fstore_<n>  , for 0  &#8804;    n    &#8804;  3, are typesafe
+iff the equivalent   fstore   instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(fstore_0, fstore(0)).
+instructionHasEquivalentTypeRule(fstore_1, fstore(1)).
+instructionHasEquivalentTypeRule(fstore_2, fstore(2)).
+instructionHasEquivalentTypeRule(fstore_3, fstore(3)).
+
+```
+
+fsub
+
+An   fsub   instruction is type safe iff the equivalent   fadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(fsub, fadd).
+
+```
+
+getfield
+
+A   getfield   instruction with operand `CP` is type safe iff `CP`
+refers to a constant pool entry denoting a field whose declared type
+is `FieldType` that is a member of a
+class `FieldClassName`, and one can validly replace a
+type matching `FieldClassName` with
+type `FieldType` on the incoming operand stack
+yielding the outgoing type state. `FieldClassName` must
+not be an array type. `protected` fields are subject to additional
+checks ( &sect;4.10.1.8 ).
+
+```
+
+instructionIsTypeSafe(getfield(CP), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+CP = field(FieldClassName, FieldName, FieldDescriptor),
+parseFieldDescriptor(FieldDescriptor, FieldType),
+passesProtectedCheck(Environment, FieldClassName, FieldName,
+FieldDescriptor, StackFrame),
+currentClassLoader(Environment, CurrentLoader),
+validTypeTransition(Environment,
+[class(FieldClassName, CurrentLoader)], FieldType,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+getstatic
+
+A   getstatic   instruction with operand `CP` is type safe iff `CP`
+refers to a constant pool entry denoting a field whose declared type
+is `FieldType`, and one can validly
+push `FieldType` on the incoming operand stack
+yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(getstatic(CP), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+CP = field(_FieldClassName, _FieldName, FieldDescriptor),
+parseFieldDescriptor(FieldDescriptor, FieldType),
+validTypeTransition(Environment, [], FieldType,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+goto  ,   goto_w
+
+A   goto   instruction is type safe iff its target operand is a valid
+branch target.
+
+```
+
+instructionIsTypeSafe(goto(Target), Environment, _Offset, StackFrame,
+afterGoto, ExceptionStackFrame) :-
+targetIsTypeSafe(Environment, StackFrame, Target),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+A   goto_w   instruction is type safe iff the equivalent   goto
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(goto_w(Target), goto(Target)).
+
+```
+
+i2b  ,   i2c  ,   i2d  ,   i2f  ,   i2l  ,   i2s
+
+An   i2b   instruction is type safe iff the equivalent   ineg
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(i2b, ineg).
+
+```
+
+An   i2c   instruction is type safe iff the equivalent   ineg
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(i2c, ineg).
+
+```
+
+An   i2d   instruction is type safe if one can validly pop `int` off the
+incoming operand stack and replace it with `double`, yielding the
+outgoing type state.
+
+```
+
+instructionIsTypeSafe(i2d, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [int], double,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+An   i2f   instruction is type safe if one can validly pop `int` off the
+incoming operand stack and replace it with `float`, yielding the
+outgoing type state.
+
+```
+
+instructionIsTypeSafe(i2f, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [int], float,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+An   i2l   instruction is type safe if one can validly pop `int` off the
+incoming operand stack and replace it with `long`, yielding the
+outgoing type state.
+
+```
+
+instructionIsTypeSafe(i2l, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [int], long,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+An   i2s   instruction is type safe iff the equivalent   ineg
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(i2s, ineg).
+
+```
+
+iadd
+
+An   iadd   instruction is type safe iff one can validly replace types
+matching `int` and `int` on the incoming operand stack with `int`
+yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(iadd, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [int, int], int,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+iaload
+
+An   iaload   instruction is type safe iff one can validly replace types
+matching `int` and array of `int` on the incoming operand stack with
+`int` yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(iaload, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [int, arrayOf(int)], int,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+iand
+
+An   iand   instruction is type safe iff the equivalent   iadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(iand, iadd).
+
+```
+
+iastore
+
+An   iastore   instruction is type safe iff one can validly pop types
+matching `int`, `int` and array of `int` off the incoming operand
+stack yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(iastore, _Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+canPop(StackFrame, [int, int, arrayOf(int)], NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+iconst_<i>
+
+An   iconst_m1   instruction is type safe if one can validly push the
+type `int` onto the incoming operand stack yielding the outgoing type
+state.
+
+```
+
+instructionIsTypeSafe(iconst_m1, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [], int, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The rules for the other variants of   iconst   are equivalent.
+
+```
+
+instructionHasEquivalentTypeRule(iconst_0, iconst_m1).
+instructionHasEquivalentTypeRule(iconst_1, iconst_m1).
+instructionHasEquivalentTypeRule(iconst_2, iconst_m1).
+instructionHasEquivalentTypeRule(iconst_3, iconst_m1).
+instructionHasEquivalentTypeRule(iconst_4, iconst_m1).
+instructionHasEquivalentTypeRule(iconst_5, iconst_m1).
+
+```
+
+idiv
+
+An   idiv   instruction is type safe iff the equivalent   iadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(idiv, iadd).
+
+```
+
+if_acmp<cond>
+
+An   if_acmpeq   instruction is type safe iff one can validly pop types
+matching `reference` and `reference` on the incoming operand stack yielding the
+outgoing type state `NextStackFrame`, and the operand
+of the instruction, `Target`, is a valid branch
+target assuming an incoming type state
+of `NextStackFrame`.
+
+```
+
+instructionIsTypeSafe(if_acmpeq(Target), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+canPop(StackFrame, [reference, reference], NextStackFrame),
+targetIsTypeSafe(Environment, NextStackFrame, Target),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The rule for   if_acmpne   is identical.
+
+```
+
+instructionHasEquivalentTypeRule(if_acmpne(Target), if_acmpeq(Target)).
+
+```
+
+if_icmp<cond>
+
+An   if_icmpeq   instruction is type safe iff one can validly pop types
+matching `int` and `int` on the incoming operand stack yielding the
+outgoing type state `NextStackFrame`, and the operand
+of the instruction, `Target`, is a valid branch
+target assuming an incoming type state
+of `NextStackFrame`.
+
+```
+
+instructionIsTypeSafe(if_icmpeq(Target), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+canPop(StackFrame, [int, int], NextStackFrame),
+targetIsTypeSafe(Environment, NextStackFrame, Target),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The rules for all other variants of the   if_icmp<cond>   instruction are
+identical.
+
+```
+
+instructionHasEquivalentTypeRule(if_icmpge(Target), if_icmpeq(Target)).
+instructionHasEquivalentTypeRule(if_icmpgt(Target), if_icmpeq(Target)).
+instructionHasEquivalentTypeRule(if_icmple(Target), if_icmpeq(Target)).
+instructionHasEquivalentTypeRule(if_icmplt(Target), if_icmpeq(Target)).
+instructionHasEquivalentTypeRule(if_icmpne(Target), if_icmpeq(Target)).
+
+```
+
+if<cond>
+
+An   ifeq   instruction is type safe iff one can validly pop a type
+matching `int` off the incoming operand stack yielding the outgoing
+type state `NextStackFrame`, and the operand of the
+instruction, `Target`, is a valid branch target
+assuming an incoming type state
+of `NextStackFrame`.
+
+```
+
+instructionIsTypeSafe(ifeq(Target), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+canPop(StackFrame, [int], NextStackFrame),
+targetIsTypeSafe(Environment, NextStackFrame, Target),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The rules for all other variations of the   if<cond>   instruction are
+identical.
+
+```
+
+instructionHasEquivalentTypeRule(ifge(Target), ifeq(Target)).
+instructionHasEquivalentTypeRule(ifgt(Target), ifeq(Target)).
+instructionHasEquivalentTypeRule(ifle(Target), ifeq(Target)).
+instructionHasEquivalentTypeRule(iflt(Target), ifeq(Target)).
+instructionHasEquivalentTypeRule(ifne(Target), ifeq(Target)).
+
+```
+
+ifnonnull  ,   ifnull
+
+An   ifnonnull   instruction is type safe iff one can validly pop a type
+matching `reference` off the incoming operand stack yielding the outgoing
+type state `NextStackFrame`, and the operand of the
+instruction, `Target`, is a valid branch target
+assuming an incoming type state of `NextStackFrame`.
+
+```
+
+instructionIsTypeSafe(ifnonnull(Target), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+canPop(StackFrame, [reference], NextStackFrame),
+targetIsTypeSafe(Environment, NextStackFrame, Target),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+An   ifnull   instruction is type safe iff the equivalent   ifnonnull
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(ifnull(Target), ifnonnull(Target)).
+
+```
+
+iinc
+
+An   iinc   instruction with first operand `Index` is
+type safe iff `L Index ` has
+type `int`. The   iinc   instruction does not change the type
+state.
+
+```
+
+instructionIsTypeSafe(iinc(Index, _Value), _Environment, _Offset,
+StackFrame, StackFrame, ExceptionStackFrame) :-
+StackFrame = frame(Locals, _OperandStack, _Flags),
+nth0(Index, Locals, int),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+iload  ,   iload_<n>
+
+An   iload   instruction with operand `Index` is type
+safe and yields an outgoing type
+state `NextStackFrame`, if a load instruction with
+operand `Index` and type `int` is type safe and
+yields an outgoing type state `NextStackFrame`.
+
+```
+
+instructionIsTypeSafe(iload(Index), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+loadIsTypeSafe(Environment, Index, int, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The instructions   iload_<n>  , for 0  &#8804;    n    &#8804;  3, are typesafe
+iff the equivalent   iload   instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(iload_0, iload(0)).
+instructionHasEquivalentTypeRule(iload_1, iload(1)).
+instructionHasEquivalentTypeRule(iload_2, iload(2)).
+instructionHasEquivalentTypeRule(iload_3, iload(3)).
+
+```
+
+imul
+
+An   imul   instruction is type safe iff the equivalent   iadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(imul, iadd).
+
+```
+
+ineg
+
+An   ineg   instruction is type safe iff there is a type matching `int`
+on the incoming operand stack. The   ineg   instruction does not alter
+the type state.
+
+```
+
+instructionIsTypeSafe(ineg, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [int], int, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+instanceof
+
+An   instanceof   instruction with operand `CP` is type safe iff `CP`
+refers to a constant pool entry denoting either a class or an array,
+and one can validly replace the type `Object` on top of the incoming
+operand stack with type `int` yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(instanceof(CP), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+(CP = class(_, _) ; CP = arrayOf(_)),
+isBootstrapLoader(BL),
+validTypeTransition(Environment, [class('java/lang/Object', BL)], int,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+invokedynamic
+
+An   invokedynamic   instruction is type safe iff all of the following
+are true:
+
+Its first operand, `CP`, refers to a constant pool entry
+denoting an dynamic call site with
+name `CallSiteName` with
+descriptor `Descriptor`.
+
+`CallSiteName` is not `<init>`.
+
+`CallSiteName` is not `<clinit>`.
+
+One can validly replace types matching the argument types given
+in `Descriptor` on the incoming operand stack
+with the return type given in `Descriptor`,
+yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(invokedynamic(CP,0,0), Environment, _Offset,
+StackFrame, NextStackFrame, ExceptionStackFrame) :-
+CP = dmethod(CallSiteName, Descriptor),
+CallSiteName \= '`<init>`',
+CallSiteName \= '`<clinit>`',
+parseMethodDescriptor(Descriptor, OperandArgList, ReturnType),
+reverse(OperandArgList, StackArgList),
+validTypeTransition(Environment, StackArgList, ReturnType,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+invokeinterface
+
+An   invokeinterface   instruction is type safe iff all of the following
+are true:
+
+Its first operand, `CP`, refers to a constant pool entry
+denoting an interface method named `MethodName`
+with descriptor `Descriptor` that is a member
+of an interface `MethodIntfName`.
+
+`MethodName` is not `<init>`.
+
+`MethodName` is not `<clinit>`.
+
+Its second operand, `Count`, is a valid count
+operand (see below).
+
+One can validly replace types matching the
+type `MethodIntfName` and the argument types
+given in `Descriptor` on the incoming operand
+stack with the return type given
+in `Descriptor`, yielding the outgoing type
+state.
+
+```
+
+instructionIsTypeSafe(invokeinterface(CP, Count, 0), Environment, _Offset,
+StackFrame, NextStackFrame, ExceptionStackFrame) :-
+CP = imethod(MethodIntfName, MethodName, Descriptor),
+MethodName \= '`<init>`',
+MethodName \= '`<clinit>`',
+parseMethodDescriptor(Descriptor, OperandArgList, ReturnType),
+currentClassLoader(Environment, CurrentLoader),
+reverse([class(MethodIntfName, CurrentLoader) | OperandArgList],
+StackArgList),
+canPop(StackFrame, StackArgList, TempFrame),
+validTypeTransition(Environment, [], ReturnType,
+TempFrame, NextStackFrame),
+countIsValid(Count, StackFrame, TempFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The `Count` operand of an   invokeinterface
+instruction is valid if it equals the size of the arguments to the
+instruction. This is equal to the difference between the size
+of `InputFrame`
+and `OutputFrame`.
+
+```
+
+countIsValid(Count, InputFrame, OutputFrame) :-
+InputFrame = frame(_Locals1, OperandStack1, _Flags1),
+OutputFrame = frame(_Locals2, OperandStack2, _Flags2),
+length(OperandStack1, Length1),
+length(OperandStack2, Length2),
+Count =:= Length1 - Length2.
+
+```
+
+invokespecial
+
+An   invokespecial   instruction is type safe iff all of the following
+are true:
+
+Its first operand, `CP`, refers to a constant pool entry
+denoting a method named `MethodName` with
+descriptor `Descriptor` that is a member of a
+class `MethodClassName`.
+
+Either:
+
+`MethodName` is not `<init>`.
+
+`MethodName` is not `<clinit>`.
+
+One can validly replace types matching the current class and
+the argument types given in `Descriptor` on
+the incoming operand stack with the return type given
+in `Descriptor`, yielding the outgoing type
+state.
+
+One can validly replace types matching the
+class `MethodClassName` and the argument
+types given in `Descriptor` on the incoming
+operand stack with the return type given
+in `Descriptor`.
+
+```
+
+instructionIsTypeSafe(invokespecial(CP), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+CP = method(MethodClassName, MethodName, Descriptor),
+MethodName \= '`<init>`',
+MethodName \= '`<clinit>`',
+parseMethodDescriptor(Descriptor, OperandArgList, ReturnType),
+thisClass(Environment, class(CurrentClassName, CurrentLoader)),
+isAssignable(class(CurrentClassName, CurrentLoader),
+class(MethodClassName,  CurrentLoader)),
+reverse([class(CurrentClassName, CurrentLoader) | OperandArgList],
+StackArgList),
+validTypeTransition(Environment, StackArgList, ReturnType,
+StackFrame, NextStackFrame),
+reverse([class(MethodClassName, CurrentLoader) | OperandArgList],
+StackArgList2),
+validTypeTransition(Environment, StackArgList2, ReturnType,
+StackFrame, _ResultStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The `isAssignable` clause enforces the structural
+constraint that   invokespecial  , for other than an instance
+initialization method, must name a method in the current
+class/interface or a superclass/superinterface.
+
+The first `validTypeTransition` clause enforces the
+structural constraint that   invokespecial  , for other than an instance
+initialization method, targets a receiver object of the current class
+or deeper. To see why, consider that
+`StackArgList` simulates the list of types on the
+operand stack expected by the method, starting with the current class
+(the class performing   invokespecial  ). The actual types on the
+operand stack are in `StackFrame`. The effect
+of `validTypeTransition` is to pop the first type
+from the operand stack in `StackFrame` and check it
+is a subtype of the first term of `StackArgList`,
+namely the current class. Thus, the actual receiver type is compatible
+with the current class.
+
+A sharp-eyed reader might notice that enforcing this structural
+constraint supercedes the structural constraint pertaining to
+invokespecial   of a `protected` method. Thus, the Prolog code above
+makes no reference to `passesProtectedCheck`
+( &sect;4.10.1.8 ), whereas the Prolog code for
+invokespecial   of an instance initialization method uses
+`passesProtectedCheck` to ensure the actual receiver
+type is compatible with the current class when certain `protected`
+instance initialization methods are named.
+
+The second `validTypeTransition` clause enforces the
+structural constraint that any method invocation instruction must
+target a receiver object whose type is compatible with the type named
+by the instruction. To see why, consider
+that `StackArgList2` simulates the list of types on
+the operand stack expected by the method, starting with the type named
+by the instruction. Again, the actual types on the operand stack are
+in `StackFrame`, and the effect
+of `validTypeTransition` is to check the actual
+receiver type in `StackFrame` is compatible with the
+type named by the instruction
+in `StackArgList2`.
+
+Or:
+
+MethodName is `<init>`.
+
+`Descriptor` specifies a `void` return
+type.
+
+One can validly pop types matching the argument types given
+in `Descriptor` and an uninitialized
+type, `UninitializedArg`, off the incoming
+operand stack,
+yielding `OperandStack`.
+
+The outgoing type state is derived from the incoming type
+state by first replacing the incoming operand stack
+with `OperandStack` and then replacing all
+instances of `UninitializedArg` with the
+type of instance being initialized.
+
+If the instruction calls an instance initialization method
+on a class instance created by an earlier   new   instruction,
+and the method is `protected`, the usage conforms to the
+special rules governing access to `protected` members
+( &sect;4.10.1.8 ).
+
+```
+
+instructionIsTypeSafe(invokespecial(CP), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+CP = method(MethodClassName, '`<init>`', Descriptor),
+parseMethodDescriptor(Descriptor, OperandArgList, void),
+reverse(OperandArgList, StackArgList),
+canPop(StackFrame, StackArgList, TempFrame),
+TempFrame = frame(Locals, [uninitializedThis | OperandStack], Flags),
+currentClassLoader(Environment, CurrentLoader),
+rewrittenUninitializedType(uninitializedThis, Environment,
+class(MethodClassName, CurrentLoader), This),
+rewrittenInitializationFlags(uninitializedThis, Flags, NextFlags),
+substitute(uninitializedThis, This, OperandStack, NextOperandStack),
+substitute(uninitializedThis, This, Locals, NextLocals),
+NextStackFrame = frame(NextLocals, NextOperandStack, NextFlags),
+ExceptionStackFrame = frame(Locals, [], Flags).
+
+```
+
+```
+
+instructionIsTypeSafe(invokespecial(CP), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+CP = method(MethodClassName, '`<init>`', Descriptor),
+parseMethodDescriptor(Descriptor, OperandArgList, void),
+reverse(OperandArgList, StackArgList),
+canPop(StackFrame, StackArgList, TempFrame),
+TempFrame = frame(Locals, [uninitialized(Address) | OperandStack], Flags),
+currentClassLoader(Environment, CurrentLoader),
+rewrittenUninitializedType(uninitialized(Address), Environment,
+class(MethodClassName, CurrentLoader), This),
+rewrittenInitializationFlags(uninitialized(Address), Flags, NextFlags),
+substitute(uninitialized(Address), This, OperandStack, NextOperandStack),
+substitute(uninitialized(Address), This, Locals, NextLocals),
+NextStackFrame = frame(NextLocals, NextOperandStack, NextFlags),
+ExceptionStackFrame = frame(Locals, [], Flags),
+passesProtectedCheck(Environment, MethodClassName, '`<init>`',
+Descriptor, NextStackFrame).
+
+```
+
+To compute what type the uninitialized argument's type needs to be
+rewritten to, there are two cases:
+
+If we are initializing an object within its constructor, its
+type is initially `uninitializedThis`. This type will be
+rewritten to the type of the class of the `<init>` method.
+
+The second case arises from initialization of an object created
+by   new  . The uninitialized arg type is rewritten
+to `MethodClass`, the type of the method holder
+of `<init>`. We check whether there really is a   new   instruction
+at `Address`.
+
+```
+
+rewrittenUninitializedType(uninitializedThis, Environment,
+MethodClass, MethodClass) :-
+MethodClass = class(MethodClassName, CurrentLoader),
+thisClass(Environment, MethodClass).
+
+rewrittenUninitializedType(uninitializedThis, Environment,
+MethodClass, MethodClass) :-
+MethodClass = class(MethodClassName, CurrentLoader),
+thisClass(Environment, class(thisClassName, thisLoader)),
+superclassChain(thisClassName, thisLoader, [MethodClass | Rest]).
+
+rewrittenUninitializedType(uninitialized(Address), Environment,
+MethodClass, MethodClass) :-
+allInstructions(Environment, Instructions),
+member(instruction(Address, new(MethodClass)), Instructions).
+
+rewrittenInitializationFlags(uninitializedThis, _Flags, []).
+rewrittenInitializationFlags(uninitialized(_), Flags, Flags).
+
+substitute(_Old, _New, [], []).
+substitute(Old, New, [Old | FromRest], [New | ToRest]) :-
+substitute(Old, New, FromRest, ToRest).
+substitute(Old, New, [From1 | FromRest], [From1 | ToRest]) :-
+From1 \= Old,
+substitute(Old, New, FromRest, ToRest).
+
+```
+
+The rule for   invokespecial   of an `<init>` method is
+the sole motivation for passing back a distinct exception stack
+frame. The concern is that when initializing an object within its
+constructor,   invokespecial   can cause a superclass `<init>` method to
+be invoked, and that invocation could fail, leaving `this`
+uninitialized. This situation cannot be created using source code in
+the Java programming language, but can be created by programming in bytecode
+directly.
+
+In this situation, the original frame holds an
+uninitialized object in local variable 0 and has flag
+`flagThisUninit`. Normal termination of   invokespecial   initializes
+the uninitialized object and turns off the `flagThisUninit` flag. But
+if the invocation of an `<init>` method throws an exception, the
+uninitialized object might be left in a partially initialized state,
+and needs to be made permanently unusable. This is represented by an
+exception frame containing the broken object (the new value of the
+local) and the `flagThisUninit` flag (the old flag). There is no way
+to get from an apparently-initialized object bearing the
+`flagThisUninit` flag to a properly initialized object, so the object
+is permanently unusable.
+
+If not for this situation, the flags of the
+exception stack frame would always be the same as the flags of the
+input stack frame.
+
+invokestatic
+
+An   invokestatic   instruction is type safe iff all of the following
+are true:
+
+Its first operand, `CP`, refers to a constant pool entry
+denoting a method named `MethodName` with
+descriptor `Descriptor`.
+
+`MethodName` is not `<init>`.
+
+`MethodName` is not `<clinit>`.
+
+One can validly replace types matching the argument types given
+in `Descriptor` on the incoming operand stack
+with the return type given in `Descriptor`,
+yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(invokestatic(CP), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+CP = method(_MethodClassName, MethodName, Descriptor),
+MethodName \= '`<init>`',
+MethodName \= '`<clinit>`',
+parseMethodDescriptor(Descriptor, OperandArgList, ReturnType),
+reverse(OperandArgList, StackArgList),
+validTypeTransition(Environment, StackArgList, ReturnType,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+invokevirtual
+
+An   invokevirtual   instruction is type safe iff all of the following
+are true:
+
+Its first operand, `CP`, refers to a constant pool entry
+denoting a method named `MethodName` with
+descriptor `Descriptor` that is a member of a
+class `MethodClassName`.
+
+`MethodName` is not `<init>`.
+
+`MethodName` is not `<clinit>`.
+
+One can validly replace types matching the
+class `MethodClassName` and the argument types
+given in `Descriptor` on the incoming operand
+stack with the return type given
+in `Descriptor`, yielding the outgoing type
+state.
+
+If the method is `protected`, the usage conforms to the special
+rules governing access to `protected` members
+( &sect;4.10.1.8 ).
+
+```
+
+instructionIsTypeSafe(invokevirtual(CP), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+CP = method(MethodClassName, MethodName, Descriptor),
+MethodName \= '`<init>`',
+MethodName \= '`<clinit>`',
+parseMethodDescriptor(Descriptor, OperandArgList, ReturnType),
+reverse(OperandArgList, ArgList),
+currentClassLoader(Environment, CurrentLoader),
+reverse([class(MethodClassName, CurrentLoader) | OperandArgList],
+StackArgList),
+validTypeTransition(Environment, StackArgList, ReturnType,
+StackFrame, NextStackFrame),
+canPop(StackFrame, ArgList, PoppedFrame),
+passesProtectedCheck(Environment, MethodClassName, MethodName,
+Descriptor, PoppedFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+ior  ,   irem
+
+An   ior   instruction is type safe iff the equivalent   iadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(ior, iadd).
+
+```
+
+An   irem   instruction is type safe iff the equivalent   iadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(irem, iadd).
+
+```
+
+ireturn
+
+An   ireturn   instruction is type safe if the enclosing method has a
+declared return type of `int`, and one can validly pop a type matching
+`int` off the incoming operand stack.
+
+```
+
+instructionIsTypeSafe(ireturn, Environment, _Offset, StackFrame,
+afterGoto, ExceptionStackFrame) :-
+thisMethodReturnType(Environment, int),
+canPop(StackFrame, [int], _PoppedStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+ishl  ,   ishr  ,   iushr
+
+An   ishl   instruction is type safe iff the equivalent   iadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(ishl, iadd).
+
+```
+
+An   ishr   instruction is type safe iff the equivalent   iadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(ishr, iadd).
+
+```
+
+An   iushr   instruction is type safe iff the equivalent   iadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(iushr, iadd).
+
+```
+
+istore  ,   istore_<n>
+
+An   istore   instruction with operand `Index` is type
+safe and yields an outgoing type
+state `NextStackFrame`, if a store instruction with
+operand `Index` and type `int` is type safe and
+yields an outgoing type
+state `NextStackFrame`.
+
+```
+
+instructionIsTypeSafe(istore(Index), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+storeIsTypeSafe(Environment, Index, int, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The instructions   istore_<n>  , for 0  &#8804;    n    &#8804;  3, are type safe
+iff the equivalent   istore   instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(istore_0, istore(0)).
+instructionHasEquivalentTypeRule(istore_1, istore(1)).
+instructionHasEquivalentTypeRule(istore_2, istore(2)).
+instructionHasEquivalentTypeRule(istore_3, istore(3)).
+
+```
+
+isub  ,   ixor
+
+An   isub   instruction is type safe iff the equivalent   iadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(isub, iadd).
+
+```
+
+An   ixor   instruction is type safe iff the equivalent   iadd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(ixor, iadd).
+
+```
+
+l2d  ,   l2f  ,   l2i
+
+An   l2d   instruction is type safe if one can validly pop `long` off
+the incoming operand stack and replace it with `double`, yielding the
+outgoing type state.
+
+```
+
+instructionIsTypeSafe(l2d, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [long], double,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+An   l2f   instruction is type safe if one can validly pop `long` off
+the incoming operand stack and replace it with `float`, yielding the
+outgoing type state.
+
+```
+
+instructionIsTypeSafe(l2f, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [long], float,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+An   l2i   instruction is type safe if one can validly pop `long` off
+the incoming operand stack and replace it with `int`, yielding the
+outgoing type state.
+
+```
+
+instructionIsTypeSafe(l2i, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [long], int,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+ladd
+
+An   ladd   instruction is type safe iff one can validly replace types
+matching `long` and `long` on the incoming operand stack with `long`
+yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(ladd, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [long, long], long,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+laload
+
+An   laload   instruction is type safe iff one can validly replace types
+matching `int` and array of `long` on the incoming operand stack with
+`long` yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(laload, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [int, arrayOf(long)], long,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+land
+
+An   land   instruction is type safe iff the equivalent   ladd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(land, ladd).
+
+```
+
+lastore
+
+An   lastore   instruction is type safe iff one can validly pop types
+matching `long`, `int` and array of `long` off the incoming operand
+stack yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(lastore, _Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+canPop(StackFrame, [long, int, arrayOf(long)], NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+lcmp
+
+A   lcmp   instruction is type safe iff one can validly replace types
+matching `long` and `long` on the incoming operand stack with `int`
+yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(lcmp, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [long, long], int,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+lconst_<l>
+
+An   lconst_0   instruction is type safe if one can validly push the
+type `long` onto the incoming operand stack yielding the outgoing type
+state.
+
+```
+
+instructionIsTypeSafe(lconst_0, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [], long, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+An   lconst_1   instruction is type safe iff the equivalent   lconst_0
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(lconst_1, lconst_0).
+
+```
+
+ldc  ,   ldc_w  ,   ldc2_w
+
+An   ldc   instruction with operand `CP` is type safe iff `CP` refers to
+a constant pool entry denoting an entity of type `Type`, where `Type`
+is  loadable ( &sect;4.4 ), but not
+`long` or `double`, and one can validly push `Type` onto the incoming
+operand stack yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(ldc(CP), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+loadableConstant(CP, Type),
+Type \= long,
+Type \= double,
+validTypeTransition(Environment, [], Type, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+loadableConstant(CP, Type) :-
+member([CP, Type], [
+[int(_),    int],
+[float(_),  float],
+[long(_),   long],
+[double(_), double]
+]).
+
+loadableConstant(CP, Type) :-
+isBootstrapLoader(BL),
+member([CP, Type], [
+[class(_),          class('java/lang/Class', BL)],
+[string(_),         class('java/lang/String', BL)],
+[methodHandle(_,_), class('java/lang/invoke/MethodHandle', BL)],
+[methodType(_,_),   class('java/lang/invoke/MethodType', BL)]
+]).
+
+loadableConstant(CP, Type) :-
+CP = dconstant(_, FieldDescriptor),
+parseFieldDescriptor(FieldDescriptor, Type).
+
+```
+
+An   ldc_w   instruction is type safe iff the equivalent   ldc
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(ldc_w(CP), ldc(CP))
+
+```
+
+An   ldc2_w   instruction with operand `CP` is type safe iff `CP` refers
+to a constant pool entry denoting an entity of type `Type`, where
+`Type` is either `long` or `double`, and one can validly push `Type`
+onto the incoming operand stack yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(ldc2_w(CP), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+loadableConstant(CP, Type),
+(Type = long ; Type = double),
+validTypeTransition(Environment, [], Type, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+ldiv
+
+An   ldiv   instruction is type safe iff the equivalent   ladd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(ldiv, ladd).
+
+```
+
+lload  ,   lload_<n>
+
+An   lload   instruction with operand `Index` is type
+safe and yields an outgoing type
+state `NextStackFrame`, if a load instruction with
+operand `Index` and type `long` is type safe and
+yields an outgoing type
+state `NextStackFrame`.
+
+```
+
+instructionIsTypeSafe(lload(Index), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+loadIsTypeSafe(Environment, Index, long, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The instructions   lload_<n>  , for 0  &#8804;    n    &#8804;  3, are type safe
+iff the equivalent   lload   instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(lload_0, lload(0)).
+instructionHasEquivalentTypeRule(lload_1, lload(1)).
+instructionHasEquivalentTypeRule(lload_2, lload(2)).
+instructionHasEquivalentTypeRule(lload_3, lload(3)).
+
+```
+
+lmul
+
+An   lmul   instruction is type safe iff the equivalent   ladd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(lmul, ladd).
+
+```
+
+lneg
+
+An   lneg   instruction is type safe iff there is a type matching `long`
+on the incoming operand stack. The   lneg   instruction does not alter
+the type state.
+
+```
+
+instructionIsTypeSafe(lneg, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [long], long,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+lookupswitch
+
+A   lookupswitch   instruction is type safe if its keys are sorted, one
+can validly pop `int` off the incoming operand stack yielding a new
+type state `BranchStackFrame`, and all of the
+instruction's targets are valid branch targets
+assuming `BranchStackFrame` as their incoming type
+state.
+
+```
+
+instructionIsTypeSafe(lookupswitch(Targets, Keys), Environment, _, StackFrame,
+afterGoto, ExceptionStackFrame) :-
+sort(Keys, Keys),
+canPop(StackFrame, [int], BranchStackFrame),
+checklist(targetIsTypeSafe(Environment, BranchStackFrame), Targets),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+lor  ,   lrem
+
+A   lor   instruction is type safe iff the equivalent   ladd   instruction
+is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(lor, ladd).
+
+```
+
+An   lrem   instruction is type safe iff the equivalent   ladd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(lrem, ladd).
+
+```
+
+lreturn
+
+An   lreturn   instruction is type safe if the enclosing method has a
+declared return type of `long`, and one can validly pop a type
+matching `long` off the incoming operand stack.
+
+```
+
+instructionIsTypeSafe(lreturn, Environment, _Offset, StackFrame,
+afterGoto, ExceptionStackFrame) :-
+thisMethodReturnType(Environment, long),
+canPop(StackFrame, [long], _PoppedStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+lshl  ,   lshr  ,   lushr
+
+An   lshl   instruction is type safe if one can validly replace the
+types `int` and `long` on the incoming operand stack with the type
+`long` yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(lshl, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [int, long], long,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+An   lshr   instruction is type safe iff the equivalent   lshl
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(lshr, lshl).
+
+```
+
+An   lushr   instruction is type safe iff the equivalent   lshl
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(lushr, lshl).
+
+```
+
+lstore  ,   lstore_<n>
+
+An   lstore   instruction with operand `Index` is type
+safe and yields an outgoing type
+state `NextStackFrame`, if a store instruction with
+operand `Index` and type `long` is type safe and
+yields an outgoing type
+state `NextStackFrame`.
+
+```
+
+instructionIsTypeSafe(lstore(Index), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+storeIsTypeSafe(Environment, Index, long, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The instructions   lstore_<n>  , for 0  &#8804;    n    &#8804;  3, are type safe
+iff the equivalent   lstore   instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(lstore_0, lstore(0)).
+instructionHasEquivalentTypeRule(lstore_1, lstore(1)).
+instructionHasEquivalentTypeRule(lstore_2, lstore(2)).
+instructionHasEquivalentTypeRule(lstore_3, lstore(3)).
+
+```
+
+lsub  ,   lxor
+
+An   lsub   instruction is type safe iff the equivalent   ladd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(lsub, ladd).
+
+```
+
+An   lxor   instruction is type safe iff the equivalent   ladd
+instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(lxor, ladd).
+
+```
+
+monitorenter  ,   monitorexit
+
+A   monitorenter   instruction is type safe iff one can validly pop a
+type matching `reference` off the incoming operand stack yielding the
+outgoing type state.
+
+```
+
+instructionIsTypeSafe(monitorenter, _Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+canPop(StackFrame, [reference], NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+A   monitorexit   instruction is type safe iff the equivalent
+monitorenter   instruction is type safe.
+
+```
+
+instructionHasEquivalentTypeRule(monitorexit, monitorenter).
+
+```
+
+multianewarray
+
+A   multianewarray   instruction with operands `CP`
+and `Dim` is type safe iff `CP` refers to a constant
+pool entry denoting an array type whose dimension is greater or equal
+to `Dim`, `Dim` is strictly
+positive, and one can validly replace `Dim` `int`
+types on the incoming operand stack with the type denoted by `CP`
+yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(multianewarray(CP, Dim), Environment, _Offset,
+StackFrame, NextStackFrame, ExceptionStackFrame) :-
+CP = arrayOf(_),
+classDimension(CP, Dimension),
+Dimension >= Dim,
+Dim > 0,
+/* Make a list of Dim ints */
+findall(int, between(1, Dim, _), IntList),
+validTypeTransition(Environment, IntList, CP,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The dimension of an array type whose component type is also an array
+type is one more than the dimension of its component type.
+
+```
+
+classDimension(arrayOf(X), Dimension) :-
+classDimension(X, Dimension1),
+Dimension is Dimension1 + 1.
+
+classDimension(_, Dimension) :-
+Dimension = 0.
+
+```
+
+new
+
+A   new   instruction with operand `CP` at
+offset `Offset` is type safe iff `CP` refers to a
+constant pool entry denoting a class or interface type, the type
+`uninitialized(Offset)` does not appear in the incoming operand stack,
+and one can validly push `uninitialized(Offset)` onto the incoming
+operand stack and replace `uninitialized(Offset)` with `top` in the
+incoming local variables yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(new(CP), Environment, Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+StackFrame = frame(Locals, OperandStack, Flags),
+CP = class(_, _),
+NewItem = uninitialized(Offset),
+notMember(NewItem, OperandStack),
+substitute(NewItem, top, Locals, NewLocals),
+validTypeTransition(Environment, [], NewItem,
+frame(NewLocals, OperandStack, Flags),
+NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The `substitute` predicate is
+defined in the rule for   invokespecial
+( &sect;  invokespecial   ).
+
+newarray
+
+A   newarray   instruction with operand `TypeCode` is
+type safe iff `TypeCode` corresponds to the primitive
+type `ElementType`, and one can validly replace the
+type `int` on the incoming operand stack with the type 'array
+of `ElementType`', yielding the outgoing type
+state.
+
+```
+
+instructionIsTypeSafe(newarray(TypeCode), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+primitiveArrayInfo(TypeCode, _TypeChar, ElementType, _VerifierType),
+validTypeTransition(Environment, [int], arrayOf(ElementType),
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+The correspondence between type codes and primitive types is specified
+by the following predicate:
+
+```
+
+primitiveArrayInfo(4,  0'Z, boolean, int).
+primitiveArrayInfo(5,  0'C, char,    int).
+primitiveArrayInfo(6,  0'F, float,   float).
+primitiveArrayInfo(7,  0'D, double,  double).
+primitiveArrayInfo(8,  0'B, byte,    int).
+primitiveArrayInfo(9,  0'S, short,   int).
+primitiveArrayInfo(10, 0'I, int,     int).
+primitiveArrayInfo(11, 0'J, long,    long).
+
+```
+
+nop
+
+A   nop   instruction is always type safe. The   nop   instruction does
+not affect the type state.
+
+```
+
+instructionIsTypeSafe(nop, _Environment, _Offset, StackFrame,
+StackFrame, ExceptionStackFrame) :-
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+pop  ,   pop2
+
+A   pop   instruction is type safe iff one can validly pop a category 1
+type off the incoming operand stack yielding the outgoing type
+state.
+
+```
+
+instructionIsTypeSafe(pop, _Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+StackFrame = frame(Locals, [Type | Rest], Flags),
+popCategory1([Type | Rest], Type, Rest),
+NextStackFrame = frame(Locals, Rest, Flags),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+A   pop2   instruction is type safe iff it is a   type safe
+form   of the   pop2   instruction.
+
+```
+
+instructionIsTypeSafe(pop2, _Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+StackFrame = frame(Locals, InputOperandStack, Flags),
+pop2SomeFormIsTypeSafe(InputOperandStack, OutputOperandStack),
+NextStackFrame = frame(Locals, OutputOperandStack, Flags),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+A   pop2   instruction is a   type safe form   of the
+pop2   instruction iff it is a   type safe form 1
+pop2   instruction or a   type safe form 2     pop2
+instruction.
+
+```
+
+pop2SomeFormIsTypeSafe(InputOperandStack, OutputOperandStack) :-
+pop2Form1IsTypeSafe(InputOperandStack, OutputOperandStack).
+
+pop2SomeFormIsTypeSafe(InputOperandStack, OutputOperandStack) :-
+pop2Form2IsTypeSafe(InputOperandStack, OutputOperandStack).
+
+```
+
+A   pop2   instruction is a   type safe form 1     pop2
+instruction iff one can validly pop two types of size 1 off the
+incoming operand stack yielding the outgoing type state.
+
+```
+
+pop2Form1IsTypeSafe([Type1, Type2 | Rest], Rest) :-
+popCategory1([Type1 | Rest], Type1, Rest),
+popCategory1([Type2 | Rest], Type2, Rest).
+
+```
+
+A   pop2   instruction is a   type safe form 2     pop2
+instruction iff one can validly pop a type of size 2 off the incoming
+operand stack yielding the outgoing type state.
+
+```
+
+pop2Form2IsTypeSafe([top, Type | Rest], Rest) :-
+popCategory2([top, Type | Rest], Type, Rest).
+
+```
+
+putfield
+
+A   putfield   instruction with operand `CP` is type safe iff all of the
+following are true:
+
+Its first operand, `CP`, refers to a constant pool entry
+denoting a field whose declared type is `FieldType` that
+is a member of a class `FieldClassName`.
+`FieldClassName` must not be an array type.
+
+Either:
+
+One can validly pop types matching `FieldType`
+and `FieldClassName` off the incoming operand
+stack yielding the outgoing type state.
+
+`protected` fields are subject to additional checks ( &sect;4.10.1.8 ).
+
+```
+
+instructionIsTypeSafe(putfield(CP), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+CP = field(FieldClassName, FieldName, FieldDescriptor),
+parseFieldDescriptor(FieldDescriptor, FieldType),
+canPop(StackFrame, [FieldType], PoppedFrame),
+passesProtectedCheck(Environment, FieldClassName, FieldName,
+FieldDescriptor, PoppedFrame),
+currentClassLoader(Environment, CurrentLoader),
+canPop(StackFrame, [FieldType, class(FieldClassName, CurrentLoader)],
+NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+Or:
+
+If the instruction occurs in an instance initialization method of the
+class `FieldClassName` and assigns to a field declared by
+the class, then one can validly pop types matching
+`FieldType` and `uninitializedThis` off the incoming
+operand stack yielding the outgoing type state. This allows instance
+fields of `this` that are declared in the current class to be assigned
+prior to complete initialization of `this`.
+
+```
+
+instructionIsTypeSafe(putfield(CP), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+CP = field(FieldClassName, FieldName, FieldDescriptor),
+parseFieldDescriptor(FieldDescriptor, FieldType),
+Environment = environment(CurrentClass, CurrentMethod, _, _, _, _),
+CurrentClass = class(FieldClassName, _),
+isInit(CurrentMethod),
+classDeclaresMember(CurrentClass, FieldName, FieldDescriptor),
+canPop(StackFrame, [FieldType, uninitializedThis], NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+putstatic
+
+A   putstatic   instruction with operand `CP` is type safe iff `CP`
+refers to a constant pool entry denoting a field whose declared type
+is `FieldType`, and one can validly pop a type
+matching `FieldType` off the incoming operand stack
+yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(putstatic(CP), _Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+CP = field(_FieldClassName, _FieldName, FieldDescriptor),
+parseFieldDescriptor(FieldDescriptor, FieldType),
+canPop(StackFrame, [FieldType], NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+return
+
+A   return   instruction is type safe if the enclosing method declares a
+`void` return type, and either:
+
+The enclosing method is not an `<init>` method, or
+
+`this` has already been completely initialized at the point
+where the instruction occurs.
+
+```
+
+instructionIsTypeSafe(return, Environment, _Offset, StackFrame,
+afterGoto, ExceptionStackFrame) :-
+thisMethodReturnType(Environment, void),
+StackFrame = frame(_Locals, _OperandStack, Flags),
+notMember(flagThisUninit, Flags),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+saload
+
+An   saload   instruction is type safe iff one can validly replace types
+matching `int` and array of `short` on the incoming operand stack with
+`int` yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(saload, Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [int, arrayOf(short)], int,
+StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+sastore
+
+An   sastore   instruction is type safe iff one can validly pop types
+matching `int`, `int`, and array of `short` off the incoming operand
+stack yielding the outgoing type state.
+
+```
+
+instructionIsTypeSafe(sastore, _Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+canPop(StackFrame, [int, int, arrayOf(short)], NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+sipush
+
+An   sipush   instruction is type safe iff one can validly push the type
+`int` onto the incoming operand stack yielding the outgoing type
+state.
+
+```
+
+instructionIsTypeSafe(sipush(_Value), Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+validTypeTransition(Environment, [], int, StackFrame, NextStackFrame),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+swap
+
+A   swap   instruction is type safe iff one can validly replace two
+category 1 types, `Type1` and `Type2`, on the incoming operand stack
+with the types `Type2` and `Type1` yielding the outgoing type
+state.
+
+```
+
+instructionIsTypeSafe(swap, _Environment, _Offset, StackFrame,
+NextStackFrame, ExceptionStackFrame) :-
+StackFrame = frame(_Locals, [Type1, Type2 | Rest], _Flags),
+popCategory1([Type1 | Rest], Type1, Rest),
+popCategory1([Type2 | Rest], Type2, Rest),
+NextStackFrame = frame(_Locals, [Type2, Type1 | Rest], _Flags),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+tableswitch
+
+A   tableswitch   instruction is type safe if its keys are sorted, one
+can validly pop `int` off the incoming operand stack yielding a new
+type state `BranchStackFrame`, and all of the
+instruction's targets are valid branch targets
+assuming `BranchStackFrame` as their incoming type
+state.
+
+```
+
+instructionIsTypeSafe(tableswitch(Targets, Keys), Environment, _Offset,
+StackFrame, afterGoto, ExceptionStackFrame) :-
+sort(Keys, Keys),
+canPop(StackFrame, [int], BranchStackFrame),
+checklist(targetIsTypeSafe(Environment, BranchStackFrame), Targets),
+exceptionStackFrame(StackFrame, ExceptionStackFrame).
+
+```
+
+wide
+
+The   wide   instructions follow the same rules as the instructions they
+widen.
+
+```
+
+instructionHasEquivalentTypeRule(wide(WidenedInstruction),
+WidenedInstruction).
+
+```
+
+###   4.10.2. Verification by Type Inference
+
+A `class` file that does
+not contain a `StackMapTable` attribute (which necessarily has a
+version number of 49.0 or below) must be verified using type
+inference.
+
+####   4.10.2.1. The Process of Verification by Type Inference
+
+During linking, the
+verifier checks the `code` array of the `Code` attribute for each
+method of the `class` file by performing data-flow analysis on each
+method. The verifier ensures that at any given point in the program,
+no matter what code path is taken to reach that point, all of the
+following are true:
+
+The operand stack is always the same size and contains the same
+types of values.
+
+No local variable is accessed unless it is known to contain a
+value of an appropriate type.
+
+Methods are invoked with the appropriate arguments.
+
+Fields are assigned only using values of appropriate
+types.
+
+All opcodes have appropriately typed arguments on the operand
+stack and in the local variable array.
+
+For efficiency reasons,
+certain tests that could in principle be performed by the verifier are
+delayed until the first time the code for the method is actually
+invoked. In so doing, the verifier avoids loading `class` files unless
+it has to.
+
+For example, if a method invokes another method that
+returns an instance of class  A , and that instance is assigned only
+to a field of the same type, the verifier does not bother to check if
+the class  A  actually exists. However, if it is assigned to a field
+of the type  B , the definitions of both  A  and  B  must be loaded in
+to ensure that  A  is a subclass of  B .
+
+####   4.10.2.2. The Bytecode Verifier
+
+The code for each method
+is verified independently. First, the bytes that make up the code are
+broken up into a sequence of instructions, and the index into the
+`code` array of the start of each instruction is placed in an
+array. The verifier then goes through the code a second time and
+parses the instructions. During this pass a data structure is built to
+hold information about each Java Virtual Machine instruction in the method. The
+operands, if any, of each instruction are checked to make sure they
+are valid. For instance:
+
+Branches must be
+within the bounds of the `code` array for the method.
+
+The targets of all
+control-flow instructions are each the start of an
+instruction. In the case of a   wide   instruction, the   wide
+opcode is considered the start of the instruction, and the
+opcode giving the operation modified by that   wide   instruction
+is not considered to start an instruction. Branches into the
+middle of an instruction are disallowed.
+
+No instruction can
+access or modify a local variable at an index greater than or
+equal to the number of local variables that its method indicates
+it allocates.
+
+All references to
+the constant pool must be to an entry of the appropriate
+type. (For example, the instruction   getfield   must reference a
+field.)
+
+The code does not
+end in the middle of an instruction.
+
+Execution cannot
+fall off the end of the code.
+
+For each exception
+handler, the starting and ending point of code protected by the
+handler must be at the beginning of an instruction or, in the
+case of the ending point, immediately past the end of the
+code. The starting point must be before the ending point. The
+exception handler code must start at a valid instruction, and it
+must not start at an opcode being modified by the   wide
+instruction.
+
+For each instruction of
+the method, the verifier records the contents of the operand stack and
+the contents of the local variable array prior to the execution of
+that instruction. For the operand stack, it needs to know the stack
+height and the type of each value on it. For each local variable, it
+needs to know either the type of the contents of that local variable
+or that the local variable contains an unusable or unknown value (it
+might be uninitialized). The bytecode verifier does not need to
+distinguish between the integral types (e.g., `byte`, `short`, `char`)
+when determining the value types on the operand stack.
+
+Next, a data-flow
+analyzer is initialized. For the first instruction of the method, the
+local variables that represent parameters initially contain values of
+the types indicated by the method's type descriptor; the operand stack
+is empty. All other local variables contain an illegal value. For the
+other instructions, which have not been examined yet, no information
+is available regarding the operand stack or local variables.
+
+Finally, the data-flow
+analyzer is run. For each instruction, a "changed" bit indicates
+whether this instruction needs to be looked at. Initially, the
+"changed" bit is set only for the first instruction. The data-flow
+analyzer executes the following loop:
+
+Select a Java Virtual Machine instruction whose "changed" bit is set. If no
+instruction remains whose "changed" bit is set, the method has
+successfully been verified. Otherwise, turn off the "changed"
+bit of the selected instruction.
+
+Model the effect of the instruction on the operand stack and
+local variable array by doing the following:
+
+If the instruction uses values from the operand stack,
+ensure that there are a sufficient number of values on the
+stack and that the top values on the stack are of an
+appropriate type. Otherwise, verification fails.
+
+If the instruction uses a local variable, ensure that the
+specified local variable contains a value of the appropriate
+type. Otherwise, verification fails.
+
+If the instruction pushes values onto the operand stack,
+ensure that there is sufficient room on the operand stack
+for the new values. Add the indicated types to the top of
+the modeled operand stack.
+
+If the instruction modifies a local variable, record that
+the local variable now contains the new type.
+
+Determine the instructions that can follow the current
+instruction. Successor instructions can be one of the
+following:
+
+The next instruction, if the current instruction is not an
+unconditional control transfer instruction (for instance,
+goto  ,   return  , or   athrow  ). Verification fails if it is
+possible to "fall off" the last instruction of the
+method.
+
+The target(s) of a conditional or unconditional branch or
+switch.
+
+Any exception handlers for this instruction.
+
+Merge the state of the operand stack and local variable array at
+the end of the execution of the current instruction into each of
+the successor instructions, as follows:
+
+If this is the first time the successor instruction has been
+visited, record that the operand stack and local variable
+values calculated in step 2 are the state of the operand
+stack and local variable array prior to executing the
+successor instruction. Set the "changed" bit for the
+successor instruction.
+
+If the successor instruction has been seen before, merge the
+operand stack and local variable values calculated in step 2
+into the values already there. Set the "changed" bit if
+there is any modification to the values.
+
+In the special case of control transfer to an exception handler:
+
+Record that a single object, of the exception type indicated
+by the exception handler, is the state of the operand stack
+prior to executing the successor instruction. There must be
+sufficient room on the operand stack for this single value,
+as if an instruction had pushed it.
+
+Record that the local variable values from immediately
+before step 2 are the state of the local variable array
+prior to executing the successor instruction. The local
+variable values calculated in step 2 are irrelevant.
+
+Continue at step 1.
+
+To merge two operand stacks, the
+number of values on each stack must be identical. Then, corresponding
+values on the two stacks are compared and the value on the merged
+stack is computed, as follows:
+
+If one value is a primitive type, then the corresponding value
+must be the same primitive type. The merged value is the
+primitive type.
+
+If one value is a non-array reference type, then the
+corresponding value must be a reference type (array or
+non-array). The merged value is a reference to an instance of
+the first common supertype of the two reference types. (Such a
+reference type always exists because the type `Object` is a
+supertype of all class, interface, and array types.)
+
+For example, `Object` and `String` can be
+merged; the result is `Object`. Similarly, `Object` and
+`String``[]` can be merged; the result is again
+`Object`. Even `Object` and `int``[]` can be merged, or
+`String` and `int``[]`; the result is `Object` for
+both.
+
+If corresponding values are both array reference types, then
+their dimensions are examined. If the array types have the same
+dimensions, then the merged value is a `reference` to an instance of
+an array type which is first common supertype of both array
+types. (If either or both of the array types has a primitive
+element type, then `Object` is used as the element type
+instead.) If the array types have different dimensions, then the
+merged value is a `reference` to an instance of an array type whose
+dimension is the smaller of the two; the element type is
+`Cloneable` or `java.io.Serializable` if the smaller array type was
+`Cloneable` or `java.io.Serializable`, and `Object` otherwise.
+
+For example, `Object``[]` and
+`String``[]` can be merged; the result is
+`Object``[]`. `Cloneable``[]` and `String``[]`
+can be merged, or `java.io.Serializable``[]` and
+`String``[]`; the result is `Cloneable``[]` and
+`java.io.Serializable``[]` respectively. Even `int``[]` and
+`String``[]` can be merged; the result is
+`Object``[]`, because `Object` is used instead of `int`
+when computing the first common supertype.
+
+Since the array types can have different
+dimensions, `Object``[]` and `String``[]``[]`
+can be merged, or `Object``[]``[]` and
+`String``[]`; in both cases the result is
+`Object``[]`. `Cloneable``[]` and
+`String``[]``[]` can be merged; the result is
+`Cloneable``[]`. Finally, `Cloneable``[]``[]`
+and `String``[]` can be merged; the result is
+`Object``[]`.
+
+If the operand stacks cannot be
+merged, verification of the method fails.
+
+To merge two local variable array
+states, corresponding pairs of local variables are compared. The value
+of the merged local variable is computed using the rules above, except
+that the corresponding values are permitted to be different primitive
+types. In that case, the verifier records that the merged local
+variable contains an unusable value.
+
+If the data-flow analyzer
+runs on a method without reporting a verification failure, then the
+method has been successfully verified by the `class` file
+verifier.
+
+Certain instructions and
+data types complicate the data-flow analyzer. We now examine each of
+these in more detail.
+
+####   4.10.2.3. Values of Types `long` and `double`
+
+Values of the `long` and
+`double` types are treated specially by the verification
+process.
+
+Whenever a value of type
+`long` or `double` is moved into a local variable at index   n  ,
+index   n  +1 is specially marked to indicate that it has been
+reserved by the value at index   n   and must not be used as a local
+variable index. Any value previously at index   n  +1 becomes
+unusable.
+
+Whenever a value is moved
+to a local variable at index   n  , the index   n  -1 is examined to
+see if it is the index of a value of type `long` or `double`. If so,
+the local variable at index   n  -1 is changed to indicate that it
+now contains an unusable value. Since the local variable at index
+n   has been overwritten, the local variable at index   n  -1
+cannot represent a value of type `long` or `double`.
+
+Dealing with values of
+types `long` or `double` on the operand stack is simpler; the verifier
+treats them as single values on the stack. For example, the
+verification code for the   dadd   opcode (add two `double` values)
+checks that the top two items on the stack are both of type
+`double`. When calculating operand stack length, values of type `long`
+and `double` have length two.
+
+Untyped instructions that
+manipulate the operand stack must treat values of type `long` and
+`double` as atomic (indivisible). For example, the verifier reports a
+failure if the top value on the stack is a `double` and it encounters
+an instruction such as   pop   or   dup  . The instructions   pop2   or
+dup2   must be used instead.
+
+####   4.10.2.4. Instance Initialization Methods and Newly Created Objects
+
+Creating a new class
+instance is a multistep process. The statement:
+
+```
+
+...
+new myClass(i, j, k);
+...
+
+```
+
+can be implemented by the
+following:
+
+```
+
+...
+new #1            // Allocate uninitialized space for myClass
+dup               // Duplicate object on the operand stack
+iload_1           // Push i
+iload_2           // Push j
+iload_3           // Push k
+invokespecial #5  // Invoke myClass.`<init>`
+...
+
+```
+
+This instruction sequence
+leaves the newly created and initialized object on top of the operand
+stack. (Additional examples of compilation to the instruction set of
+the Java Virtual Machine are given in  &sect;3 ( Compiling for the Java Virtual Machine ) .)
+
+The instance
+initialization method ( &sect;2.9.1 ) for
+class `myClass` sees the new uninitialized object as
+its `this` argument in local variable 0. Before that method invokes
+another instance initialization method of `myClass`
+or its direct superclass on `this`, the only operation the method can
+perform on `this` is assigning fields declared
+within `myClass`.
+
+When doing dataflow
+analysis on instance methods, the verifier initializes local variable
+0 to contain an object of the current class, or, for instance
+initialization methods, local variable 0 contains a special type
+indicating an uninitialized object. After an appropriate instance
+initialization method is invoked (from the current class or its direct
+superclass) on this object, all occurrences of this special type on
+the verifier's model of the operand stack and in the local variable
+array are replaced by the current class type. The verifier rejects
+code that uses the new object before it has been initialized or that
+initializes the object more than once. In addition, it ensures that
+every normal return of the method has invoked an instance
+initialization method either in the class of this method or in the
+direct superclass.
+
+Similarly, a special type
+is created and pushed on the verifier's model of the operand stack as
+the result of the Java Virtual Machine instruction   new  . The special type indicates
+the instruction by which the class instance was created and the type
+of the uninitialized class instance created. When an instance
+initialization method declared in the class of the uninitialized class
+instance is invoked on that class instance, all occurrences of the
+special type are replaced by the intended type of the class
+instance. This change in type may propagate to subsequent instructions
+as the dataflow analysis proceeds.
+
+The instruction number
+needs to be stored as part of the special type, as there may be
+multiple not-yet-initialized instances of a class in existence on the
+operand stack at one time. For example, the Java Virtual Machine instruction sequence
+that implements:
+
+```
+
+new InputStream(new Foo(), new InputStream("foo"))
+
+```
+
+may have two
+uninitialized instances of `InputStream` on the
+operand stack at once. When an instance initialization method is
+invoked on a class instance, only those occurrences of the special
+type on the operand stack or in the local variable array that are the
+same object as the class instance are replaced.
+
+####   4.10.2.5. Exceptions and `finally`
+
+To implement the
+`try`-`finally` construct, a compiler for the Java programming language that
+generates `class` files with version number 50.0 or below may use the
+exception-handling facilities together with two special instructions:
+jsr   ("jump to subroutine") and   ret   ("return from subroutine"). The
+`finally` clause is compiled as a subroutine within the Java Virtual Machine code for
+its method, much like the code for an exception handler. When a   jsr
+instruction that invokes the subroutine is executed, it pushes its
+return address, the address of the instruction after the   jsr   that is
+being executed, onto the operand stack as a value of type
+`returnAddress`. The code for the subroutine stores the return address
+in a local variable. At the end of the subroutine, a   ret   instruction
+fetches the return address from the local variable and transfers
+control to the instruction at the return address.
+
+Control can be
+transferred to the `finally` clause (the `finally` subroutine can be
+invoked) in several different ways. If the `try` clause completes
+normally, the `finally` subroutine is invoked via a   jsr   instruction
+before evaluating the next expression. A `break` or `continue` inside
+the `try` clause that transfers control outside the `try` clause
+executes a   jsr   to the code for the `finally` clause first. If the
+`try` clause executes a   return  , the compiled code does the
+following:
+
+Saves the return
+value (if any) in a local variable.
+
+Executes a   jsr   to
+the code for the `finally` clause.
+
+Upon return from
+the `finally` clause, returns the value saved in the local
+variable.
+
+The compiler sets up a
+special exception handler, which catches any exception thrown by the
+`try` clause. If an exception is thrown in the `try` clause, this
+exception handler does the following:
+
+Saves the exception
+in a local variable.
+
+Executes a   jsr   to
+the `finally` clause.
+
+Upon return from
+the `finally` clause, rethrows the exception.
+
+For more information about the implementation of the
+`try`-`finally` construct, see  &sect;3.13 .
+
+The code for the
+`finally` clause presents a special problem to the verifier. Usually,
+if a particular instruction can be reached via multiple paths and a
+particular local variable contains incompatible values through those
+multiple paths, then the local variable becomes unusable. However, a
+`finally` clause might be called from several different places,
+yielding several different circumstances:
+
+The invocation from
+the exception handler may have a certain local variable that
+contains an exception.
+
+The invocation to
+implement   return   may have some local variable that contains the
+return value.
+
+The invocation from
+the bottom of the `try` clause may have an indeterminate value in
+that same local variable.
+
+The code for the
+`finally` clause itself might pass verification, but after completing
+the updating all the successors of the   ret   instruction, the verifier
+would note that the local variable that the exception handler expects
+to hold an exception, or that the return code expects to hold a return
+value, now contains an indeterminate value.
+
+Verifying code that
+contains a `finally` clause is complicated. The basic idea is the
+following:
+
+Each instruction
+keeps track of the list of   jsr   targets needed to reach that
+instruction. For most code, this list is empty. For instructions
+inside code for the `finally` clause, it is of length one. For
+multiply nested `finally` code (extremely rare!), it may be longer
+than one.
+
+For each
+instruction and each   jsr   needed to reach that instruction, a bit
+vector is maintained of all local variables accessed or modified
+since the execution of the   jsr   instruction.
+
+When executing the
+ret   instruction, which implements a return from a subroutine,
+there must be only one possible subroutine from which the
+instruction can be returning. Two different subroutines cannot
+"merge" their execution to a single   ret   instruction.
+
+To perform the
+data-flow analysis on a   ret   instruction, a special procedure is
+used. Since the verifier knows the subroutine from which the
+instruction must be returning, it can find all the   jsr
+instructions that call the subroutine and merge the state of the
+operand stack and local variable array at the time of the   ret
+instruction into the operand stack and local variable array of the
+instructions following the   jsr  . Merging uses a special set of
+values for local variables:
+
+For any local
+variable that the bit vector (constructed above) indicates has
+been accessed or modified by the subroutine, use the type of
+the local variable at the time of the   ret  .
+
+For other
+local variables, use the type of the local variable before the
+jsr   instruction.
+
+##   4.11. Limitations of the Java Virtual Machine
+
+The following limitations of
+the Java Virtual Machine are implicit in the `class` file format:
+
+The per-class or
+per-interface constant pool is limited to 65535 entries by the
+16-bit `constant_pool_count` field of the
+`ClassFile` structure ( &sect;4.1 ). This acts as
+an internal limit on the total complexity of a single class or
+interface.
+
+The number of fields
+that may be declared by a class or interface is limited to 65535
+by the size of the `fields_count` item of the
+`ClassFile` structure ( &sect;4.1 ).
+
+Note that the value
+of the `fields_count` item of the `ClassFile`
+structure does not include fields that are inherited from
+superclasses or superinterfaces.
+
+The number of methods
+that may be declared by a class or interface is limited to 65535
+by the size of the `methods_count` item of the
+`ClassFile` structure ( &sect;4.1 ).
+
+Note that the value
+of the `methods_count` item of the `ClassFile`
+structure does not include methods that are inherited from
+superclasses or superinterfaces.
+
+The number of direct
+superinterfaces of a class or interface is limited to 65535 by the
+size of the `interfaces_count` item of the
+`ClassFile` structure ( &sect;4.1 ).
+
+The greatest number of
+local variables in the local variables array of a frame created
+upon invocation of a method ( &sect;2.6 ) is
+limited to 65535 by the size of the
+`max_locals` item of the `Code` attribute
+( &sect;4.7.3 ) giving the code of the method, and
+by the 16-bit local variable indexing of the Java Virtual Machine instruction
+set.
+
+Note that values of
+type `long` and `double` are each considered to reserve two local
+variables and contribute two units toward
+the `max_locals` value, so use of local variables
+of those types further reduces this limit.
+
+The size of an operand
+stack in a frame ( &sect;2.6 ) is limited to 65535
+values by the `max_stack` field of the `Code`
+attribute ( &sect;4.7.3 ).
+
+Note that values of
+type `long` and `double` are each considered to contribute two
+units toward the `max_stack` value, so use of
+values of these types on the operand stack further reduces this
+limit.
+
+The number of method
+parameters is limited to 255 by the definition of a method
+descriptor ( &sect;4.3.3 ), where the limit
+includes one unit for `this` in the case of instance or interface
+method invocations.
+
+Note that a method
+descriptor is defined in terms of a notion of method parameter
+length in which a parameter of type `long` or `double` contributes
+two units to the length, so parameters of these types further
+reduce the limit.
+
+The length of field and
+method names, field and method descriptors, and other constant
+string values (including those referenced by `ConstantValue`
+( &sect;4.7.2 ) attributes) is limited to 65535
+characters by the 16-bit unsigned `length` item
+of the `CONSTANT_Utf8_info` structure
+( &sect;4.4.7 ).
+
+Note that the limit
+is on the number of bytes in the encoding and not on the number of
+encoded characters. UTF-8 encodes some characters using two or
+three bytes. Thus, strings incorporating multibyte characters are
+further constrained.
+
+The number of
+dimensions in an array is limited to 255 by the size of
+the   dimensions   opcode of the   multianewarray
+instruction and by the constraints imposed on the
+multianewarray  ,   anewarray  , and   newarray   instructions
+( &sect;4.9.1 ,  &sect;4.9.2 ).
+
+Prev
+
+Next
+
+Chapter 3. Compiling for the Java Virtual Machine
+Home
+Chapter 5. Loading, Linking, and Initializing
+
+Legal Notice

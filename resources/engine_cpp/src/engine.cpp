@@ -429,33 +429,77 @@ Local* as_hashcode_target(const ExprPtr& e) {
 std::optional<std::pair<std::string, std::string>> match_hash_case(const std::vector<StmtPtr>& body,
                                                                      const std::string& x_name,
                                                                      const std::string& idx_name) {
-    if (body.size() != 2 && body.size() != 3) return std::nullopt;
-    if (body[0]->kind != StmtKind::IfStmt) return std::nullopt;
-    auto* ifs = static_cast<IfStmt*>(body[0].get());
-    if (ifs->else_body.has_value()) return std::nullopt;
-    if (ifs->then_body.size() != 1 || ifs->then_body[0]->kind != StmtKind::BreakStmt) return std::nullopt;
-    if (!ifs->cond || ifs->cond->kind != ExprKind::UnOp) return std::nullopt;
-    auto* neg = static_cast<UnOp*>(ifs->cond.get());
-    if (neg->op != "!" || !neg->expr || neg->expr->kind != ExprKind::MethodCall) return std::nullopt;
-    auto* eq = static_cast<MethodCall*>(neg->expr.get());
-    if (eq->name != "equals" || eq->args.size() != 1 || !eq->target || eq->target->kind != ExprKind::Local) return std::nullopt;
-    if (static_cast<Local*>(eq->target.get())->name != x_name) return std::nullopt;
-    if (eq->args[0]->kind != ExprKind::Const) return std::nullopt;
-    auto* lit = static_cast<Const*>(eq->args[0].get());
-    if (lit->type != "String") return std::nullopt;
+    if (body.empty()) return std::nullopt;
 
-    if (body[1]->kind != StmtKind::ExprStmt) return std::nullopt;
-    auto* es = static_cast<ExprStmtNode*>(body[1].get());
-    if (!es->expr || es->expr->kind != ExprKind::Assign) return std::nullopt;
-    auto* asn = static_cast<Assign*>(es->expr.get());
-    if (asn->op != "=" || !asn->target || asn->target->kind != ExprKind::Local) return std::nullopt;
-    if (static_cast<Local*>(asn->target.get())->name != idx_name) return std::nullopt;
-    if (!asn->value || asn->value->kind != ExprKind::Const) return std::nullopt;
-    auto* idxc = static_cast<Const*>(asn->value.get());
+    // Форма A:
+    //   if (!X.equals("лит")) break;
+    //   idxVar = N;
+    //   [break;]
+    if (body.size() == 2 || body.size() == 3) {
+        if (body[0]->kind == StmtKind::IfStmt) {
+            auto* ifs = static_cast<IfStmt*>(body[0].get());
+            if (!ifs->else_body.has_value() && ifs->then_body.size() == 1 && ifs->then_body[0]->kind == StmtKind::BreakStmt) {
+                if (ifs->cond && ifs->cond->kind == ExprKind::UnOp) {
+                    auto* neg = static_cast<UnOp*>(ifs->cond.get());
+                    if (neg->op == "!" && neg->expr && neg->expr->kind == ExprKind::MethodCall) {
+                        auto* eq = static_cast<MethodCall*>(neg->expr.get());
+                        if (eq->name == "equals" && eq->args.size() == 1 && eq->target && eq->target->kind == ExprKind::Local) {
+                            if (static_cast<Local*>(eq->target.get())->name == x_name && eq->args[0]->kind == ExprKind::Const) {
+                                auto* lit = static_cast<Const*>(eq->args[0].get());
+                                if (lit->type == "String" && body[1]->kind == StmtKind::ExprStmt) {
+                                    auto* es = static_cast<ExprStmtNode*>(body[1].get());
+                                    if (es->expr && es->expr->kind == ExprKind::Assign) {
+                                        auto* asn = static_cast<Assign*>(es->expr.get());
+                                        if (asn->op == "=" && asn->target && asn->target->kind == ExprKind::Local) {
+                                            if (static_cast<Local*>(asn->target.get())->name == idx_name && asn->value && asn->value->kind == ExprKind::Const) {
+                                                if (body.size() == 2 || (body.size() == 3 && body[2]->kind == StmtKind::BreakStmt)) {
+                                                    return std::make_pair(lit->literal, static_cast<Const*>(asn->value.get())->literal);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-    if (body.size() == 3 && body[2]->kind != StmtKind::BreakStmt) return std::nullopt;
+    // Форма B:
+    //   if (X.equals("лит")) { idxVar = N; [break;] }
+    //   [break;]
+    if (body.size() == 1 || body.size() == 2) {
+        if (body[0]->kind == StmtKind::IfStmt) {
+            auto* ifs = static_cast<IfStmt*>(body[0].get());
+            if (!ifs->else_body.has_value() && !ifs->then_body.empty() && ifs->then_body[0]->kind == StmtKind::ExprStmt) {
+                if (ifs->cond && ifs->cond->kind == ExprKind::MethodCall) {
+                    auto* eq = static_cast<MethodCall*>(ifs->cond.get());
+                    if (eq->name == "equals" && eq->args.size() == 1 && eq->target && eq->target->kind == ExprKind::Local) {
+                        if (static_cast<Local*>(eq->target.get())->name == x_name && eq->args[0]->kind == ExprKind::Const) {
+                            auto* lit = static_cast<Const*>(eq->args[0].get());
+                            if (lit->type == "String") {
+                                auto* es = static_cast<ExprStmtNode*>(ifs->then_body[0].get());
+                                if (es->expr && es->expr->kind == ExprKind::Assign) {
+                                    auto* asn = static_cast<Assign*>(es->expr.get());
+                                    if (asn->op == "=" && asn->target && asn->target->kind == ExprKind::Local) {
+                                        if (static_cast<Local*>(asn->target.get())->name == idx_name && asn->value && asn->value->kind == ExprKind::Const) {
+                                            if (body.size() == 1 || (body.size() == 2 && body[1]->kind == StmtKind::BreakStmt)) {
+                                                return std::make_pair(lit->literal, static_cast<Const*>(asn->value.get())->literal);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-    return std::make_pair(lit->literal, idxc->literal);
+    return std::nullopt;
 }
 
 }  // namespace
@@ -2628,12 +2672,45 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
         prune_unused_imports(stmts, ctx);
         stmts = collapse_adjacent_monitors(stmts);
         if (contains_unfolded_monitor(stmts)) throw DecompileAbort("synchronized-блок не свёрнут (monitorenter/monitorexit)");
-        if (has_escaping_local_decl(stmts)) {
+        for (int hoist_pass = 0; hoist_pass < 4 && has_escaping_local_decl(stmts); ++hoist_pass) {
             stmts = hoist_all_escaping_to_root(stmts, ctx);
         }
         if (has_escaping_local_decl(stmts)) {
-            throw DecompileAbort("переменная объявлена в блоке, но используется за его пределами "
-                                  "(типично для switch(String) через hashCode) - структуризация ненадёжна");
+            auto all_escaping = collect_all_escaping_names(stmts);
+            if (!all_escaping.empty()) {
+                std::map<std::string, std::string> types;
+                for (auto& [slot, info] : ctx.locals) {
+                    if (!info.name.empty() && !info.type.empty()) types[info.name] = info.type;
+                }
+                for (auto& [name, typ] : ctx.crossing_temp_types) {
+                    if (!name.empty() && !typ.empty()) types[name] = typ;
+                }
+                stmts = strip_decl_to_assign(stmts, all_escaping, types);
+                std::set<std::string> root_declared;
+                for (auto& s : stmts) {
+                    if (s && s->kind == StmtKind::LocalDecl) root_declared.insert(static_cast<LocalDecl*>(s.get())->name);
+                }
+                for (auto& [slot, info] : ctx.locals) {
+                    if (info.is_param) root_declared.insert(info.name);
+                }
+                std::vector<StmtPtr> prefix;
+                for (auto& name : all_escaping) {
+                    if (root_declared.count(name)) continue;
+                    std::string typ = (types.count(name) && !types[name].empty()) ? types[name] : "Object";
+                    prefix.push_back(std::make_shared<LocalDecl>(typ, name, nullptr));
+                    root_declared.insert(name);
+                }
+                if (!prefix.empty()) {
+                    size_t insert_pos = 0;
+                    if (!stmts.empty() && stmts[0] && stmts[0]->kind == StmtKind::ExprStmt) {
+                        auto* es = static_cast<ExprStmtNode*>(stmts[0].get());
+                        if (es->expr && es->expr->kind == ExprKind::MethodCall && static_cast<MethodCall*>(es->expr.get())->is_ctor) {
+                            insert_pos = 1;
+                        }
+                    }
+                    stmts.insert(stmts.begin() + insert_pos, prefix.begin(), prefix.end());
+                }
+            }
         }
 
         refresh_crossing_temp_types(stmts, ctx);
