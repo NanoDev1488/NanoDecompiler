@@ -1324,6 +1324,28 @@ ExprPtr simplify_expr(ExprPtr e) {
                     }
                 }
             }
+
+            // Unboxing / boxing deobfuscation (ObfUpd 11)
+            static const std::set<std::string> unbox_method_names = {
+                "booleanValue", "intValue", "longValue", "doubleValue",
+                "floatValue", "byteValue", "shortValue", "charValue"
+            };
+            if (unbox_method_names.count(mc->name) && mc->args.empty() && mc->target) {
+                if (mc->target->kind == ExprKind::MethodCall) {
+                    auto* inner = static_cast<MethodCall*>(mc->target.get());
+                    if (inner->name == "valueOf" && inner->args.size() == 1) {
+                        return inner->args[0];
+                    }
+                } else if (mc->target->kind == ExprKind::NewObject) {
+                    auto* no = static_cast<NewObject*>(mc->target.get());
+                    if (no->args.size() == 1) {
+                        return no->args[0];
+                    }
+                } else if (mc->target->kind == ExprKind::Cast) {
+                    auto* c = static_cast<Cast*>(mc->target.get());
+                    if (c->expr) return c->expr;
+                }
+            }
             break;
         }
         case ExprKind::NewObject: {
@@ -2546,6 +2568,74 @@ std::vector<StmtPtr> prune_opaque_branches(std::vector<StmtPtr> stmts) {
     return out;
 }
 
+std::vector<StmtPtr> restore_assertions_pass(std::vector<StmtPtr> stmts) {
+    std::vector<StmtPtr> out;
+    for (auto& s : stmts) {
+        if (!s) continue;
+        if (s->kind == StmtKind::IfStmt) {
+            auto* i = static_cast<IfStmt*>(s.get());
+            i->then_body = restore_assertions_pass(i->then_body);
+            if (i->else_body.has_value()) i->else_body = restore_assertions_pass(*i->else_body);
+            
+            // Check if then_body throws AssertionError
+            if (i->then_body.size() == 1 && i->then_body[0]->kind == StmtKind::ThrowStmt) {
+                auto* ts = static_cast<ThrowStmt*>(i->then_body[0].get());
+                if (ts->expr && ts->expr->kind == ExprKind::NewObject) {
+                    auto* no = static_cast<NewObject*>(ts->expr.get());
+                    if (no->type.find("AssertionError") != std::string::npos) {
+                        ExprPtr cond = i->cond;
+                        ExprPtr actual_cond = nullptr;
+                        ExprPtr detail_expr = no->args.empty() ? nullptr : no->args[0];
+                        
+                        if (cond && cond->kind == ExprKind::BinOp) {
+                            auto* b = static_cast<BinOp*>(cond.get());
+                            if (b->op == "&&") {
+                                auto is_assert_disabled = [](const ExprPtr& e) {
+                                    if (!e) return false;
+                                    std::string str = emit_expr(e);
+                                    return str.find("assertionsDisabled") != std::string::npos;
+                                };
+                                if (is_assert_disabled(b->left)) {
+                                    actual_cond = negate(b->right);
+                                } else if (is_assert_disabled(b->right)) {
+                                    actual_cond = negate(b->left);
+                                }
+                            }
+                        } else if (cond) {
+                            std::string str = emit_expr(cond);
+                            if (str.find("assertionsDisabled") != std::string::npos) {
+                                actual_cond = std::make_shared<Const>("false", "boolean");
+                            }
+                        }
+                        
+                        if (actual_cond) {
+                            std::string assert_code = "assert " + emit_expr(actual_cond);
+                            if (detail_expr) {
+                                assert_code += " : " + emit_expr(detail_expr);
+                            }
+                            assert_code += ";";
+                            out.push_back(std::make_shared<RawStmt>(assert_code));
+                            continue;
+                        }
+                    }
+                }
+            }
+            out.push_back(s);
+        } else if (s->kind == StmtKind::WhileStmt) {
+            auto* w = static_cast<WhileStmt*>(s.get());
+            w->body = restore_assertions_pass(w->body);
+            out.push_back(s);
+        } else if (s->kind == StmtKind::BlockStmt) {
+            auto* b = static_cast<BlockStmt*>(s.get());
+            b->stmts = restore_assertions_pass(b->stmts);
+            out.push_back(s);
+        } else {
+            out.push_back(s);
+        }
+    }
+    return out;
+}
+
 std::vector<StmtPtr> unflatten_switch_dispatchers(std::vector<StmtPtr> stmts) {
     if (stmts.size() < 2) return stmts;
     std::vector<StmtPtr> out;
@@ -2757,6 +2847,7 @@ std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
         out = fold_try_catches(out);
         out = prune_opaque_branches(out);
         out = unflatten_switch_dispatchers(out);
+        out = restore_assertions_pass(out);
         out = prune_dead_code_pass(out);
     }
     return out;

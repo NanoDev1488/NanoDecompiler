@@ -1,5 +1,22 @@
 # NanoDecompiler Changelog
 
+## [1.9.148-ObfUpd.11] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **[ObfUpd 11/15] Восстановление assert и деобфускация боксинга примитивов (Assertion Restoration & Unboxing)**:
+  - 
+esources/engine_cpp/src/structure.cpp: реализован проход 
+estore_assertions_pass, реконструирующий конструкции if (! && !cond) throw new AssertionError(...) обратно в чистые Java-операторы ssert cond; и ssert cond : detail;.
+  - 
+esources/engine_cpp/src/structure.cpp: деобфускация паразитного автобоксинга и анбоксинга в simplify_expr (Boolean.valueOf(x).booleanValue() -> x, Integer.valueOf(x).intValue() -> x, Long.valueOf(x).longValue() -> x и т.д., включая распаковку NewObject и Cast).
+
+### GUI и Исправления
+- **Устранение бага первого открытия файла (Eternal Loading Fix)**:
+  - src/components/CodeView.tsx: добавлен автоматический триггер useEffect при отображении любого файла с code === undefined, гарантирующий мгновенную подгрузку содержимого без необходимости повторного клика.
+  - src/state/engine.tsx: синхронное обновление jobsRef.current при завершении декомпиляции для исключения гонки состояния между потоком событий и ленивым чтением.
+
+---
+
 ## [1.9.147-ObfUpd.10] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

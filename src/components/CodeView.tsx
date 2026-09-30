@@ -140,6 +140,12 @@ export const CodeView = memo(function CodeView({
   }, [file?.id]);
 
   useEffect(() => {
+    if (file && file.code === undefined && file.loadError === undefined && jobId) {
+      selectFile(jobId, file.id);
+    }
+  }, [file?.id, file?.code, file?.loadError, jobId, selectFile]);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.altKey && e.key.toLowerCase() === "z") {
         e.preventDefault();

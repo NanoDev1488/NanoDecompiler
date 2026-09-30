@@ -17,6 +17,7 @@ import {
   fmtSeconds,
   rid,
   type Job,
+  type JobStatus,
   type JobDetails,
   type LogFilter,
   type LogLine,
@@ -794,13 +795,13 @@ export function EngineProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      setJobs(list =>
-        list.map(j =>
-          j.id === jobId
-            ? { ...j, status: ok ? "done" : "failed", progress: ok ? 1 : j.progress, elapsedMs: elapsed, files, error }
-            : j,
-        ),
+      const updatedJobs: Job[] = jobsRef.current.map(j =>
+        j.id === jobId
+          ? { ...j, status: (ok ? "done" : "failed") as JobStatus, progress: ok ? 1 : j.progress, elapsedMs: elapsed, files, error }
+          : j,
       );
+      jobsRef.current = updatedJobs;
+      setJobs(updatedJobs);
 
       if (ok && files?.length) {
         setSelectedJobId(jobId);

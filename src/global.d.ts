@@ -97,6 +97,7 @@ declare global {
         appIcon: "terminal" | "layers";
         setupCompleted: boolean;
         language: "ru" | "en";
+        disableVsCodeLogs: boolean;
         telemetryEnabled: boolean;
         telemetryUrl: string;
       }>;
@@ -107,6 +108,7 @@ declare global {
           appIcon: "terminal" | "layers";
           setupCompleted: boolean;
           language: "ru" | "en";
+          disableVsCodeLogs: boolean;
           telemetryEnabled: boolean;
           telemetryUrl: string;
         }>

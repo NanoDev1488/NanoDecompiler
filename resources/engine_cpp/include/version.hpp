@@ -218,7 +218,8 @@ namespace nd {
 // НОВОЕ v1.9.145-ObfUpd.8: [ObfUpd 8/15] устранение недостижимого мертвого кода и неиспользуемых меток (Dead Code Elimination: отсечение операторов после terminal-прыжков return/throw/break/continue, сплющивание вложенных блоков).
 // НОВОЕ v1.9.146-ObfUpd.9: [ObfUpd 9/15] усиление эвристик деобфускации идентификаторов (ProGuard 2-символьные имена, непечатные символы и омоглифы/Il1/O0 паттерны Zelix KlassMaster и Allatori в looks_obfuscated).
 // НОВОЕ v1.9.147-ObfUpd.10: [ObfUpd 10/15] устранение промежуточных временных переменных стека (tempN / __stk / __sb inlining: рекурсивная подстановка в составные блоки, исключение паразитных объявлений StringBuilder tempN в заголовках методов).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.147-ObfUpd.10";
+// НОВОЕ v1.9.148-ObfUpd.11: [ObfUpd 11/15] восстановление assert ($assertionsDisabled десугаринг в assert cond; / assert cond : msg;) и устранение паразитного автобоксинга/распаковки примитивов (Boolean/Integer/Long/Double/Float/Byte/Short/Character unbox deobfuscation).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.148-ObfUpd.11";
 }
 
 
