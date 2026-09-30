@@ -1241,6 +1241,11 @@ ExprPtr simplify_expr(ExprPtr e) {
         case ExprKind::Cast: {
             auto* c = static_cast<Cast*>(e.get());
             if (c->expr) c->expr = simplify_expr(c->expr);
+            if (c->expr && c->expr->type == c->type) return c->expr;
+            if (c->expr && c->expr->kind == ExprKind::Cast) {
+                auto* inner_c = static_cast<Cast*>(c->expr.get());
+                if (inner_c->type == c->type) return c->expr;
+            }
             break;
         }
         case ExprKind::InstanceOf: {
@@ -1274,6 +1279,89 @@ ExprPtr simplify_expr(ExprPtr e) {
                     auto* c = static_cast<Const*>(b->left.get());
                     if (c->literal == "true") return negate(b->right);
                     if (c->literal == "false") return b->right;
+                }
+            }
+            if (b->op == "&") {
+                if (b->right && b->right->kind == ExprKind::Const) {
+                    auto* c = static_cast<Const*>(b->right.get());
+                    if (c->literal == "0") return std::make_shared<Const>("0", b->type);
+                    if (c->literal == "-1") return b->left;
+                    if (c->literal == "255") { c->literal = "0xFF"; c->value = "0xFF"; c->val = "0xFF"; }
+                    else if (c->literal == "65535") { c->literal = "0xFFFF"; c->value = "0xFFFF"; c->val = "0xFFFF"; }
+                    else if (c->literal == "16777215") { c->literal = "0xFFFFFF"; c->value = "0xFFFFFF"; c->val = "0xFFFFFF"; }
+                    else if (c->literal == "65280") { c->literal = "0xFF00"; c->value = "0xFF00"; c->val = "0xFF00"; }
+                    else if (c->literal == "4294967295L") { c->literal = "0xFFFFFFFFL"; c->value = "0xFFFFFFFFL"; c->val = "0xFFFFFFFFL"; }
+                }
+                if (b->left && b->left->kind == ExprKind::Const) {
+                    auto* c = static_cast<Const*>(b->left.get());
+                    if (c->literal == "0") return std::make_shared<Const>("0", b->type);
+                    if (c->literal == "-1") return b->right;
+                    if (c->literal == "255") { c->literal = "0xFF"; c->value = "0xFF"; c->val = "0xFF"; }
+                    else if (c->literal == "65535") { c->literal = "0xFFFF"; c->value = "0xFFFF"; c->val = "0xFFFF"; }
+                }
+            }
+            if (b->op == "|" || b->op == "^") {
+                if (b->right && b->right->kind == ExprKind::Const) {
+                    auto* c = static_cast<Const*>(b->right.get());
+                    if (c->literal == "0") return b->left;
+                    if (c->literal == "255") { c->literal = "0xFF"; c->value = "0xFF"; c->val = "0xFF"; }
+                    else if (c->literal == "65535") { c->literal = "0xFFFF"; c->value = "0xFFFF"; c->val = "0xFFFF"; }
+                }
+                if (b->left && b->left->kind == ExprKind::Const) {
+                    auto* c = static_cast<Const*>(b->left.get());
+                    if (c->literal == "0") return b->right;
+                    if (c->literal == "255") { c->literal = "0xFF"; c->value = "0xFF"; c->val = "0xFF"; }
+                    else if (c->literal == "65535") { c->literal = "0xFFFF"; c->value = "0xFFFF"; c->val = "0xFFFF"; }
+                }
+            }
+            if (b->op == "<<" || b->op == ">>" || b->op == ">>>") {
+                if (b->right && b->right->kind == ExprKind::Const) {
+                    auto* c = static_cast<Const*>(b->right.get());
+                    if (c->literal == "0") return b->left;
+                }
+            }
+            if (b->op == "+") {
+                if (b->right && b->right->kind == ExprKind::Const && static_cast<Const*>(b->right.get())->literal == "0" && b->type != "String") {
+                    return b->left;
+                }
+                if (b->left && b->left->kind == ExprKind::Const && static_cast<Const*>(b->left.get())->literal == "0" && b->type != "String") {
+                    return b->right;
+                }
+            }
+            if (b->op == "-") {
+                if (b->right && b->right->kind == ExprKind::Const && static_cast<Const*>(b->right.get())->literal == "0") {
+                    return b->left;
+                }
+            }
+            if (b->op == "*") {
+                if (b->right && b->right->kind == ExprKind::Const && static_cast<Const*>(b->right.get())->literal == "1") return b->left;
+                if (b->left && b->left->kind == ExprKind::Const && static_cast<Const*>(b->left.get())->literal == "1") return b->right;
+            }
+            if (b->op == "/") {
+                if (b->right && b->right->kind == ExprKind::Const && static_cast<Const*>(b->right.get())->literal == "1") return b->left;
+            }
+            if (b->op == "&&") {
+                if (b->right && b->right->kind == ExprKind::Const) {
+                    auto* c = static_cast<Const*>(b->right.get());
+                    if (c->literal == "true") return b->left;
+                    if (c->literal == "false") return std::make_shared<Const>("false", "boolean");
+                }
+                if (b->left && b->left->kind == ExprKind::Const) {
+                    auto* c = static_cast<Const*>(b->left.get());
+                    if (c->literal == "true") return b->right;
+                    if (c->literal == "false") return std::make_shared<Const>("false", "boolean");
+                }
+            }
+            if (b->op == "||") {
+                if (b->right && b->right->kind == ExprKind::Const) {
+                    auto* c = static_cast<Const*>(b->right.get());
+                    if (c->literal == "false") return b->left;
+                    if (c->literal == "true") return std::make_shared<Const>("true", "boolean");
+                }
+                if (b->left && b->left->kind == ExprKind::Const) {
+                    auto* c = static_cast<Const*>(b->left.get());
+                    if (c->literal == "false") return b->right;
+                    if (c->literal == "true") return std::make_shared<Const>("true", "boolean");
                 }
             }
             break;

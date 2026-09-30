@@ -1,5 +1,16 @@
 # NanoDecompiler Changelog
 
+## [1.9.134] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **Оптимизация побитовых, логических и арифметических выражений (Bitwise Mask Simplification & Hex Formatting)**:
+  - `resources/engine_cpp/src/structure.cpp`: в `simplify_expr` внедрено автоматическое форматирование байтовых и битовых масок констант в шестнадцатеричный вид (`0xFF`, `0xFFFF`, `0xFFFFFF`, `0xFF00`, `0xFFFFFFFFL`), восстанавливающее исходный идиоматичный стиль Java.
+  - `resources/engine_cpp/src/structure.cpp`: реализована свертка нейтральных элементов для побитовых операций (`x & -1 -> x`, `x & 0 -> 0`, `x | 0 -> x`, `x ^ 0 -> x`, `x << 0 -> x`).
+  - `resources/engine_cpp/src/structure.cpp`: добавлена оптимизация нейтральных элементов для арифметики (`x + 0 -> x`, `x - 0 -> x`, `x * 1 -> x`, `x / 1 -> x`) и булевой логики (`x && true -> x`, `x && false -> false`, `x || false -> x`, `x || true -> true`).
+  - `resources/engine_cpp/src/structure.cpp`: устранение избыточных и повторных приведений типов (`(T)(T)x -> (T)x`, `(T)x -> x` если тип `x` уже равен `T`).
+
+---
+
 ## [1.9.133] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)
