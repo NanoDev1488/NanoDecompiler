@@ -1196,15 +1196,16 @@ bool same_target(const ExprPtr& a, const ExprPtr& b) {
 }
 
 bool is_plain_break(const StmtPtr& x) {
-    return x->kind == StmtKind::BreakStmt && !static_cast<BreakStmt*>(x.get())->label.has_value();
+    return x && x->kind == StmtKind::BreakStmt && !static_cast<BreakStmt*>(x.get())->label.has_value();
 }
 bool is_plain_continue(const StmtPtr& x) {
-    return x->kind == StmtKind::ContinueStmt && !static_cast<ContinueStmt*>(x.get())->label.has_value();
+    return x && x->kind == StmtKind::ContinueStmt && !static_cast<ContinueStmt*>(x.get())->label.has_value();
 }
 
 bool looks_like_update(const StmtPtr& stmt) {
-    if (stmt->kind != StmtKind::ExprStmt) return false;
+    if (!stmt || stmt->kind != StmtKind::ExprStmt) return false;
     ExprPtr e = static_cast<ExprStmtNode*>(stmt.get())->expr;
+    if (!e) return false;
     if (e->kind == ExprKind::UnOp) {
         auto* u = static_cast<UnOp*>(e.get());
         if (u->op == "++" || u->op == "--") return true;
@@ -2081,7 +2082,7 @@ std::vector<StmtPtr> inline_single_use_temps_anywhere(std::vector<StmtPtr> stmts
 
 StmtPtr simplify_while_true(const std::shared_ptr<WhileStmt>& s) {
     std::vector<StmtPtr> body = s->body;
-    if (!body.empty() && body[0]->kind == StmtKind::IfStmt) {
+    if (!body.empty() && body[0] && body[0]->kind == StmtKind::IfStmt) {
         auto* first = static_cast<IfStmt*>(body[0].get());
         if (!first->then_body.empty() && first->then_body.size() == 1 && is_plain_break(first->then_body[0]) &&
             (!first->else_body.has_value() || first->else_body->empty())) {
@@ -2095,9 +2096,9 @@ StmtPtr simplify_while_true(const std::shared_ptr<WhileStmt>& s) {
     }
     s->body = body;
     if (s->cond) s->cond = simplify_expr(s->cond);
-    if (s->cond->kind == ExprKind::Const && static_cast<Const*>(s->cond.get())->literal == "true" && !body.empty()) {
+    if (s->cond && s->cond->kind == ExprKind::Const && static_cast<Const*>(s->cond.get())->literal == "true" && !body.empty()) {
         StmtPtr last = body.back();
-        if (last->kind == StmtKind::IfStmt) {
+        if (last && last->kind == StmtKind::IfStmt) {
             auto* li = static_cast<IfStmt*>(last.get());
             auto& tb = li->then_body;
             auto& eb = li->else_body;
@@ -2119,7 +2120,7 @@ StmtPtr simplify_while_true(const std::shared_ptr<WhileStmt>& s) {
             }
         }
     }
-    bool cond_is_true = s->cond->kind == ExprKind::Const && static_cast<Const*>(s->cond.get())->literal == "true";
+    bool cond_is_true = s->cond && s->cond->kind == ExprKind::Const && static_cast<Const*>(s->cond.get())->literal == "true";
     if (!cond_is_true && !body.empty()) {
         StmtPtr last = body.back();
         if (looks_like_update(last)) {
@@ -2156,7 +2157,7 @@ StmtPtr simplify_stmt(StmtPtr s) {
         if (w->cond) w->cond = simplify_expr(w->cond);
         w->body = simplify_stmts(w->body);
         while (!w->body.empty() && is_plain_continue(w->body.back())) w->body.pop_back();
-        if (w->cond->kind == ExprKind::Const && static_cast<Const*>(w->cond.get())->literal == "true") {
+        if (w->cond && w->cond->kind == ExprKind::Const && static_cast<Const*>(w->cond.get())->literal == "true") {
             return simplify_while_true(w);
         }
         if (!w->body.empty() && looks_like_update(w->body.back())) {
@@ -2248,9 +2249,9 @@ std::vector<StmtPtr> collapse_nested_if_conditions(std::vector<StmtPtr> stmts) {
     while (changed) {
         changed = false;
         for (auto& s : stmts) {
-            if (s->kind == StmtKind::IfStmt) {
+            if (s && s->kind == StmtKind::IfStmt) {
                 auto* i = static_cast<IfStmt*>(s.get());
-                if (!i->else_body.has_value() && i->then_body.size() == 1 && i->then_body[0]->kind == StmtKind::IfStmt) {
+                if (!i->else_body.has_value() && i->then_body.size() == 1 && i->then_body[0] && i->then_body[0]->kind == StmtKind::IfStmt) {
                     auto* inner = static_cast<IfStmt*>(i->then_body[0].get());
                     if (!inner->else_body.has_value()) {
                         i->cond = std::make_shared<BinOp>("&&", i->cond, inner->cond, "boolean");
@@ -2270,7 +2271,7 @@ std::vector<StmtPtr> merge_sequential_short_circuit_ifs(std::vector<StmtPtr> stm
     std::vector<StmtPtr> out;
     size_t idx = 0;
     while (idx < stmts.size()) {
-        if (idx + 1 < stmts.size() && stmts[idx]->kind == StmtKind::IfStmt && stmts[idx + 1]->kind == StmtKind::IfStmt) {
+        if (idx + 1 < stmts.size() && stmts[idx] && stmts[idx + 1] && stmts[idx]->kind == StmtKind::IfStmt && stmts[idx + 1]->kind == StmtKind::IfStmt) {
             auto* i1 = static_cast<IfStmt*>(stmts[idx].get());
             auto* i2 = static_cast<IfStmt*>(stmts[idx + 1].get());
             if (!i1->else_body.has_value() && !i2->else_body.has_value() &&

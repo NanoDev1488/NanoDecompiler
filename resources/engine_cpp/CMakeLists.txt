@@ -38,7 +38,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     target_link_options(NanoDecompilerCLI PRIVATE -s -Wl,--gc-sections)
   endif()
   if(APPLE)
-    target_link_options(NanoDecompilerCLI PRIVATE -Wl,-dead_strip -Wl,-stack_size,0x1000000)
+    target_link_options(NanoDecompilerCLI PRIVATE -Wl,-dead_strip -Wl,-stack_size,0x4000000)
   endif()
 endif()
 
