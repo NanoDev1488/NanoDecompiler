@@ -560,13 +560,14 @@ std::vector<std::string> get_utf8_argv() {
 extern std::string g_current_decompile_class;
 
 static void sigsegv_handler(int sig) {
+    (void)sig;
     const char msg[] = "\n[CRASH] Caught fatal signal (SIGSEGV/SIGBUS)!\n";
-    write(STDERR_FILENO, msg, sizeof(msg) - 1);
+    if (write(STDERR_FILENO, msg, sizeof(msg) - 1) < 0) {}
     if (!g_current_decompile_class.empty()) {
         const char cmsg[] = "[CRASH] Processing class: ";
-        write(STDERR_FILENO, cmsg, sizeof(cmsg) - 1);
-        write(STDERR_FILENO, g_current_decompile_class.data(), g_current_decompile_class.size());
-        write(STDERR_FILENO, "\n", 1);
+        if (write(STDERR_FILENO, cmsg, sizeof(cmsg) - 1) < 0) {}
+        if (write(STDERR_FILENO, g_current_decompile_class.data(), g_current_decompile_class.size()) < 0) {}
+        if (write(STDERR_FILENO, "\n", 1) < 0) {}
     }
     void* callstack[64];
     int frames = backtrace(callstack, 64);

@@ -199,6 +199,8 @@ std::string strip_dollar_outside_literals(const std::string& text) {
 
 }  // namespace
 
+std::string g_current_decompile_class = "";
+
 JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::string& out_dir, bool skip_legitimacy, bool print_progress) {
     JarProcessResult jr;
     jr.out_dir = out_dir;
@@ -625,7 +627,6 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     size_t rendered_so_far = 0;
     int last_bar_filled = -1;
     const int kProgressBarWidth = 20;
-std::string g_current_decompile_class = "";
 
     for (auto& [internal, cf] : class_files) {
         if (synthetic_switchmap_classes.count(internal)) continue;
