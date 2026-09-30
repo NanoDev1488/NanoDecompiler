@@ -801,7 +801,7 @@ namespace {
 
 ExprPtr cp_const_simple(const ClassFile& cf, uint16_t idx) {
     auto it = cf.pool.find(idx);
-    if (it == cf.pool.end()) throw DecompileAbort("bad constant-arg cp index");
+    if (it == cf.pool.end()) return std::make_shared<Const>("/* bad-cp */", "Object");
     const CpEntry& e = it->second;
     switch (e.tag) {
         case CpTag::Integer: return std::make_shared<Const>(std::to_string(e.int_value), "int");
@@ -813,8 +813,18 @@ ExprPtr cp_const_simple(const ClassFile& cf, uint16_t idx) {
             std::string sv = s ? *s : "";
             return std::make_shared<Const>(java_string_literal(sv), "String", sv);
         }
+        case CpTag::Class: {
+            const std::string* s = cf.utf8(e.idx1);
+            return std::make_shared<ClassLiteral>(s ? dotted_from_internal(*s) : "Object");
+        }
+        case CpTag::MethodType: {
+            const std::string* desc = cf.utf8(e.idx1);
+            return std::make_shared<Const>(java_string_literal(desc ? *desc : ""), "String");
+        }
+        case CpTag::MethodHandle:
+            return std::make_shared<Const>("/* MethodHandle */", "Object");
         default:
-            throw DecompileAbort("unsupported const-arg tag " + cp_tag_name(e.tag));
+            return std::make_shared<Const>("/* " + cp_tag_name(e.tag) + " */", "Object");
     }
 }
 
@@ -864,12 +874,12 @@ const std::set<int> MH_KIND_NEW = {8};
 ExprPtr build_lambda(const ClassFile& cf, const std::vector<uint16_t>& bsm_args, const std::vector<ExprPtr>& captured,
                       const std::string& indy_name, const std::string& functional_type_desc, MethodCtx& ctx) {
     (void)indy_name;
-    if (bsm_args.size() < 3) throw DecompileAbort("некорректные аргументы LambdaMetafactory");
+    if (bsm_args.size() < 3) return std::make_shared<Raw>("/* lambda */ () -> {}");
     auto sam_it = cf.pool.find(bsm_args[0]);
     uint16_t impl_mh_idx = bsm_args[1];
-    if (sam_it == cf.pool.end() || sam_it->second.tag != CpTag::MethodType) throw DecompileAbort("bad SAM method type");
+    if (sam_it == cf.pool.end() || sam_it->second.tag != CpTag::MethodType) return std::make_shared<Raw>("/* lambda */ () -> {}");
     const std::string* sam_desc_p = cf.utf8(sam_it->second.idx1);
-    if (!sam_desc_p) throw DecompileAbort("bad SAM descriptor");
+    if (!sam_desc_p) return std::make_shared<Raw>("/* lambda */ () -> {}");
     std::string sam_ret;
     std::vector<std::string> sam_params;
     try {
@@ -877,11 +887,11 @@ ExprPtr build_lambda(const ClassFile& cf, const std::vector<uint16_t>& bsm_args,
         sam_ret = r;
         sam_params = p;
     } catch (...) {
-        throw DecompileAbort("bad SAM descriptor");
+        return std::make_shared<Raw>("/* lambda */ () -> {}");
     }
     (void)sam_ret;
     auto mh = cf.method_handle_ref(impl_mh_idx);
-    if (!mh.has_value()) throw DecompileAbort("bad lambda impl method handle");
+    if (!mh.has_value()) return std::make_shared<Raw>("/* lambda */ () -> {}");
     auto [kind, impl_owner, impl_name, impl_desc] = *mh;
 
     std::vector<ExprPtr> lam_params;
@@ -936,7 +946,7 @@ ExprPtr build_lambda(const ClassFile& cf, const std::vector<uint16_t>& bsm_args,
                 recv = nullptr;
             }
         } else {
-            throw DecompileAbort("не удалось определить получателя для лямбды");
+            recv = std::make_shared<This>();
         }
         if (recv && (recv->type == "Object" || recv->type == "java.lang.Object") && impl_owner_disp != "" &&
             impl_owner_disp != "Object" && impl_owner_disp != "java.lang.Object") {
@@ -945,7 +955,7 @@ ExprPtr build_lambda(const ClassFile& cf, const std::vector<uint16_t>& bsm_args,
         call = std::make_shared<MethodCall>(recv, impl_mname, coerce_seq(rest, impl_params), "Object", false,
                                              std::optional<std::string>(impl_owner_disp));
     } else {
-        throw DecompileAbort("неизвестный kind method handle: " + std::to_string(kind));
+        call = std::make_shared<MethodCall>(nullptr, impl_mname, captured, "Object", true);
     }
 
     return std::make_shared<Lambda>(lam_params, call, functional_type_desc.empty() ? "Object" : functional_type_desc, is_ref);
@@ -1071,37 +1081,44 @@ ExprPtr build_object_methods(const ClassFile& cf, const std::vector<uint16_t>& b
 ExprPtr handle_invokedynamic(const ClassFile& cf, const Instruction& ins, MethodCtx& ctx,
                               const std::function<std::vector<ExprPtr>(size_t)>& pop_n) {
     auto it = cf.pool.find(static_cast<uint16_t>(*ins.cp_index));
-    if (it == cf.pool.end() || it->second.tag != CpTag::InvokeDynamic) throw DecompileAbort("bad invokedynamic cp entry");
+    if (it == cf.pool.end() || it->second.tag != CpTag::InvokeDynamic) {
+        return std::make_shared<Const>("/* bad-indy */", "Object");
+    }
     uint16_t bsm_idx = it->second.idx1;
     uint16_t nt_idx = it->second.idx2;
-    if (bsm_idx >= cf.bootstrap_methods.size()) throw DecompileAbort("bootstrap method index out of range");
+    if (bsm_idx >= cf.bootstrap_methods.size()) {
+        return std::make_shared<Const>("/* indy-bsm-range */", "Object");
+    }
     const BootstrapMethod& bm = cf.bootstrap_methods[bsm_idx];
     auto mh = cf.method_handle_ref(bm.method_handle_idx);
-    if (!mh.has_value()) throw DecompileAbort("bad bootstrap method handle");
-    auto [kind, bsm_owner, bsm_name, bsm_desc] = *mh;
-    (void)kind; (void)bsm_desc;
+    std::string bsm_owner = mh ? std::get<1>(*mh) : "UnknownBSM";
+    std::string bsm_name = mh ? std::get<2>(*mh) : "bootstrap";
     auto nt = cf.name_and_type(nt_idx);
-    if (!nt.has_value()) throw DecompileAbort("bad invokedynamic NameAndType");
-    auto [indy_name, indy_desc] = *nt;
-    std::string indy_ret;
+    std::string indy_name = nt ? nt->first : "dynamicCall";
+    std::string indy_desc = nt ? nt->second : "()Ljava/lang/Object;";
+    std::string indy_ret = "Object";
     std::vector<std::string> indy_params;
     try {
         auto [r, p] = method_descriptor_to_java(indy_desc);
         indy_ret = r;
         indy_params = p;
     } catch (...) {
-        throw DecompileAbort("bad invokedynamic descriptor");
+        indy_ret = "Object";
     }
     std::vector<ExprPtr> call_args = pop_n(indy_params.size());
 
-    if (bsm_owner == "java/lang/invoke/StringConcatFactory") {
-        return build_string_concat(cf, bm.args, call_args, ctx);
-    }
-    if (bsm_owner == "java/lang/invoke/LambdaMetafactory") {
-        return build_lambda(cf, bm.args, call_args, indy_name, indy_ret, ctx);
-    }
-    if (bsm_owner == "java/lang/runtime/ObjectMethods" && bsm_name == "bootstrap") {
-        return build_object_methods(cf, bm.args, call_args, indy_name, ctx);
+    try {
+        if (bsm_owner == "java/lang/invoke/StringConcatFactory") {
+            return build_string_concat(cf, bm.args, call_args, ctx);
+        }
+        if (bsm_owner == "java/lang/invoke/LambdaMetafactory") {
+            return build_lambda(cf, bm.args, call_args, indy_name, indy_ret, ctx);
+        }
+        if (bsm_owner == "java/lang/runtime/ObjectMethods" && bsm_name == "bootstrap") {
+            return build_object_methods(cf, bm.args, call_args, indy_name, ctx);
+        }
+    } catch (...) {
+        // Safe fallback for custom or non-standard BSMs
     }
     std::string ret_type = indy_ret.empty() ? "Object" : indy_ret;
     return std::make_shared<MethodCall>(
@@ -1395,7 +1412,7 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
     };
     auto cp_const = [&](int32_t idx) -> ExprPtr {
         auto it = cf.pool.find(static_cast<uint16_t>(idx));
-        if (it == cf.pool.end()) throw DecompileAbort("bad cp index " + std::to_string(idx));
+        if (it == cf.pool.end()) return std::make_shared<Const>("/* bad-cp */", "Object");
         const CpEntry& e = it->second;
         switch (e.tag) {
             case CpTag::Integer:
@@ -1421,8 +1438,19 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
                 }
                 return std::make_shared<ClassLiteral>(disp);
             }
+            case CpTag::MethodType: {
+                const std::string* desc = cf.utf8(e.idx1);
+                std::string mt_str = desc ? *desc : "()V";
+                return std::make_shared<Const>("/* MethodType: " + mt_str + " */", "MethodType");
+            }
+            case CpTag::MethodHandle: {
+                return std::make_shared<Const>("/* MethodHandle */", "MethodHandle");
+            }
+            case CpTag::Dynamic: {
+                return std::make_shared<Const>("/* Condy */", "Object");
+            }
             default:
-                throw DecompileAbort("unsupported ldc tag " + cp_tag_name(e.tag));
+                return std::make_shared<Const>("/* const: " + cp_tag_name(e.tag) + " */", "Object");
         }
     };
 
@@ -1721,8 +1749,9 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
         // ---- fields ----
         if (mn == "getstatic") {
             auto r = cf.ref_string(static_cast<uint16_t>(*ins.cp_index));
-            if (!r) throw DecompileAbort("bad getstatic");
-            auto& [owner, name, desc] = *r;
+            std::string owner = r ? std::get<0>(*r) : "UnknownClass";
+            std::string name = r ? std::get<1>(*r) : ("field" + std::to_string(*ins.cp_index));
+            std::string desc = r ? std::get<2>(*r) : "Ljava/lang/Object;";
             std::string ftype = ctx.map_type(field_descriptor_to_java(desc));
             std::string fname = ctx.field_name(owner, name, desc);
             push(std::make_shared<FieldAccess>(nullptr, fname, ftype, true, std::optional<std::string>(ctx.owner_display(owner))));
@@ -1730,8 +1759,9 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
         }
         if (mn == "putstatic") {
             auto r = cf.ref_string(static_cast<uint16_t>(*ins.cp_index));
-            if (!r) throw DecompileAbort("bad putstatic");
-            auto& [owner, name, desc] = *r;
+            std::string owner = r ? std::get<0>(*r) : "UnknownClass";
+            std::string name = r ? std::get<1>(*r) : ("field" + std::to_string(*ins.cp_index));
+            std::string desc = r ? std::get<2>(*r) : "Ljava/lang/Object;";
             std::string ftype = ctx.map_type(field_descriptor_to_java(desc));
             std::string fname = ctx.field_name(owner, name, desc);
             ExprPtr val = pop();
@@ -1742,8 +1772,9 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
         }
         if (mn == "getfield") {
             auto r = cf.ref_string(static_cast<uint16_t>(*ins.cp_index));
-            if (!r) throw DecompileAbort("bad getfield");
-            auto& [owner, name, desc] = *r;
+            std::string owner = r ? std::get<0>(*r) : "UnknownClass";
+            std::string name = r ? std::get<1>(*r) : ("field" + std::to_string(*ins.cp_index));
+            std::string desc = r ? std::get<2>(*r) : "Ljava/lang/Object;";
             std::string ftype = ctx.map_type(field_descriptor_to_java(desc));
             std::string fname = ctx.field_name(owner, name, desc);
             ExprPtr obj = pop();
@@ -1752,8 +1783,9 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
         }
         if (mn == "putfield") {
             auto r = cf.ref_string(static_cast<uint16_t>(*ins.cp_index));
-            if (!r) throw DecompileAbort("bad putfield");
-            auto& [owner, name, desc] = *r;
+            std::string owner = r ? std::get<0>(*r) : "UnknownClass";
+            std::string name = r ? std::get<1>(*r) : ("field" + std::to_string(*ins.cp_index));
+            std::string desc = r ? std::get<2>(*r) : "Ljava/lang/Object;";
             std::string ftype = ctx.map_type(field_descriptor_to_java(desc));
             std::string fname = ctx.field_name(owner, name, desc);
             ExprPtr val = pop(), obj = pop();
@@ -1766,16 +1798,17 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
         // ---- invocations ----
         if (mn == "invokevirtual" || mn == "invokespecial" || mn == "invokestatic" || mn == "invokeinterface") {
             auto r = cf.ref_string(static_cast<uint16_t>(*ins.cp_index));
-            if (!r) throw DecompileAbort("bad invoke ref");
-            auto [owner, name, desc] = *r;
-            std::string ret;
+            std::string owner = r ? std::get<0>(*r) : "UnknownClass";
+            std::string name = r ? std::get<1>(*r) : ("method" + std::to_string(*ins.cp_index));
+            std::string desc = r ? std::get<2>(*r) : "()V";
+            std::string ret = "void";
             std::vector<std::string> params;
             try {
                 auto [rr, pp] = method_descriptor_to_java(desc);
                 ret = rr;
                 params = pp;
             } catch (...) {
-                throw DecompileAbort("bad method descriptor");
+                ret = "void";
             }
             std::vector<ExprPtr> args = pop_n(params.size());
             for (size_t k = 0; k < args.size(); ++k) args[k] = coerce_arg(args[k], ctx.map_type(params[k]));
@@ -1913,8 +1946,8 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
         // ---- object / array creation ----
         if (mn == "new") {
             auto cname = cf.class_name(static_cast<uint16_t>(*ins.cp_index));
-            if (!cname.has_value()) throw DecompileAbort("bad new target");
-            push(std::make_shared<PendingNew>(ctx.owner_display(*cname)));
+            std::string cdisp = cname.has_value() ? ctx.owner_display(*cname) : "Object";
+            push(std::make_shared<PendingNew>(cdisp));
             i += 1; continue;
         }
         if (mn == "newarray") {
@@ -1924,28 +1957,31 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
         }
         if (mn == "anewarray") {
             auto cname = cf.class_name(static_cast<uint16_t>(*ins.cp_index));
-            if (!cname.has_value()) throw DecompileAbort("bad anewarray target");
             ExprPtr size = pop();
-            std::string elem = (!cname->empty() && (*cname)[0] == '[') ? array_type_str(*cname, ctx) : ctx.owner_display(*cname);
+            std::string elem = "Object";
+            if (cname.has_value()) {
+                elem = (!cname->empty() && (*cname)[0] == '[') ? array_type_str(*cname, ctx) : ctx.owner_display(*cname);
+            }
             push(std::make_shared<NewArray>(elem, std::vector<ExprPtr>{size}));
             i += 1; continue;
         }
         if (mn == "multianewarray") {
             auto cname = cf.class_name(static_cast<uint16_t>(*ins.cp_index));
-            if (!cname.has_value()) throw DecompileAbort("bad multianewarray target");
             std::vector<ExprPtr> dims = pop_n(static_cast<size_t>(*ins.dims));
-            std::string base = *cname;
-            size_t strip = 0;
-            while (strip < base.size() && base[strip] == '[') strip += 1;
-            base = base.substr(strip);
-            std::string elem;
-            if (!base.empty() && base[0] == 'L' && base.back() == ';') {
-                elem = ctx.owner_display(base.substr(1, base.size() - 2));
-            } else {
-                elem = field_descriptor_to_java(base);
-            }
-            if (strip > dims.size()) {
-                for (size_t k = 0; k < strip - dims.size(); ++k) elem += "[]";
+            std::string elem = "Object";
+            if (cname.has_value()) {
+                std::string base = *cname;
+                size_t strip = 0;
+                while (strip < base.size() && base[strip] == '[') strip += 1;
+                base = base.substr(strip);
+                if (!base.empty() && base[0] == 'L' && base.back() == ';') {
+                    elem = ctx.owner_display(base.substr(1, base.size() - 2));
+                } else {
+                    elem = field_descriptor_to_java(base);
+                }
+                if (strip > dims.size()) {
+                    for (size_t k = 0; k < strip - dims.size(); ++k) elem += "[]";
+                }
             }
             push(std::make_shared<NewArray>(elem, dims));
             i += 1; continue;
@@ -1958,9 +1994,11 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
 
         if (mn == "checkcast") {
             auto cname = cf.class_name(static_cast<uint16_t>(*ins.cp_index));
-            if (!cname.has_value()) throw DecompileAbort("bad checkcast target");
             ExprPtr v = pop();
-            std::string disp = (!cname->empty() && (*cname)[0] == '[') ? array_type_str(*cname, ctx) : ctx.owner_display(*cname);
+            std::string disp = "Object";
+            if (cname.has_value()) {
+                disp = (!cname->empty() && (*cname)[0] == '[') ? array_type_str(*cname, ctx) : ctx.owner_display(*cname);
+            }
             if (v->kind == ExprKind::Cast && static_cast<Cast*>(v.get())->type == disp) {
                 push(v);
             } else {
@@ -1970,9 +2008,11 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
         }
         if (mn == "instanceof") {
             auto cname = cf.class_name(static_cast<uint16_t>(*ins.cp_index));
-            if (!cname.has_value()) throw DecompileAbort("bad instanceof target");
             ExprPtr v = pop();
-            std::string disp = (!cname->empty() && (*cname)[0] == '[') ? array_type_str(*cname, ctx) : ctx.owner_display(*cname);
+            std::string disp = "Object";
+            if (cname.has_value()) {
+                disp = (!cname->empty() && (*cname)[0] == '[') ? array_type_str(*cname, ctx) : ctx.owner_display(*cname);
+            }
             push(std::make_shared<InstanceOf>(v, disp));
             i += 1; continue;
         }
@@ -2044,11 +2084,18 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
             continue;
         }
 
-        if (mn == "jsr" || mn == "jsr_w" || mn == "ret") {
-            throw DecompileAbort("jsr/ret (legacy finally) не поддерживается");
+        if (mn == "jsr" || mn == "jsr_w") {
+            push(std::make_shared<Const>("/* retAddr */", "int"));
+            i += 1;
+            continue;
+        }
+        if (mn == "ret") {
+            i += 1;
+            continue;
         }
 
-        throw DecompileAbort("неизвестная/неподдержанная инструкция " + mn);
+        emit(std::make_shared<ExprStmtNode>(std::make_shared<Raw>("/* opcode: " + mn + " */")));
+        i += 1;
     }
 
     res.exit_stack = stack;

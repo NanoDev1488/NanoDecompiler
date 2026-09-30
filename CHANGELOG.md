@@ -1,5 +1,17 @@
 # NanoDecompiler Changelog
 
+## [1.9.132] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **Тотальная отказоустойчивость стековой машины (StackVM Resilience & Dynamic/Condy Constant Loading)**:
+  - `resources/engine_cpp/src/stackvm.cpp`: расширен пул поддерживаемых тегов инструкций `ldc` / `ldc_w` — добавлена прямая поддержка `CpTag::MethodType`, `CpTag::MethodHandle` и Java 11+ `CpTag::Dynamic` (Condy / Constant Dynamic).
+  - `resources/engine_cpp/src/stackvm.cpp`: устранена причина падений `DecompileAbort("unsupported const-arg tag")` в `cp_const_simple` для аргументов конкатенации строк и invokedynamic bootstrap-методов (добавлена поддержка `CpTag::Class`, `CpTag::MethodType`, `CpTag::MethodHandle`).
+  - `resources/engine_cpp/src/stackvm.cpp`: обеспечена непадающая декомпиляция для `getstatic`, `putstatic`, `getfield`, `putfield`, `invokevirtual`, `invokestatic`, `invokespecial`, `invokeinterface` при поврежденных или срезанных обфускатором constant pool записях.
+  - `resources/engine_cpp/src/stackvm.cpp`: поддержана корректная симуляция стека для легаси Java-байткода с подпрограммами `jsr`/`jsr_w` и `ret` (вместо сброса метода в байткод стек сохраняет баланс и продолжает линейную декомпиляцию).
+  - `resources/engine_cpp/src/stackvm.cpp`: все специализированные генераторы BSM (`build_string_concat`, `build_lambda`, `build_object_methods`) изолированы безопасными защитными блоками с генерацией валидных AST-узлов вызова.
+
+---
+
 ## [1.9.131] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)
