@@ -639,10 +639,11 @@ std::vector<StmtPtr> Structurer::region(std::optional<int64_t> pc_opt, const std
         const Block& block = cfg_.blocks.at(pc);
         auto rit = results_.find(pc);
         if (rit == results_.end()) {
-            std::vector<ExprPtr> empty_seed;
-            std::vector<ExprPtr> flag;
-            results_[pc] = simulate_block(cfg_.blocks.at(pc), empty_seed, ctx_, &flag);
-            rit = results_.find(pc);
+            if (block.succs.size() == 1) {
+                pc_opt = block.succs[0];
+                continue;
+            }
+            break;
         }
         const BlockResult& res = rit->second;
         for (auto& s : res.stmts) out.push_back(s);
