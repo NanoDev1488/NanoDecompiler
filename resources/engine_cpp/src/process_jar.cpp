@@ -716,7 +716,7 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
         total_methods += static_cast<int>(cf.methods.size());
         total_fields += static_cast<int>(cf.fields.size());
     }
-    write_readme(out_dir, jar_path, static_cast<int>(class_files.size()), total_methods, total_fields, renamer, stats, jr.platform);
+    write_readme(out_dir, jar_path, static_cast<int>(class_files.size()), total_methods, total_fields, renamer, stats, jr.platform, jr.decrypted_strings_count);
 
     return jr;
 }
@@ -802,7 +802,7 @@ void write_mapping_report(const std::string& out_dir, const Renamer& renamer) {
 void write_readme(const std::string& out_dir, const std::string& jar_path, int n_classes,
                    int total_methods_in_kept_classes,
                    int total_fields_in_kept_classes, const Renamer& renamer, const ProjectStats& stats,
-                   const PlatformInfo& platform) {
+                   const PlatformInfo& platform, int decrypted_strings_count) {
     // БАГ-ФИКС (по прямой просьбе пользователя - "переделай readme_ru.txt,
     // сейчас там разнообразие"): раньше "Классов успешно разобрано"/
     // "Ошибок парсинга" + список непарсящихся классов печатались ЗДЕСЬ,
@@ -861,7 +861,7 @@ void write_readme(const std::string& out_dir, const std::string& jar_path, int n
     f << "\n" << std::string(70, '=') << "\n";
     f << "⚡ СТАТИСТИКА И СТАТУС ДЕОБФУСКАЦИИ (15 ЭТАПОВ DEOBFUSCATION PIPELINE)\n";
     f << std::string(70, '=') << "\n\n";
-    f << "  [1/15]  Деобфускация строк Allatori (мульти-XOR):                  АКТИВНО (" << jr.decrypted_strings_count << " строк)\n";
+    f << "  [1/15]  Деобфускация строк Allatori (мульти-XOR):                  АКТИВНО (" << decrypted_strings_count << " строк)\n";
     f << "  [2/15]  Устранение непрозрачных предикатов (opaque predicates):   АКТИВНО\n";
     f << "  [3/15]  Расплющивание управляющего потока (switch unflattening):  АКТИВНО\n";
     f << "  [4/15]  Нейтрализация фиктивных батутов исключений (trampolines): АКТИВНО\n";

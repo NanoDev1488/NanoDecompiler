@@ -73,9 +73,11 @@ contextBridge.exposeInMainWorld("nano", {
   getAppIconThumbnails: (): Promise<{ terminal: string | null; layers: string | null }> =>
     ipcRenderer.invoke("appIcon:thumbnails"),
   checkEnv: (): Promise<{
-    java: { ok: boolean; text?: string; inPath?: boolean };
-    maven: { ok: boolean; text?: string; inPath?: boolean };
+    java: { ok: boolean; text?: string; inPath?: boolean; olderThanBundled?: boolean; bundledVersion?: string };
+    maven: { ok: boolean; text?: string; inPath?: boolean; olderThanBundled?: boolean; bundledVersion?: string };
   }> => ipcRenderer.invoke("env:check"),
+  addToSystemPath: (tool: "java" | "maven"): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("tools:addToSystemPath", tool),
   runDecompile: (jarPath: string, outDir: string): Promise<RunResult> =>
     ipcRenderer.invoke("run:decompile", jarPath, outDir),
   cancel: (): Promise<boolean> => ipcRenderer.invoke("run:cancel"),

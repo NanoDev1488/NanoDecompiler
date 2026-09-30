@@ -28,6 +28,7 @@ import {
   type ToastKind,
 } from "../lib/model";
 import { buildFreeformBugReport, buildTelemetryReport } from "../lib/telemetry";
+import { DEFAULT_ICON_THUMBNAILS } from "../lib/iconThumbs";
 
 const MAX_LOG_LINES = 800;
 
@@ -120,8 +121,8 @@ interface EngineApi {
   envIssue: boolean;
   engineVersion: string | null;
   guiVersion: string | null;
-  javaEnv: { ok: boolean; text?: string; inPath?: boolean } | null;
-  mavenEnv: { ok: boolean; text?: string; inPath?: boolean } | null;
+  javaEnv: { ok: boolean; text?: string; inPath?: boolean; olderThanBundled?: boolean; bundledVersion?: string } | null;
+  mavenEnv: { ok: boolean; text?: string; inPath?: boolean; olderThanBundled?: boolean; bundledVersion?: string } | null;
   installingTool: "java" | "maven" | null;
   installProgress: { type: "progress"; label: string; pct: number | null; downloaded_mb: number; total_mb: number | null } | null;
   iconThumbnails: { terminal: string | null; layers: string | null };
@@ -151,6 +152,7 @@ interface EngineApi {
   clearQueue(): void;
   selectJob(id: string): void;
   selectFile(jobId: string, fileId: string): void;
+  addToSystemPath(tool: "java" | "maven"): Promise<void>;
   updateFileCode(jobId: string, fileId: string, code: string): void;
   setLogFilter(f: LogFilter): void;
   toggleTerminal(): void;
@@ -267,12 +269,10 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   // единой реальной проверки java/mvn (см. env:check в main.ts). javaEnv/
   // mavenEnv - настоящий результат "java -version"/"mvn -version" через
   // дочерний процесс.
-  const [javaEnv, setJavaEnv] = useState<{ ok: boolean; text?: string; inPath?: boolean } | null>(null);
-  const [mavenEnv, setMavenEnv] = useState<{ ok: boolean; text?: string; inPath?: boolean } | null>(null);
-  const [iconThumbnails, setIconThumbnails] = useState<{ terminal: string | null; layers: string | null }>({
-    terminal: null,
-    layers: null,
-  });
+  const [javaEnv, setJavaEnv] = useState<{ ok: boolean; text?: string; inPath?: boolean; olderThanBundled?: boolean; bundledVersion?: string } | null>(null);
+  const [mavenEnv, setMavenEnv] = useState<{ ok: boolean; text?: string; inPath?: boolean; olderThanBundled?: boolean; bundledVersion?: string } | null>(null);
+  const inFlightReadsRef = useRef<Set<string>>(new Set());
+  const [iconThumbnails, setIconThumbnails] = useState<{ terminal: string | null; layers: string | null }>(DEFAULT_ICON_THUMBNAILS);
   // Растягиваемые панели (по просьбе пользователя) - сессионное состояние,
   // сбрасывается при перезапуске приложения (осознанный компромисс - не
   // усложняем settings:get/set ради ширины панели в пикселях).
@@ -450,6 +450,20 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     },
     [installingTool, checkEnv, toast],
   );
+
+  const addToSystemPath = useCallback(async (tool: "java" | "maven") => {
+    try {
+      const res = await window.nano.addToSystemPath(tool);
+      if (res.ok) {
+        toast(`${tool === "java" ? "Java" : "Maven"} ${t(settings.language, "toast.path_updated")}`, "ok");
+        checkEnv();
+      } else {
+        toast(`Не удалось добавить ${tool} в PATH: ${res.error ?? "неизвестная ошибка"}`, "err");
+      }
+    } catch (e) {
+      toast(`Ошибка добавления в PATH: ${String(e)}`, "err");
+    }
+  }, [checkEnv, settings.language, toast]);
 
   useEffect(() => {
     if (!window.nano?.onDownloadProgress) return;
@@ -634,7 +648,12 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     window.nano
       .getAppIconThumbnails()
       .then(t => {
-        if (!cancelled) setIconThumbnails(t);
+        if (!cancelled) {
+          setIconThumbnails(prev => ({
+            terminal: t?.terminal || DEFAULT_ICON_THUMBNAILS.terminal || prev.terminal,
+            layers: t?.layers || DEFAULT_ICON_THUMBNAILS.layers || prev.layers,
+          }));
+        }
       })
       .catch(() => {});
     return () => {
@@ -805,40 +824,18 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
       if (ok && files?.length) {
         setSelectedJobId(jobId);
-        setOpenFileByJob(m => (m[jobId] ? m : { ...m, [jobId]: files[0].id }));
+        const primaryFile = files.find(f => /\.java$/i.test(f.name)) ?? files[0];
+        setOpenFileByJob(m => (m[jobId] ? m : { ...m, [jobId]: primaryFile.id }));
+        selectFile(jobId, primaryFile.id);
       }
 
       if (job) {
         if (ok) {
           toast(`${t(settings.language, "toast.done")}: ${job.fileName} — ${fmtSeconds(elapsed)}`, "ok");
           if (settings.openFolderOnDone) window.nano.openPath(job.outDir).catch(() => {});
-          // НОВОЕ v1.9.5 (прямая просьба пользователя - "если телеметрия
-          // включена, ОБЯЗАТЕЛЬНО отправлять всё, все байткоды ошибок, что
-          // не декомпилировалось"): раньше отправка была ТОЛЬКО по ручному
-          // клику на кнопке в карточке плагина - теперь, если
-          // telemetryEnabled включён в настройках, отправка идёт САМА,
-          // сразу по завершении job'а с хотя бы одним fallback-контекстом,
-          // без дополнительного подтверждения. Сама настройка
-          // (выключена по умолчанию) - и есть то самое согласие, кнопка
-          // остаётся для ручной повторной отправки/отправки старых job'ов.
-          // БАГ-ФИКС v1.9.11 (жалоба "автоматически байткод не отправляется,
-          // хотя сбор ошибок включён"): считаем по liveDetails (см. выше),
-          // не по job.details напрямую - иначе на быстрых job'ах (мало
-          // строк лога) React ещё не успевал бы применить patchJob с
-          // ND_RESULT к моменту закрытия процесса, fallbackCount всегда
-          // читался бы как 0, и автоотправка молча не срабатывала бы,
-          // несмотря на реально включённую настройку и реальные fallback'и.
           const fallbackCount = liveDetails?.stats.fallback_contexts.length ?? 0;
-          if (settings.telemetryEnabled) {
-            let autoComment = "автоматическая отправка (telemetryEnabled)";
-            try {
-              const readmeRes = await window.nano.readTextFile(job.outDir, "README_RU.txt");
-              if (readmeRes.ok && readmeRes.content) {
-                autoComment += "\n\n=== README_RU ===\n" + readmeRes.content;
-              }
-            } catch (e) {
-              // Ignore
-            }
+          if (settings.telemetryEnabled && fallbackCount > 0) {
+            const autoComment = `Автоматический сбор (telemetryEnabled): ${fallbackCount} мест(а) с нераспознанным байткодом`;
             void sendErrorReport(jobId, autoComment, liveDetails);
           }
         } else {
@@ -1220,66 +1217,74 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   // сразу через readTextFile было бы и медленно, и лишним IPC-трафиком.
   const selectFile = useCallback((jobId: string, fileId: string) => {
     setOpenFileByJob(m => ({ ...m, [jobId]: fileId }));
+    if (!fileId) return;
     const job = jobsRef.current.find(j => j.id === jobId);
     const file = job?.files?.find(f => f.id === fileId);
     if (!job || !file || file.code !== undefined) return;
-    // Сбрасываем прошлую ошибку перед (пере)попыткой чтения - иначе кнопка
-    // "Повторить" молча оставит старый текст ошибки, пока не придёт ответ.
-    setJobs(prev =>
-      prev.map(j =>
+
+    const flightKey = `${jobId}:${fileId}`;
+    if (inFlightReadsRef.current.has(flightKey)) return;
+    inFlightReadsRef.current.add(flightKey);
+
+    // Сбрасываем прошлую ошибку перед (пере)попыткой чтения
+    setJobs(prev => {
+      const next = prev.map(j =>
         j.id !== jobId ? j : { ...j, files: j.files?.map(f => (f.id === fileId ? { ...f, loadError: undefined } : f)) },
-      ),
-    );
+      );
+      jobsRef.current = next;
+      return next;
+    });
+
     window.nano
       .readTextFile(job.outDir, file.relPath)
       .then(res => {
+        inFlightReadsRef.current.delete(flightKey);
         if (!res.ok || res.content === undefined) {
-          // БАГ-ФИКС: раньше здесь просто return - file.code оставался
-          // undefined НАВСЕГДА, CodeView показывал "загрузка…" бесконечно,
-          // неотличимо от того, что файл правда ещё грузится. Теперь явная
-          // ошибка + возможность повторить.
-          setJobs(prev =>
-            prev.map(j =>
+          setJobs(prev => {
+            const next = prev.map(j =>
               j.id !== jobId
                 ? j
                 : { ...j, files: j.files?.map(f => (f.id === fileId ? { ...f, loadError: res.error ?? "не удалось прочитать файл" } : f)) },
-            ),
-          );
+            );
+            jobsRef.current = next;
+            return next;
+          });
           return;
         }
         const loc = res.content.split("\n").length;
-        setJobs(prev =>
-          prev.map(j =>
+        setJobs(prev => {
+          const next = prev.map(j =>
             j.id !== jobId
               ? j
               : { ...j, files: j.files?.map(f => (f.id === fileId ? { ...f, code: res.content, loc } : f)) },
-          ),
-        );
+          );
+          jobsRef.current = next;
+          return next;
+        });
       })
       .catch(e => {
-        setJobs(prev =>
-          prev.map(j =>
+        inFlightReadsRef.current.delete(flightKey);
+        setJobs(prev => {
+          const next = prev.map(j =>
             j.id !== jobId
               ? j
               : { ...j, files: j.files?.map(f => (f.id === fileId ? { ...f, loadError: String(e) } : f)) },
-          ),
-        );
+          );
+          jobsRef.current = next;
+          return next;
+        });
       });
   }, []);
 
   const clearLog = useCallback(() => setLog([]), []);
 
-  // НОВОЕ v1.9.9 (read-write вьюер кода, HANDOFF п.6): после успешной
-  // записи на диск (fs:writeTextFile) обновляем закэшированный file.code
-  // ЛОКАЛЬНО, а не повторным чтением через selectFile() - selectFile
-  // молча пропускает перечитывание, если file.code уже не undefined (см.
-  // комментарий выше), к тому же у нас и так уже есть новый текст в руках
-  // (то, что только что записали) - лишний round-trip на диск не нужен.
   const updateFileCode = useCallback((jobId: string, fileId: string, code: string) => {
     const loc = code.split("\n").length;
-    setJobs(prev =>
-      prev.map(j => (j.id !== jobId ? j : { ...j, files: j.files?.map(f => (f.id === fileId ? { ...f, code, loc } : f)) })),
-    );
+    setJobs(prev => {
+      const next = prev.map(j => (j.id !== jobId ? j : { ...j, files: j.files?.map(f => (f.id === fileId ? { ...f, code, loc } : f)) }));
+      jobsRef.current = next;
+      return next;
+    });
   }, []);
 
   const copyText = useCallback(
@@ -1432,7 +1437,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     addFiles, addJarPaths, openFileDialog, startQueue, stopRunning, stopAll, cancelJob, removeJob, clearQueue,
     selectJob, selectFile, updateFileCode, setLogFilter, toggleTerminal, clearLog, copyLog, copyText,
     openOutput, setSettingsOpen, setUpdateModalOpen, setSidebarWidth, setFileTreeWidth, setTerminalHeight, saveSettings, completeSetup, setPaletteOpen, setProjectSearchOpen, setBugReportOpen,
-    resolveEnvIssue, checkForUpdates, applyEngineUpdate, applyClientUpdate, openClientDownload, checkEnv, installTool, toast, dismissToast,
+    resolveEnvIssue, checkForUpdates, applyEngineUpdate, applyClientUpdate, openClientDownload, checkEnv, installTool, addToSystemPath, toast, dismissToast,
     sendErrorReport, sendBugReport,
   };
 

@@ -1150,16 +1150,15 @@ std::pair<StmtPtr, std::optional<int64_t>> Structurer::build_try(int64_t pc, con
 namespace {
 
 bool is_synth_temp(const std::string& name) {
-    if (name.rfind("__", 0) == 0) return true;
+    if (name.rfind("__stk", 0) == 0 || name.rfind("__temp", 0) == 0 ||
+        name.rfind("__sb", 0) == 0 || name.rfind("__cross", 0) == 0) return true;
     if (name.rfind("temp", 0) == 0 && name.size() > 4) {
-        bool all_digits = true;
         for (size_t i = 4; i < name.size(); ++i) {
-            if (!std::isdigit(static_cast<unsigned char>(name[i]))) { all_digits = false; break; }
+            if (!std::isdigit(static_cast<unsigned char>(name[i]))) return false;
         }
-        if (all_digits) return true;
+        return true;
     }
-    static const std::regex re(R"(^(__)?(stk|temp|cross|sb|[a-zA-Z]+)\d+$)");
-    return std::regex_match(name, re);
+    return false;
 }
 
 std::optional<std::pair<ExprPtr, ExprPtr>> as_assign(const StmtPtr& stmt) {
@@ -1168,12 +1167,6 @@ std::optional<std::pair<ExprPtr, ExprPtr>> as_assign(const StmtPtr& stmt) {
         if (es->expr && es->expr->kind == ExprKind::Assign) {
             auto* a = static_cast<Assign*>(es->expr.get());
             return std::make_pair(a->target, a->value);
-        }
-    }
-    if (stmt && stmt->kind == StmtKind::LocalDecl) {
-        auto* ld = static_cast<LocalDecl*>(stmt.get());
-        if (ld->init) {
-            return std::make_pair(std::make_shared<Local>(ld->name, ld->type), ld->init);
         }
     }
     return std::nullopt;
@@ -3021,7 +3014,6 @@ std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
         out = collapse_temp_chains(out);
         out = hoist_common_branch_tail(out);
         out = eliminate_redundant_else_after_return(out);
-        out = inline_single_use_temps_anywhere(out);
         out = collapse_nested_if_conditions(out);
         out = merge_sequential_short_circuit_ifs(out);
         out = fold_try_with_resources(out);

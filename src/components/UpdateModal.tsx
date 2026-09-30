@@ -2,6 +2,8 @@ import { Check, Download, FileText, Loader2, RefreshCw, Sparkles, Terminal, X } 
 import { useEngine } from "../state/engine";
 import { Kbd } from "./ui";
 import { cn } from "../utils/cn";
+import { ChangelogView } from "./ChangelogView";
+import { formatVersionsDisplay } from "../lib/model";
 
 export function UpdateModal() {
   const {
@@ -253,7 +255,7 @@ export function UpdateModal() {
             <div className="space-y-3">
               <p className="text-[14px] font-medium text-ink">У вас установлена последняя версия</p>
               <p className="mono text-[11.5px] text-faint">
-                движок {engineVersion?.replace(/^NanoDecompiler /, "") ?? "…"} · GUI v{guiVersion ?? "…"}
+                {formatVersionsDisplay(engineVersion, guiVersion)}
               </p>
               <div className="flex gap-2">
                 <button className="btn btn-ghost h-9 flex-1 text-[12.5px]" onClick={() => checkForUpdates()}>
@@ -285,12 +287,18 @@ export function UpdateModal() {
           {/* Блок списка изменений (Changelog) */}
           {updateInfo.changelog && (
             <div className="mt-5 w-full rounded-xl border border-line bg-bg/40 p-3.5 text-left shadow-inner">
-              <div className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-ink">
-                <FileText size={13} className="text-acid" />
-                <span>Список изменений релиза:</span>
+              <div className="mb-2 flex items-center justify-between text-[12px] font-medium text-ink">
+                <div className="flex items-center gap-1.5">
+                  <FileText size={13} className="text-acid" />
+                  <span>Список изменений {hasUpdate && updateInfo.latestVersion ? `(v${updateInfo.latestVersion})` : "релиза"}:</span>
+                </div>
               </div>
-              <div className="max-h-52 overflow-y-auto pr-1 text-[12px] leading-relaxed text-dim whitespace-pre-wrap font-sans selection:bg-acid/20 scrollbar-thin">
-                {updateInfo.changelog}
+              <div className="max-h-60 overflow-y-auto pr-1 scrollbar-thin">
+                <ChangelogView
+                  content={updateInfo.changelog}
+                  latestVersion={updateInfo.latestVersion}
+                  hasUpdate={hasUpdate}
+                />
               </div>
             </div>
           )}

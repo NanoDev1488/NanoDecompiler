@@ -49,6 +49,10 @@
           "!run.bat",
           "!run.sh"
         ]
+      },
+      {
+        "from": "resources/icons",
+        "to": "icons"
       }
     ],
     "win": {
@@ -60,10 +64,17 @@
       "icon": "resources/engine/icon.png",
       "category": "Development"
     },
+    "appImage": {
+      "compression": "maximum"
+    },
     "mac": {
       "target": "dmg",
       "icon": "resources/engine/icon.png",
       "identity": null
+    },
+    "dmg": {
+      "format": "ULFO",
+      "writeUpdateInfo": false
     },
     "afterPack": "scripts/afterPack.cjs",
     "asar": true,

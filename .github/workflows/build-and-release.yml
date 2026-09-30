@@ -140,6 +140,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node20-
 
+      - name: Кэш Electron и electron-builder (Windows)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: ${{ runner.os }}-electron-cache-${{ hashFiles('package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-cache-
+
       - name: npm install
         run: npm install
 
@@ -225,6 +235,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node20-
 
+      - name: Кэш Electron и electron-builder (Linux)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: ${{ runner.os }}-electron-cache-${{ hashFiles('package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-cache-
+
       - name: npm install
         run: npm install
 
@@ -304,6 +324,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node20-
 
+      - name: Кэш Electron и electron-builder (macOS)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: ${{ runner.os }}-electron-cache-${{ hashFiles('package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-cache-
+
       - name: npm install
         run: npm install
 
@@ -354,16 +384,18 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-zlib
-            mingw-w64-x86_64-make
             mingw-w64-x86_64-ccache
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-upx
 
       - name: Собрать движок (Windows)
         shell: msys2 {0}
         working-directory: resources/engine_cpp
         run: |
-          cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
-          cmake --build build --parallel
+          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          ninja -C build -j $(nproc)
           strip -s build/NanoDecompilerCLI.exe
+          upx --best build/NanoDecompilerCLI.exe || true
           cp build/NanoDecompilerCLI.exe ../../NanoDecompilerClApi.exe
 
       - name: Проверка - exe реально работает (обычный режим и --json-output)
@@ -405,14 +437,15 @@ jobs:
             ${{ runner.os }}-ccache-
 
       - name: Установить зависимости сборки
-        run: sudo apt-get update && sudo apt-get install -y build-essential zlib1g-dev ccache
+        run: sudo apt-get update && sudo apt-get install -y build-essential zlib1g-dev ccache ninja-build upx-ucl
 
       - name: Собрать движок (Linux)
         working-directory: resources/engine_cpp
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
-          cmake --build build --parallel
+          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          ninja -C build -j $(nproc)
           strip --strip-all build/NanoDecompilerCLI
+          upx --best build/NanoDecompilerCLI || true
           cp build/NanoDecompilerCLI ../../NanoDecompilerClApi
 
       - name: Проверка - бинарник реально работает
@@ -443,14 +476,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-ccache-
 
-      - name: Установить ccache
-        run: brew install ccache --quiet || true
+      - name: Установить ccache и ninja
+        run: brew install ccache ninja --quiet || true
 
       - name: Собрать движок (macOS)
         working-directory: resources/engine_cpp
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
-          cmake --build build --parallel
+          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          ninja -C build -j $(sysctl -n hw.logicalcpu)
           strip build/NanoDecompilerCLI
           cp build/NanoDecompilerCLI ../../NanoDecompilerClApi
 

@@ -2395,31 +2395,74 @@ std::vector<StmtPtr> inline_crossing_pass(const std::vector<StmtPtr>& lst, Metho
         size_t i = 0, n = work.size();
         while (i < n) {
             StmtPtr cur = work[i];
-            StmtPtr nxt = (i + 1 < n) ? work[i + 1] : nullptr;
-            if (cur->kind == StmtKind::ExprStmt && nxt) {
+            if (cur->kind == StmtKind::ExprStmt) {
                 auto* es = static_cast<ExprStmtNode*>(cur.get());
                 if (es->expr && es->expr->kind == ExprKind::Assign) {
                     auto* a = static_cast<Assign*>(es->expr.get());
                     if (a->target && a->target->kind == ExprKind::Local) {
                         std::string tname = static_cast<Local*>(a->target.get())->name;
-                        if (ctx.crossing_temp_types.count(tname) || (tname.rfind("__stk", 0) == 0) || (tname.rfind("__temp", 0) == 0)) {
+                        bool is_temp = ctx.crossing_temp_types.count(tname) ||
+                                       (tname.rfind("__stk", 0) == 0) ||
+                                       (tname.rfind("__temp", 0) == 0) ||
+                                       (tname.rfind("__cross", 0) == 0) ||
+                                       (tname.rfind("temp", 0) == 0 && tname.size() > 4 && std::isdigit(static_cast<unsigned char>(tname[4])));
+                        if (is_temp) {
                             std::vector<StmtPtr> rest(work.begin() + i + 1, work.end());
                             if (count_local_uses_list(rest, tname) == 1) {
-                                if (nxt->kind == StmtKind::ReturnStmt) {
-                                    auto* r = static_cast<ReturnStmt*>(nxt.get());
-                                    if (r->expr && r->expr->kind == ExprKind::Local && static_cast<Local*>(r->expr.get())->name == tname) {
-                                        out.push_back(std::make_shared<ReturnStmt>(coerce_arg(a->value, ctx.ret_type)));
+                                if (i + 1 < n) {
+                                    StmtPtr nxt = work[i + 1];
+                                    if (nxt->kind == StmtKind::ReturnStmt) {
+                                        auto* r = static_cast<ReturnStmt*>(nxt.get());
+                                        if (r->expr && r->expr->kind == ExprKind::Local && static_cast<Local*>(r->expr.get())->name == tname) {
+                                            out.push_back(std::make_shared<ReturnStmt>(coerce_arg(a->value, ctx.ret_type)));
+                                            i += 2;
+                                            changed = true;
+                                            continue;
+                                        }
+                                    }
+                                    StmtPtr nxt_mod = nxt;
+                                    if (substitute_local_once_stmt(nxt_mod, tname, a->value)) {
+                                        out.push_back(nxt_mod);
                                         i += 2;
                                         changed = true;
                                         continue;
                                     }
                                 }
-                                StmtPtr nxt_mod = nxt;
-                                if (substitute_local_once_stmt(nxt_mod, tname, a->value)) {
-                                    out.push_back(nxt_mod);
-                                    i += 2;
-                                    changed = true;
-                                    continue;
+
+                                bool is_pure = (a->value->kind == ExprKind::Const) || (a->value->kind == ExprKind::Local);
+                                if (is_pure) {
+                                    std::string src_local = (a->value->kind == ExprKind::Local) ? static_cast<Local*>(a->value.get())->name : "";
+                                    size_t target_idx = (size_t)-1;
+                                    bool safe = true;
+                                    for (size_t k = i + 1; k < n; ++k) {
+                                        std::vector<StmtPtr> single = {work[k]};
+                                        if (count_local_uses_list(single, tname) > 0) {
+                                            target_idx = k;
+                                            break;
+                                        }
+                                        if (!src_local.empty() && work[k]->kind == StmtKind::ExprStmt) {
+                                            auto* wes = static_cast<ExprStmtNode*>(work[k].get());
+                                            if (wes->expr && wes->expr->kind == ExprKind::Assign) {
+                                                auto* wa = static_cast<Assign*>(wes->expr.get());
+                                                if (wa->target && wa->target->kind == ExprKind::Local &&
+                                                    static_cast<Local*>(wa->target.get())->name == src_local) {
+                                                    safe = false;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (safe && target_idx != (size_t)-1) {
+                                        StmtPtr target_mod = work[target_idx];
+                                        if (substitute_local_once_stmt(target_mod, tname, a->value)) {
+                                            work[target_idx] = target_mod;
+                                            for (size_t k = 0; k < n; ++k) {
+                                                if (k != i) out.push_back(work[k]);
+                                            }
+                                            changed = true;
+                                            break;
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -2799,7 +2842,6 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
         for (auto& [idx, info] : ctx.locals) {
             if (info.is_param) declared_seed[info.name] = info.type;
         }
-        for (auto& [name, t] : ctx.crossing_temp_types) declared_seed[name] = t;
         stmts = ensure_local_declarations(stmts, declared_seed);
         stmts = fold_if_else_ternary(stmts);
         {
@@ -2867,9 +2909,45 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
 
         refresh_crossing_temp_types(stmts, ctx);
 
+        std::set<std::string> declared_in_body;
+        std::function<void(const std::vector<StmtPtr>&)> find_decls = [&](const std::vector<StmtPtr>& list) {
+            for (auto& s : list) {
+                if (!s) continue;
+                if (s->kind == StmtKind::LocalDecl) {
+                    declared_in_body.insert(static_cast<LocalDecl*>(s.get())->name);
+                } else if (s->kind == StmtKind::IfStmt) {
+                    auto* i = static_cast<IfStmt*>(s.get());
+                    find_decls(i->then_body);
+                    if (i->else_body) find_decls(*i->else_body);
+                } else if (s->kind == StmtKind::WhileStmt) {
+                    find_decls(static_cast<WhileStmt*>(s.get())->body);
+                } else if (s->kind == StmtKind::DoWhileStmt) {
+                    find_decls(static_cast<DoWhileStmt*>(s.get())->body);
+                } else if (s->kind == StmtKind::ForStmt) {
+                    find_decls(static_cast<ForStmt*>(s.get())->body);
+                } else if (s->kind == StmtKind::SwitchStmt) {
+                    for (auto& c : static_cast<SwitchStmt*>(s.get())->cases) find_decls(c.body);
+                } else if (s->kind == StmtKind::TryStmt) {
+                    auto* t = static_cast<TryStmt*>(s.get());
+                    find_decls(t->body);
+                    for (auto& c : t->catches) find_decls(c.body);
+                    if (t->finally_body) find_decls(*t->finally_body);
+                } else if (s->kind == StmtKind::SyncStmt) {
+                    find_decls(static_cast<SyncStmt*>(s.get())->body);
+                } else if (s->kind == StmtKind::BlockStmt) {
+                    find_decls(static_cast<BlockStmt*>(s.get())->stmts);
+                }
+            }
+        };
+        find_decls(stmts);
+
         std::string pad(4 * static_cast<size_t>(indent), ' ');
         std::vector<std::string> pre_lines;
-        for (auto& [name, typ] : ctx.crossing_temp_types) pre_lines.push_back(pad + simple_type(typ) + " " + name + ";");
+        for (auto& [name, typ] : ctx.crossing_temp_types) {
+            if (!declared_in_body.count(name)) {
+                pre_lines.push_back(pad + simple_type(typ) + " " + name + ";");
+            }
+        }
 
         std::vector<std::string> local_names;
         for (auto& [idx, info] : ctx.locals) local_names.push_back(info.name);

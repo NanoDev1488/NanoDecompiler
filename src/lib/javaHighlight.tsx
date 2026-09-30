@@ -162,9 +162,9 @@ function tokenizeLine(line: string): Token[] {
 }
 
 // НОВОЕ 1.9.6 + v1.9.17: распознаём уровни java.util.logging.Level, Bukkit Logger,
-// SLF4J, Log4j и System.out/err (warning/severe/error/info/config/fine/finer/finest/debug/log).
-const LOG_METHOD_RE = /\.(warning|severe|error|info|config|fine|finer|finest|debug|log|println|print)\s*\(/g;
-const LOG_RECEIVER_RE = /(?:getLogger\(\)|\blog(?:ger)?|Bukkit\.getLogger\(\)|System\.(?:out|err))\s*$/i;
+// SLF4J, Log4j, System.out/err и sendMessage/sendActionBar/sendTitle.
+const LOG_METHOD_RE = /\.(warning|severe|error|info|config|fine|finer|finest|debug|log|println|print|sendMessage|sendActionBar|sendTitle|sendRawMessage)\s*\(/g;
+const LOG_RECEIVER_RE = /(?:getLogger\(\)|\blog(?:ger)?|Bukkit\.getLogger\(\)|System\.(?:out|err)|\bsender|\bplayer|\btarget|\bp|\buser|\bcommandSender|\bctx|\baudience|\brecipient)\s*$/i;
 
 interface Region {
   start: number;
@@ -347,35 +347,139 @@ const LOG_LEVEL_SEVERITY = new Set(["severe", "warning", "error"]);
  * методов, `+`, переменные) показывается как есть. */
 function renderChipPreview(tokens: Token[], region: Region): ReactNode {
   if (region.kind === "log") {
-    // methodNameEnd - конец слова "warning"/"info"/... (см. region.start в
-    // findLogRegions - он указывает точно на начало этого слова).
     const inRange = tokensInRange(tokens, region.start, region.end);
     const parts: ReactNode[] = [];
-    for (let i = 0; i < inRange.length; i++) {
+    let activeColorHex: string | null = null;
+    let i = 0;
+
+    // Filter out the initial method word and opening parenthesis
+    while (i < inRange.length) {
       const t = inRange[i];
-      const isMethodWord = i === 0 && t.cls === null && !t.isStr; // сам "warning"/"info" - слово, не строка
-      const isOpenParen = i <= 1 && t.text.trim() === "(";
-      const isLast = i === inRange.length - 1;
-      if (isMethodWord) continue; // имя метода само по себе скрываем - тег уровня его уже заменяет
-      if (isOpenParen) continue;
-      if (isLast && !t.isStr && t.text.endsWith(")")) {
-        // ПОСЛЕДНИЙ токен в диапазоне ВСЕГДА заканчивается ровно на
-        // закрывающую скобку самого лог-вызова (так задаёт region.end в
-        // findLogRegions) - убираем ровно ОДИН этот символ с конца, а не
-        // требуем точного совпадения всего токена с ")" (после
-        // tokensInRange токен на границе может быть куском вроде "())"
-        // - там ")" самого method-вызова внутри нужно оставить, а
-        // отсекается только САМАЯ последняя, "чужая" скобка).
-        const trimmed = t.text.slice(0, -1);
-        if (trimmed) parts.push(renderToken(t, i, trimmed));
+      if (i === 0 && !t.isStr) {
+        i++;
         continue;
       }
-      parts.push(t.isStr ? renderToken(t, i, stripQuotes(t.text)) : renderToken(t, i));
+      if (i === 1 && t.text.trim() === "(") {
+        i++;
+        continue;
+      }
+      break;
     }
+
+    // Also strip trailing closing parenthesis of the outer call
+    let limit = inRange.length;
+    if (limit > i && inRange[limit - 1].text.endsWith(")")) {
+      limit--;
+    }
+
+    while (i < limit) {
+      const t = inRange[i];
+      const textTrim = t.text.trim();
+
+      // Check for ChatColor.COLOR or NamedTextColor.COLOR
+      if (
+        (textTrim === "ChatColor" || textTrim === "NamedTextColor" || textTrim === "TextColor") &&
+        i + 2 < limit &&
+        inRange[i + 1].text.trim() === "."
+      ) {
+        const colorName = inRange[i + 2].text.trim().toLowerCase();
+        if (MC_COLOR_NAME_HEX[colorName]) {
+          activeColorHex = MC_COLOR_NAME_HEX[colorName];
+          i += 3;
+          if (i < limit && inRange[i].text.trim() === "+") i++;
+          continue;
+        }
+      }
+
+      // Check for standalone color enum token
+      if (t.isColorEnum && MC_COLOR_NAME_HEX[textTrim.toLowerCase()]) {
+        activeColorHex = MC_COLOR_NAME_HEX[textTrim.toLowerCase()];
+        i++;
+        if (i < limit && inRange[i].text.trim() === "+") i++;
+        continue;
+      }
+
+      // Check for obfuscated decryptor method wrapper like method1("string") or someFunc("string")
+      if (
+        !t.isStr &&
+        /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(textTrim) &&
+        i + 3 < limit &&
+        inRange[i + 1].text.trim() === "(" &&
+        inRange[i + 2].isStr &&
+        inRange[i + 3].text.trim() === ")"
+      ) {
+        const strToken = inRange[i + 2];
+        const unquoted = stripQuotes(strToken.text);
+        parts.push(
+          activeColorHex ? (
+            <span key={i} style={{ color: activeColorHex }}>
+              {unquoted}
+            </span>
+          ) : (
+            renderToken(strToken, i, unquoted)
+          )
+        );
+        i += 4;
+        continue;
+      }
+
+      // String literal
+      if (t.isStr) {
+        const unquoted = stripQuotes(t.text);
+        parts.push(
+          activeColorHex ? (
+            <span key={i} style={{ color: activeColorHex }}>
+              {unquoted}
+            </span>
+          ) : (
+            renderToken(t, i, unquoted)
+          )
+        );
+        i++;
+        continue;
+      }
+
+      // Concatenation '+'
+      if (textTrim === "+") {
+        i++;
+        continue;
+      }
+
+      // Runtime server calls like manager.getAddons().size() or obj.method()
+      const exprTokens: Token[] = [];
+      const exprStart = i;
+      while (i < limit) {
+        const cur = inRange[i];
+        const ct = cur.text.trim();
+        if (ct === "+" || cur.isStr) break;
+        exprTokens.push(cur);
+        i++;
+      }
+
+      if (exprTokens.length > 0) {
+        const exprStr = exprTokens.map(et => et.text).join("").trim();
+        parts.push(
+          <span
+            key={`rt-${exprStart}`}
+            className="mono rounded bg-acid/20 px-1 py-0.2 text-[11px] text-acid font-semibold cursor-help hover:bg-acid/30 transition-colors mx-0.5"
+            title={`Runtime-значение сервера: ${exprStr}`}
+          >
+            &#123;&#125;
+          </span>
+        );
+      }
+    }
+
+    let tagLabel = region.logLevel ?? "log";
+    if (tagLabel === "sendMessage") tagLabel = "msg";
+    else if (tagLabel === "sendActionBar") tagLabel = "actionbar";
+    else if (tagLabel === "sendTitle") tagLabel = "title";
+    else if (tagLabel === "println" || tagLabel === "print") tagLabel = "out";
+
     return (
       <>
         <span className={"chain-chip-tag" + (LOG_LEVEL_SEVERITY.has(region.logLevel ?? "") ? " tag-warn" : "")}>
-          {region.logLevel}
+          {tagLabel}
         </span>
         {parts}
       </>

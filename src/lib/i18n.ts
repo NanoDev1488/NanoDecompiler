@@ -3,7 +3,9 @@ export type Lang = "ru" | "en";
 
 export const DICT = {
   ru: {
-    "settings.tab.general": "Основное",
+    "settings.tab.general": "Общие",
+    "settings.tab.decompiler": "Декомпилятор",
+    "settings.tab.editor": "Редактор",
     "settings.tab.about": "О сервисе",
     "settings.about.overview": "Обзор",
     "settings.about.features": "Возможности",
@@ -45,6 +47,7 @@ export const DICT = {
     "toast.report_failed": "Не удалось отправить отчёт",
     "toast.unknown_error": "неизвестная ошибка",
     "toast.installed": "установлен(а)",
+    "toast.path_updated": "успешно добавлен(а) в системный PATH",
     "toast.install_failed": "Не удалось установить",
     "toast.check_update_failed": "Не удалось проверить обновления",
     "toast.no_updates": "Вы на последней версии",
@@ -140,6 +143,8 @@ export const DICT = {
   },
   en: {
     "settings.tab.general": "General",
+    "settings.tab.decompiler": "Decompiler",
+    "settings.tab.editor": "Editor",
     "settings.tab.about": "About",
     "settings.about.overview": "Overview",
     "settings.about.features": "Features",
@@ -181,6 +186,7 @@ export const DICT = {
     "toast.report_failed": "Failed to send report",
     "toast.unknown_error": "unknown error",
     "toast.installed": "installed",
+    "toast.path_updated": "successfully added to system PATH",
     "toast.install_failed": "Failed to install",
     "toast.check_update_failed": "Failed to check for updates",
     "toast.no_updates": "You are on the latest version",

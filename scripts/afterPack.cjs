@@ -71,4 +71,21 @@ exports.default = async function afterPack(context) {
       }
     }
   }
+
+  // Очистка .map/.pdb файлов из распакованного бандла
+  function pruneDebugFiles(dir) {
+    if (!fs.existsSync(dir)) return;
+    for (const item of fs.readdirSync(dir)) {
+      const p = path.join(dir, item);
+      try {
+        const stat = fs.statSync(p);
+        if (stat.isDirectory()) {
+          pruneDebugFiles(p);
+        } else if (item.endsWith(".map") || item.endsWith(".pdb") || item.endsWith(".dSYM")) {
+          fs.unlinkSync(p);
+        }
+      } catch (_) {}
+    }
+  }
+  try { pruneDebugFiles(context.appOutDir); } catch (_) {}
 };

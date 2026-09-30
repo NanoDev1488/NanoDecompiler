@@ -29,6 +29,17 @@ function Shell() {
 
   // браузер иначе открывает перетащенный файл как страницу
   useEffect(() => {
+    try {
+      const savedFont = localStorage.getItem("nano:editor_font");
+      if (savedFont === "fira") {
+        document.documentElement.style.setProperty("--font-mono", '"Fira Code", ui-monospace, "SF Mono", Menlo, monospace');
+      } else if (savedFont === "consolas") {
+        document.documentElement.style.setProperty("--font-mono", 'Consolas, Monaco, "Courier New", monospace');
+      } else {
+        document.documentElement.style.setProperty("--font-mono", '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace');
+      }
+    } catch {}
+
     const prevent = (e: DragEvent) => e.preventDefault();
     window.addEventListener("dragover", prevent);
     window.addEventListener("drop", prevent);

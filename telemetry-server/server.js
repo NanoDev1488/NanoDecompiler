@@ -29,6 +29,91 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const zlib = require("zlib");
+
+// ==================== pure node zip generator ====================
+const crcTable = new Uint32Array(256);
+for (let n = 0; n < 256; n++) {
+  let c = n;
+  for (let k = 0; k < 8; k++) {
+    c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+  }
+  crcTable[n] = c;
+}
+function crc32(buf) {
+  let crc = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) {
+    crc = crcTable[(crc ^ buf[i]) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function createZip(files) {
+  const localHeaders = [];
+  const centralHeaders = [];
+  let offset = 0;
+
+  for (const file of files) {
+    const nameBuf = Buffer.from(file.name, "utf8");
+    const dataBuf = Buffer.isBuffer(file.data) ? file.data : Buffer.from(file.data || "", "utf8");
+    const crc = crc32(dataBuf);
+    const compressed = zlib.deflateRawSync(dataBuf);
+    const uncompressedSize = dataBuf.length;
+    const compressedSize = compressed.length;
+
+    const localHeader = Buffer.alloc(30);
+    localHeader.writeUInt32LE(0x04034b50, 0);
+    localHeader.writeUInt16LE(20, 4);
+    localHeader.writeUInt16LE(0, 6);
+    localHeader.writeUInt16LE(8, 8);
+    localHeader.writeUInt16LE(0, 10);
+    localHeader.writeUInt16LE(0, 12);
+    localHeader.writeUInt32LE(crc, 14);
+    localHeader.writeUInt32LE(compressedSize, 18);
+    localHeader.writeUInt32LE(uncompressedSize, 22);
+    localHeader.writeUInt16LE(nameBuf.length, 26);
+    localHeader.writeUInt16LE(0, 28);
+
+    localHeaders.push(localHeader, nameBuf, compressed);
+
+    const centralHeader = Buffer.alloc(46);
+    centralHeader.writeUInt32LE(0x02014b50, 0);
+    centralHeader.writeUInt16LE(20, 4);
+    centralHeader.writeUInt16LE(20, 6);
+    centralHeader.writeUInt16LE(0, 8);
+    centralHeader.writeUInt16LE(8, 10);
+    centralHeader.writeUInt16LE(0, 12);
+    centralHeader.writeUInt16LE(0, 14);
+    centralHeader.writeUInt32LE(crc, 16);
+    centralHeader.writeUInt32LE(compressedSize, 20);
+    centralHeader.writeUInt32LE(uncompressedSize, 24);
+    centralHeader.writeUInt16LE(nameBuf.length, 28);
+    centralHeader.writeUInt16LE(0, 30);
+    centralHeader.writeUInt16LE(0, 32);
+    centralHeader.writeUInt16LE(0, 34);
+    centralHeader.writeUInt16LE(0, 36);
+    centralHeader.writeUInt32LE(0, 38);
+    centralHeader.writeUInt32LE(offset, 42);
+
+    centralHeaders.push(centralHeader, nameBuf);
+    offset += 30 + nameBuf.length + compressedSize;
+  }
+
+  const centralDirOffset = offset;
+  const centralDirSize = centralHeaders.reduce((acc, b) => acc + b.length, 0);
+
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(0, 4);
+  eocd.writeUInt16LE(0, 6);
+  eocd.writeUInt16LE(files.length, 8);
+  eocd.writeUInt16LE(files.length, 10);
+  eocd.writeUInt32LE(centralDirSize, 12);
+  eocd.writeUInt32LE(centralDirOffset, 16);
+  eocd.writeUInt16LE(0, 20);
+
+  return Buffer.concat([...localHeaders, ...centralHeaders, eocd]);
+}
 
 // ==================== конфигурация ====================
 
@@ -93,8 +178,6 @@ function safeArrOfStr(v, maxItems = 2000, maxLineLen = 2000) {
 
 function normalizeReport(body) {
   const fallbackContextsRaw = Array.isArray(body.fallback_contexts) ? body.fallback_contexts : [];
-  // Потолок - не даём одному отчёту раздуться до гигабайта, если движок
-  // словил что-то совсем экзотическое (тысячи методов с fallback).
   const MAX_CONTEXTS = 200;
   const fallback_contexts = fallbackContextsRaw.slice(0, MAX_CONTEXTS).map(c => ({
     file: safeStr(c && c.file, "unknown file"),
@@ -103,6 +186,14 @@ function normalizeReport(body) {
     bytecode: safeArrOfStr(c && c.bytecode),
     java_after: safeArrOfStr(c && c.java_after),
   }));
+
+  const heavy_files = Array.isArray(body.heavy_files)
+    ? body.heavy_files.slice(0, 20).map(f => ({
+        file: safeStr(f && f.file, "unknown.java"),
+        content: typeof f.content === "string" ? f.content : "",
+        fallback_pct: safeNum(f && f.fallback_pct, 0),
+      }))
+    : [];
 
   return {
     app_version: safeStr(body.app_version),
@@ -119,6 +210,7 @@ function normalizeReport(body) {
     decompiled_pct: Math.max(0, Math.min(100, safeNum(body.decompiled_pct))),
     user_comment: safeStr(body.user_comment, ""),
     fallback_contexts,
+    heavy_files,
   };
 }
 
@@ -129,31 +221,50 @@ function escapeHtml(s) {
 }
 
 function buildSummaryHtml(r) {
+  const fallbackPct = r.total_methods > 0 ? (r.fallback_methods / r.total_methods) * 100 : (100 - r.decompiled_pct);
   const lines = [
-    `<b>NanoDecompiler error report</b>`,
+    `<b>🔍 NanoDecompiler Report</b>`,
     ``,
-    `App version: <code>${escapeHtml(r.app_version)}</code>`,
-    `Commit: <code>${escapeHtml(r.app_commit)}</code>`,
-    `Engine: <code>${escapeHtml(r.engine_version)}</code>`,
-    `OS: <code>${escapeHtml(r.os)}</code>`,
+    `📦 <b>Плагин:</b> <code>${escapeHtml(r.target_plugin_name)}</code> (${escapeHtml(r.jar_file_name)})`,
+    `🖥 <b>Платформа:</b> <code>${escapeHtml(r.target_platform)}</code>`,
+    `⚙️ <b>Версия:</b> GUI <code>${escapeHtml(r.app_version)}</code> · Engine <code>${escapeHtml(r.engine_version)}</code>`,
+    `💻 <b>ОС:</b> <code>${escapeHtml(r.os)}</code>`,
     ``,
-    `Plugin: <b>${escapeHtml(r.target_plugin_name)}</b> (${escapeHtml(r.jar_file_name)})`,
-    `Platform: ${escapeHtml(r.target_platform)}`,
-    `Methods: ${r.decompiled_methods}/${r.total_methods} decompiled (${r.decompiled_pct.toFixed(1)}%), ${r.fallback_methods} fallback`,
-    `Fallback locations attached: ${r.fallback_contexts.length}`,
+    `📊 <b>Статистика:</b>`,
+    `• Классов: <b>${r.classes_total}</b>`,
+    `• Методов: <b>${r.decompiled_methods}/${r.total_methods}</b> декомпилировано (<b>${r.decompiled_pct.toFixed(1)}%</b>)`,
+    `• Байткод-откатов: <b>${r.fallback_methods}</b> (${fallbackPct.toFixed(1)}% | ${r.fallback_contexts.length} мест зафиксировано)`,
   ];
-  if (r.user_comment) lines.push(``, `Comment: ${escapeHtml(r.user_comment)}`);
+
+  if (r.user_comment) {
+    lines.push(``, `💬 <b>Комментарий:</b>\n<blockquote expandable>${escapeHtml(r.user_comment)}</blockquote>`);
+  }
+
+  if (r.fallback_contexts.length > 0) {
+    lines.push(``, `⚠️ <b>Места байткода:</b>`);
+    const previewCount = Math.min(3, r.fallback_contexts.length);
+    for (let i = 0; i < previewCount; i++) {
+      const c = r.fallback_contexts[i];
+      const snippet = [
+        ...c.java_before.slice(-5),
+        `// --- БАЙТКОД (${c.bytecode.length} строк) ---`,
+        ...c.bytecode.slice(0, 8),
+        ...(c.bytecode.length > 8 ? ["// ..."] : []),
+        ...c.java_after.slice(0, 5),
+      ].join("\n");
+      lines.push(
+        `<b>[${i + 1}] ${escapeHtml(c.file)}</b>${c.method_hint ? ` · <code>${escapeHtml(c.method_hint)}</code>` : ""}\n<blockquote expandable>${escapeHtml(snippet)}</blockquote>`
+      );
+    }
+    if (r.fallback_contexts.length > previewCount) {
+      lines.push(`<i>... и ещё ${r.fallback_contexts.length - previewCount} мест во вложении</i>`);
+    }
+  }
+
   const text = lines.join("\n");
-  // Telegram-лимит на текст сообщения - 4096 символов, у summary такого
-  // объёма никогда не будет, но на всякий случай подрежем.
   return text.length > 4000 ? text.slice(0, 4000) + "\n…" : text;
 }
 
-/**
- * Полный файл-вложение - ПОСЛЕДОВАТЕЛЬНО, каждый fallback целиком (before +
- * bytecode + after) один за другим, а НЕ "все before, потом все bytecode,
- * потом все after" - именно так, как попросили.
- */
 function buildAttachmentText(r) {
   const parts = [];
   parts.push(`NanoDecompiler error report`);
@@ -182,14 +293,14 @@ function buildAttachmentText(r) {
     parts.push(`---- [${idx + 1}/${r.fallback_contexts.length}] ${c.file} ----`);
     if (c.method_hint) parts.push(`Method: ${c.method_hint}`);
     parts.push(``);
-    parts.push(`-- ${c.java_before.length} line(s) before --`);
-    parts.push(...c.java_before);
+    parts.push(`-- ${Math.min(5, c.java_before.length)} line(s) before --`);
+    parts.push(...c.java_before.slice(-5));
     parts.push(``);
     parts.push(`-- bytecode (${c.bytecode.length} line(s)) --`);
     parts.push(...c.bytecode);
     parts.push(``);
-    parts.push(`-- ${c.java_after.length} line(s) after --`);
-    parts.push(...c.java_after);
+    parts.push(`-- ${Math.min(5, c.java_after.length)} line(s) after --`);
+    parts.push(...c.java_after.slice(0, 5));
   });
 
   return parts.join("\n");
@@ -206,15 +317,14 @@ async function tgSendMessage(text) {
   if (!res.ok) throw new Error(`sendMessage: ${res.status} ${await res.text()}`);
 }
 
-async function tgSendDocument(filename, content) {
-  if (!content.trim()) return; // нечего прикладывать (0 fallback-контекстов) - не шлём пустой файл
+async function tgSendDocument(filename, content, mimeType = "text/plain; charset=utf-8") {
+  if (!content) return;
   const form = new FormData();
   form.append("chat_id", chatId);
-  form.append(
-    "document",
-    new Blob([content], { type: "text/plain; charset=utf-8" }),
-    filename,
-  );
+  const blob = Buffer.isBuffer(content)
+    ? new Blob([content], { type: mimeType })
+    : new Blob([content], { type: mimeType });
+  form.append("document", blob, filename);
   const res = await fetch(`${TG_API}/sendDocument`, { method: "POST", body: form });
   if (!res.ok) throw new Error(`sendDocument: ${res.status} ${await res.text()}`);
 }
@@ -233,7 +343,7 @@ const server = http.createServer((req, res) => {
 
   let raw = "";
   let tooBig = false;
-  const MAX_BODY = 20 * 1024 * 1024; // 20 МБ с запасом - обычный отчёт на порядки меньше
+  const MAX_BODY = 25 * 1024 * 1024;
   req.on("data", chunk => {
     if (tooBig) return;
     raw += chunk;
@@ -256,7 +366,25 @@ const server = http.createServer((req, res) => {
     try {
       await tgSendMessage(buildSummaryHtml(report));
       const safeName = report.jar_file_name.replace(/[^\w.\-]+/g, "_").slice(0, 60) || "report";
-      await tgSendDocument(`${safeName}_fallback_report.txt`, buildAttachmentText(report));
+      const fallbackPct = report.total_methods > 0 ? (report.fallback_methods / report.total_methods) * 100 : (100 - report.decompiled_pct);
+
+      if (fallbackPct > 5.0 || (report.heavy_files && report.heavy_files.length > 0)) {
+        // Упаковываем в ZIP архив, если байткод превышает 5% или есть файлы с байткодом
+        const zipFiles = [
+          { name: "report_summary.txt", data: buildAttachmentText(report) },
+          { name: "stats.json", data: JSON.stringify(body, null, 2) },
+        ];
+        if (report.heavy_files && report.heavy_files.length > 0) {
+          for (const f of report.heavy_files) {
+            zipFiles.push({ name: `sources/${f.file.replace(/^[/\\]+/, "")}`, data: f.content });
+          }
+        }
+        const zipBuf = createZip(zipFiles);
+        await tgSendDocument(`${safeName}_bytecode_archive.zip`, zipBuf, "application/zip");
+      } else if (report.fallback_contexts.length > 0) {
+        await tgSendDocument(`${safeName}_fallback_report.txt`, buildAttachmentText(report), "text/plain; charset=utf-8");
+      }
+
       res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ ok: true }));
     } catch (e) {
       console.error("Ошибка отправки в Telegram:", e.message);

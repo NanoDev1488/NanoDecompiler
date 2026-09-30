@@ -249,3 +249,15 @@ export function joinOutDir(outputDir: string, name: string): string {
   const trimmed = outputDir.endsWith(sep) ? outputDir.slice(0, -1) : outputDir;
   return `${trimmed}${sep}${name}`;
 }
+
+export function formatVersionsDisplay(engineVer: string | null, guiVer: string | null, lang: string = "ru"): string {
+  const cleanEngine = engineVer?.replace(/^NanoDecompiler\s*/i, "").replace(/^v/i, "").trim() ?? "";
+  const cleanGui = guiVer?.replace(/^NanoDecompiler\s*/i, "").replace(/^v/i, "").trim() ?? "";
+
+  if (cleanEngine && cleanGui && cleanEngine === cleanGui) {
+    return lang === "ru"
+      ? `NanoDecompiler v${cleanEngine} (Синхронизировано)`
+      : `NanoDecompiler v${cleanEngine} (Synchronized)`;
+  }
+  return `engine ${cleanEngine ? `v${cleanEngine}` : "…"} · GUI ${cleanGui ? `v${cleanGui}` : "…"}`;
+}

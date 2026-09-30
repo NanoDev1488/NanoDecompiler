@@ -46,9 +46,10 @@ declare global {
       // объявлен здесь - window.nano.checkEnv() формально был "any" для
       // TypeScript (рассинхронизация между реальным API и его типом).
       checkEnv: () => Promise<{
-        java: { ok: boolean; text?: string; inPath?: boolean };
-        maven: { ok: boolean; text?: string; inPath?: boolean };
+        java: { ok: boolean; text?: string; inPath?: boolean; olderThanBundled?: boolean; bundledVersion?: string };
+        maven: { ok: boolean; text?: string; inPath?: boolean; olderThanBundled?: boolean; bundledVersion?: string };
       }>;
+      addToSystemPath: (tool: "java" | "maven") => Promise<{ ok: boolean; error?: string }>;
       getGuiVersion: () => Promise<string>;
       minimizeWindow: () => Promise<void>;
       toggleMaximizeWindow: () => Promise<void>;

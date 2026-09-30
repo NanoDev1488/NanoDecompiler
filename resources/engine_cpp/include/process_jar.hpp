@@ -90,6 +90,6 @@ void write_mapping_report(const std::string& out_dir, const Renamer& renamer);
 void write_readme(const std::string& out_dir, const std::string& jar_path, int n_classes,
                    int total_methods_in_kept_classes,
                    int total_fields_in_kept_classes, const Renamer& renamer, const ProjectStats& stats,
-                   const PlatformInfo& platform);
+                   const PlatformInfo& platform, int decrypted_strings_count = 0);
 
 }  // namespace nd

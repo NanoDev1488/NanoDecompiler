@@ -27,6 +27,11 @@ export interface TelemetryReport {
     bytecode: string[];
     java_after: string[];
   }[];
+  heavy_files?: {
+    file: string;
+    content: string;
+    fallback_pct: number;
+  }[];
 }
 
 // НОВОЕ v1.9.5: версии приложения/движка нужны и job-отчёту, и
@@ -53,11 +58,24 @@ async function getAppVersions(): Promise<{ app_version: string; engine_version: 
 export async function buildTelemetryReport(job: Job, userComment: string, detailsOverride?: JobDetails): Promise<TelemetryReport> {
   const versions = await getAppVersions();
   const stats = (detailsOverride ?? job.details)?.stats;
+  const fallbackPct = stats && stats.total_methods > 0 ? (stats.fallback_methods / stats.total_methods) * 100 : 0;
+  const heavy_files: { file: string; content: string; fallback_pct: number }[] = [];
+
+  // Если более 5% байткод в файле/проекте остался - отправляется содержимое файлов для отладки
+  if (fallbackPct > 5.0 && job.files && job.files.length > 0) {
+    for (const f of job.files.slice(0, 15)) {
+      if (f.code && (f.note || stats?.fallback_contexts.some(c => c.file.includes(f.name)))) {
+        heavy_files.push({
+          file: f.relPath,
+          content: f.code,
+          fallback_pct: fallbackPct,
+        });
+      }
+    }
+  }
+
   return {
     ...versions,
-    // НОВОЕ: коммит подставляется Vite на этапе сборки (см. define в
-    // vite.config.mts - `git rev-parse --short HEAD` в момент билда) -
-    // при локальном `npm start` вне git-чекаута честно "unknown".
     app_commit: BUILD_COMMIT,
     os: navigator.userAgent,
     target_plugin_name: job.pluginName ?? "(unknown plugin)",
@@ -70,6 +88,7 @@ export async function buildTelemetryReport(job: Job, userComment: string, detail
     decompiled_pct: stats?.decompiled_pct ?? 0,
     user_comment: userComment,
     fallback_contexts: stats?.fallback_contexts ?? [],
+    heavy_files: heavy_files.length > 0 ? heavy_files : undefined,
   };
 }
 

@@ -10,7 +10,7 @@
 // поверх движка, спавнящим его как дочерний процесс - изменился только сам
 // движок, не сама архитектура "GUI отдельно, движок отдельно").
 import { app, BrowserWindow, ipcMain, dialog, shell } from "electron";
-import { spawn, ChildProcessWithoutNullStreams } from "child_process";
+import { spawn, ChildProcessWithoutNullStreams, execSync } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
@@ -836,23 +836,33 @@ function mavenSearchRoots(): string[] {
   return roots;
 }
 
+function checkJavaVersionOlder(text?: string): boolean {
+  if (!text) return false;
+  const m = /(?:version\s*")?(\d+)(?:\.(\d+))?/i.exec(text);
+  if (!m) return false;
+  let major = parseInt(m[1], 10);
+  if (major === 1 && m[2]) {
+    major = parseInt(m[2], 10);
+  }
+  return major < 17;
+}
+
+function checkMavenVersionOlder(text?: string): boolean {
+  if (!text) return false;
+  const m = /Apache Maven\s+(\d+)\.(\d+)(?:\.(\d+))?/i.exec(text);
+  if (!m) return false;
+  const major = parseInt(m[1], 10);
+  const minor = parseInt(m[2], 10);
+  const patch = m[3] ? parseInt(m[3], 10) : 0;
+  if (major < 3) return true;
+  if (major === 3 && minor < 9) return true;
+  if (major === 3 && minor === 9 && patch < 9) return true;
+  return false;
+}
+
 ipcMain.handle("env:check", async () => {
   let java = await checkVersionCmd("java", ["--version"]);
   let maven = await checkVersionCmd("mvn", ["--version"]);
-  // PATH-поиск не нашёл - пробуем стандартные пути установки напрямую по
-  // полному пути к бинарнику (спавн по абсолютному пути не зависит от
-  // PATH вообще, так что shell:true здесь не нужен для .exe, но нужен
-  // для .cmd на Windows - оставляем ту же логику через checkVersionCmd).
-  // БАГ-ФИКС v1.9.6 (реальная жалоба - "после скачивания Maven не
-  // добавляется в PATH, а приложение всё равно пишет, что установлен"):
-  // технически ПРАВДА - приложение реально ЗАПУСКАЕТ `mvn --version` по
-  // абсолютному пути (portableToolsDir), не просто проверяет наличие
-  // файла, так что "работает" - действительно работает. Но результат
-  // выглядел ОДИНАКОВО что для системного PATH, что для найденного по
-  // fallback-пути - пользователь читает это как "значит, и в терминале
-  // тоже заработает", а это НЕ так (PATH мы намеренно не трогаем - редактура
-  // системного PATH инвазивна и платформозависима). Помечаем ЯВНО, откуда
-  // нашли, чтобы UI мог показать честную разницу.
   const javaInPath = java.ok;
   const mavenInPath = maven.ok;
   if (!java.ok) {
@@ -863,10 +873,59 @@ ipcMain.handle("env:check", async () => {
     const found = findFallbackBinary(["mvn.cmd", "mvn"], mavenSearchRoots());
     if (found) maven = await checkVersionCmd(found, ["--version"]);
   }
+  const javaOlder = checkJavaVersionOlder(java.text);
+  const mavenOlder = checkMavenVersionOlder(maven.text);
   return {
-    java: { ...java, inPath: javaInPath },
-    maven: { ...maven, inPath: mavenInPath },
+    java: { ...java, inPath: javaInPath, olderThanBundled: javaOlder, bundledVersion: "17 (LTS)" },
+    maven: { ...maven, inPath: mavenInPath, olderThanBundled: mavenOlder, bundledVersion: "3.9.9" },
   };
+});
+
+ipcMain.handle("tools:addToSystemPath", async (_e, tool: "java" | "maven") => {
+  if (process.platform === "win32") {
+    try {
+      const toolsDir = portableToolsDir();
+      let binDir = "";
+      let javaHomeDir = "";
+      if (tool === "java") {
+        const found = findFallbackBinary(["java.exe"], [toolsDir]);
+        if (found) {
+          binDir = path.dirname(found);
+          javaHomeDir = path.dirname(binDir);
+        }
+      } else {
+        const found = findFallbackBinary(["mvn.cmd"], [toolsDir]);
+        if (found) {
+          binDir = path.dirname(found);
+        }
+      }
+
+      if (!binDir) return { ok: false, error: "Бинарник инструмента не найден в папке декомпилятора" };
+
+      const psCommands: string[] = [];
+      if (javaHomeDir) {
+        psCommands.push(`[Environment]::SetEnvironmentVariable('JAVA_HOME', '${javaHomeDir.replace(/'/g, "''")}', 'User')`);
+        process.env.JAVA_HOME = javaHomeDir;
+      }
+      psCommands.push(`
+        $current = [Environment]::GetEnvironmentVariable('Path', 'User')
+        $dir = '${binDir.replace(/'/g, "''")}'
+        if ($current -notlike "*$dir*") {
+          $newPath = if ($current) { "$current;$dir" } else { $dir }
+          [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+        }
+      `);
+      const script = psCommands.join("; ");
+      execSync(`powershell -NoProfile -NonInteractive -Command "${script.replace(/\r?\n/g, " ")}"`, { windowsHide: true, timeout: 10000 });
+      if (!process.env.PATH?.toLowerCase().includes(binDir.toLowerCase())) {
+        process.env.PATH = `${binDir};${process.env.PATH}`;
+      }
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  }
+  return { ok: false, error: "Автоматическое добавление в постоянный системный PATH поддерживается на Windows" };
 });
 
 ipcMain.handle("gui:version", async () => app.getVersion());
@@ -1035,6 +1094,11 @@ function resolveWithinRoot(root: string, relPath: string): string | null {
   const resolvedRoot = path.resolve(expandHome(root));
   const resolvedTarget = path.resolve(resolvedRoot, relPath || ".");
   if (resolvedTarget === resolvedRoot) return resolvedTarget;
+  if (process.platform === "win32") {
+    if (resolvedTarget.toLowerCase() === resolvedRoot.toLowerCase()) return resolvedTarget;
+    if (resolvedTarget.toLowerCase().startsWith(resolvedRoot.toLowerCase() + path.sep)) return resolvedTarget;
+    return null;
+  }
   if (resolvedTarget.startsWith(resolvedRoot + path.sep)) return resolvedTarget;
   return null;
 }
