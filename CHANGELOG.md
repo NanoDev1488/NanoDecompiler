@@ -1,5 +1,15 @@
 # NanoDecompiler Changelog
 
+## [1.9.139-ObfUpd.2] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **[ObfUpd 2/15] Устранение непрозрачных предикатов и отсечение ложных ветвей (Opaque Predicates & Bogus Branch Pruning)**:
+  - `resources/engine_cpp/src/structure.cpp`: в `is_same_expr` добавлена рекурсивная проверка эквивалентности выражений (`FieldAccess`, `ArrayAccess`, `Cast`).
+  - `resources/engine_cpp/src/structure.cpp`: в `simplify_expr` для бинарных операций `==`, `!=`, `<`, `<=`, `>`, `>=`, `^`, `-` внедрена свертка тождественных выражений (`x == x -> true`, `x != x -> false`, `x ^ x -> 0`, `x - x -> 0`) и вычисление константных условий.
+  - `resources/engine_cpp/src/structure.cpp`: реализован оптимизационный проход `prune_opaque_branches` — отсечение ложных ветвей `if (false)` и продвижение истинных ветвей `if (true)`, а также полное удаление мертвых циклов `while (false)`.
+
+---
+
 ## [1.9.138-ObfUpd.1] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

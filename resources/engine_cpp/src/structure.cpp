@@ -1205,6 +1205,34 @@ bool looks_like_update(const StmtPtr& stmt) {
     return e->kind == ExprKind::Assign;
 }
 
+static bool is_same_expr(const ExprPtr& a, const ExprPtr& b) {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    if (a->kind != b->kind) return false;
+    if (a->kind == ExprKind::Local) {
+        return static_cast<Local*>(a.get())->name == static_cast<Local*>(b.get())->name;
+    }
+    if (a->kind == ExprKind::Const) {
+        return static_cast<Const*>(a.get())->literal == static_cast<Const*>(b.get())->literal;
+    }
+    if (a->kind == ExprKind::FieldAccess) {
+        auto* fa1 = static_cast<FieldAccess*>(a.get());
+        auto* fa2 = static_cast<FieldAccess*>(b.get());
+        return fa1->name == fa2->name && fa1->owner == fa2->owner && is_same_expr(fa1->target, fa2->target);
+    }
+    if (a->kind == ExprKind::ArrayAccess) {
+        auto* aa1 = static_cast<ArrayAccess*>(a.get());
+        auto* aa2 = static_cast<ArrayAccess*>(b.get());
+        return is_same_expr(aa1->array, aa2->array) && is_same_expr(aa1->index, aa2->index);
+    }
+    if (a->kind == ExprKind::Cast) {
+        auto* c1 = static_cast<Cast*>(a.get());
+        auto* c2 = static_cast<Cast*>(b.get());
+        return c1->type == c2->type && is_same_expr(c1->expr, c2->expr);
+    }
+    return false;
+}
+
 ExprPtr simplify_expr(ExprPtr e) {
     if (!e) return nullptr;
     switch (e->kind) {
@@ -1273,6 +1301,28 @@ ExprPtr simplify_expr(ExprPtr e) {
             auto* b = static_cast<BinOp*>(e.get());
             if (b->left) b->left = simplify_expr(b->left);
             if (b->right) b->right = simplify_expr(b->right);
+            if (b->left && b->left->kind == ExprKind::Const && b->right && b->right->kind == ExprKind::Const) {
+                auto* c1 = static_cast<Const*>(b->left.get());
+                auto* c2 = static_cast<Const*>(b->right.get());
+                bool eq = (c1->literal == c2->literal);
+                if (b->op == "==") return std::make_shared<Const>(eq ? "true" : "false", "boolean");
+                if (b->op == "!=") return std::make_shared<Const>(eq ? "false" : "true", "boolean");
+                try {
+                    long long v1 = std::stoll(c1->literal);
+                    long long v2 = std::stoll(c2->literal);
+                    if (b->op == "<") return std::make_shared<Const>(v1 < v2 ? "true" : "false", "boolean");
+                    if (b->op == "<=") return std::make_shared<Const>(v1 <= v2 ? "true" : "false", "boolean");
+                    if (b->op == ">") return std::make_shared<Const>(v1 > v2 ? "true" : "false", "boolean");
+                    if (b->op == ">=") return std::make_shared<Const>(v1 >= v2 ? "true" : "false", "boolean");
+                } catch (...) {}
+            }
+            if (is_same_expr(b->left, b->right)) {
+                if (b->op == "==") return std::make_shared<Const>("true", "boolean");
+                if (b->op == "!=") return std::make_shared<Const>("false", "boolean");
+                if (b->op == "<=" || b->op == ">=") return std::make_shared<Const>("true", "boolean");
+                if (b->op == "<" || b->op == ">") return std::make_shared<Const>("false", "boolean");
+                if (b->op == "^" || b->op == "-") return std::make_shared<Const>("0", b->type);
+            }
             if (b->op == "==") {
                 if (b->right && b->right->kind == ExprKind::Const) {
                     auto* c = static_cast<Const*>(b->right.get());
@@ -1784,18 +1834,6 @@ StmtPtr simplify_stmt(StmtPtr s) {
     return s;
 }
 
-static bool is_same_expr(const ExprPtr& a, const ExprPtr& b) {
-    if (!a && !b) return true;
-    if (!a || !b) return false;
-    if (a->kind != b->kind) return false;
-    if (a->kind == ExprKind::Local) {
-        return static_cast<Local*>(a.get())->name == static_cast<Local*>(b.get())->name;
-    }
-    if (a->kind == ExprKind::Const) {
-        return static_cast<Const*>(a.get())->literal == static_cast<Const*>(b.get())->literal;
-    }
-    return false;
-}
 
 static bool is_same_stmt(const StmtPtr& a, const StmtPtr& b) {
     if (!a && !b) return true;
@@ -2229,6 +2267,48 @@ std::vector<StmtPtr> fold_try_catches(std::vector<StmtPtr> stmts) {
     return stmts;
 }
 
+std::vector<StmtPtr> prune_opaque_branches(std::vector<StmtPtr> stmts) {
+    std::vector<StmtPtr> out;
+    for (auto& s : stmts) {
+        if (!s) continue;
+        if (s->kind == StmtKind::IfStmt) {
+            auto* i = static_cast<IfStmt*>(s.get());
+            if (i->cond) i->cond = simplify_expr(i->cond);
+            i->then_body = prune_opaque_branches(i->then_body);
+            if (i->else_body.has_value()) i->else_body = prune_opaque_branches(*i->else_body);
+            if (i->cond && i->cond->kind == ExprKind::Const) {
+                auto* c = static_cast<Const*>(i->cond.get());
+                if (c->literal == "true") {
+                    for (auto& bs : i->then_body) out.push_back(bs);
+                    continue;
+                }
+                if (c->literal == "false") {
+                    if (i->else_body.has_value()) {
+                        for (auto& bs : *i->else_body) out.push_back(bs);
+                    }
+                    continue;
+                }
+            }
+            out.push_back(s);
+        } else if (s->kind == StmtKind::WhileStmt) {
+            auto* w = static_cast<WhileStmt*>(s.get());
+            if (w->cond) w->cond = simplify_expr(w->cond);
+            if (w->cond && w->cond->kind == ExprKind::Const && static_cast<Const*>(w->cond.get())->literal == "false") {
+                continue;
+            }
+            w->body = prune_opaque_branches(w->body);
+            out.push_back(s);
+        } else if (s->kind == StmtKind::BlockStmt) {
+            auto* b = static_cast<BlockStmt*>(s.get());
+            b->stmts = prune_opaque_branches(b->stmts);
+            out.push_back(s);
+        } else {
+            out.push_back(s);
+        }
+    }
+    return out;
+}
+
 }  // namespace
 
 std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
@@ -2246,6 +2326,7 @@ std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
         out = fuse_for_initializers(out);
         out = propagate_local_constant_arrays(out);
         out = fold_try_catches(out);
+        out = prune_opaque_branches(out);
     }
     return out;
 }
