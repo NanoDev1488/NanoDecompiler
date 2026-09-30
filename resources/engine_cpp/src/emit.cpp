@@ -195,6 +195,78 @@ std::string emit_expr(const ExprPtr& e) {
     return "/* ? unknown expr */";
 }
 
+static bool is_label_used_in_stmt(const StmtPtr& s, const std::string& lbl) {
+    if (!s) return false;
+    if (s->kind == StmtKind::BreakStmt) {
+        auto* b = static_cast<const BreakStmt*>(s.get());
+        return b->label.has_value() && *b->label == lbl;
+    }
+    if (s->kind == StmtKind::ContinueStmt) {
+        auto* c = static_cast<const ContinueStmt*>(s.get());
+        return c->label.has_value() && *c->label == lbl;
+    }
+    if (s->kind == StmtKind::BlockStmt) {
+        auto* bl = static_cast<const BlockStmt*>(s.get());
+        for (const auto& child : bl->stmts) {
+            if (is_label_used_in_stmt(child, lbl)) return true;
+        }
+    }
+    if (s->kind == StmtKind::IfStmt) {
+        auto* i = static_cast<const IfStmt*>(s.get());
+        for (const auto& child : i->then_body) {
+            if (is_label_used_in_stmt(child, lbl)) return true;
+        }
+        if (i->else_body.has_value()) {
+            for (const auto& child : *i->else_body) {
+                if (is_label_used_in_stmt(child, lbl)) return true;
+            }
+        }
+    }
+    if (s->kind == StmtKind::WhileStmt) {
+        auto* w = static_cast<const WhileStmt*>(s.get());
+        for (const auto& child : w->body) {
+            if (is_label_used_in_stmt(child, lbl)) return true;
+        }
+    }
+    if (s->kind == StmtKind::DoWhileStmt) {
+        auto* dw = static_cast<const DoWhileStmt*>(s.get());
+        for (const auto& child : dw->body) {
+            if (is_label_used_in_stmt(child, lbl)) return true;
+        }
+    }
+    if (s->kind == StmtKind::ForStmt) {
+        auto* f = static_cast<const ForStmt*>(s.get());
+        for (const auto& child : f->body) {
+            if (is_label_used_in_stmt(child, lbl)) return true;
+        }
+    }
+    if (s->kind == StmtKind::SwitchStmt) {
+        auto* sw = static_cast<const SwitchStmt*>(s.get());
+        for (const auto& c : sw->cases) {
+            for (const auto& child : c.body) {
+                if (is_label_used_in_stmt(child, lbl)) return true;
+            }
+        }
+    }
+    if (s->kind == StmtKind::TryCatchStmt) {
+        auto* tc = static_cast<const TryCatchStmt*>(s.get());
+        for (const auto& child : tc->try_body) {
+            if (is_label_used_in_stmt(child, lbl)) return true;
+        }
+        for (const auto& c : tc->catches) {
+            for (const auto& child : c.body) {
+                if (is_label_used_in_stmt(child, lbl)) return true;
+            }
+        }
+        if (tc->finally_body.has_value()) {
+            for (const auto& child : *tc->finally_body) {
+                if (is_label_used_in_stmt(child, lbl)) return true;
+            }
+        }
+    }
+    return false;
+}
+
 std::vector<std::string> emit_stmts(const std::vector<StmtPtr>& stmts, int indent) {
     std::vector<std::string> lines;
     for (auto& s : stmts) {
@@ -256,7 +328,7 @@ std::vector<std::string> emit_stmt(const StmtPtr& s, int indent) {
         }
         case StmtKind::WhileStmt: {
             const auto* w = static_cast<const WhileStmt*>(s.get());
-            std::string label = w->label.has_value() ? (*w->label + ": ") : "";
+            std::string label = (w->label.has_value() && is_label_used_in_stmt(s, *w->label)) ? (*w->label + ": ") : "";
             std::vector<std::string> out = {pad + label + "while (" + emit_expr(w->cond) + ") {"};
             auto body_lines = emit_stmts(w->body, indent + 1);
             out.insert(out.end(), body_lines.begin(), body_lines.end());
@@ -265,7 +337,7 @@ std::vector<std::string> emit_stmt(const StmtPtr& s, int indent) {
         }
         case StmtKind::DoWhileStmt: {
             const auto* w = static_cast<const DoWhileStmt*>(s.get());
-            std::string label = w->label.has_value() ? (*w->label + ": ") : "";
+            std::string label = (w->label.has_value() && is_label_used_in_stmt(s, *w->label)) ? (*w->label + ": ") : "";
             std::vector<std::string> out = {pad + label + "do {"};
             auto body_lines = emit_stmts(w->body, indent + 1);
             out.insert(out.end(), body_lines.begin(), body_lines.end());
@@ -274,7 +346,7 @@ std::vector<std::string> emit_stmt(const StmtPtr& s, int indent) {
         }
         case StmtKind::ForStmt: {
             const auto* f = static_cast<const ForStmt*>(s.get());
-            std::string label = f->label.has_value() ? (*f->label + ": ") : "";
+            std::string label = (f->label.has_value() && is_label_used_in_stmt(s, *f->label)) ? (*f->label + ": ") : "";
             std::string init_txt = f->init ? emit_expr(f->init) : "";
             bool cond_is_true_const = f->cond && f->cond->kind == ExprKind::Const &&
                                        static_cast<const Const*>(f->cond.get())->literal == "true";
@@ -291,26 +363,16 @@ std::vector<std::string> emit_stmt(const StmtPtr& s, int indent) {
         }
         case StmtKind::SwitchStmt: {
             const auto* sw = static_cast<const SwitchStmt*>(s.get());
+            std::string label = (sw->label.has_value() && is_label_used_in_stmt(s, *sw->label)) ? (*sw->label + ": ") : "";
             std::string selector_str = emit_expr(sw->selector);
             std::vector<std::string> out;
-            // НОВОЕ v1.7.6 (реальный вопрос - "почему в switch какие-то
-            // случайные цифры"): это не мусор и не баг - javac РЕАЛЬНО
-            // компилирует switch(String) именно так (сначала switch по
-            // hashCode() строки с if(!s.equals(...))-проверкой внутри
-            // каждого case, потом отдельный switch по вычисленному
-            // индексу) - показанные числа это НАСТОЯЩИЕ String.hashCode()
-            // из байткода, декомпилятор их не выдумывает. Полноценная
-            // пересборка обратно в чистый switch(String) с оригинальными
-            // строковыми case - отдельная, рискованная задача (см.
-            // HANDOFF по structure.cpp) - пока просто ЧЕСТНО поясняем,
-            // что здесь происходит и почему, прямо в самом коде.
             if (selector_str.size() > 11 && selector_str.compare(selector_str.size() - 11, 11, ".hashCode()") == 0) {
                 out.push_back(pad + "// ПРИМЕЧАНИЕ: это switch(String) в оригинале - javac компилирует его именно");
                 out.push_back(pad + "// так (switch по hashCode() строки + проверка equals() внутри каждого case),");
                 out.push_back(pad + "// числа ниже - настоящие String.hashCode() из байткода, не потеряны и не");
                 out.push_back(pad + "// выдуманы декомпилятором.");
             }
-            out.push_back(pad + "switch (" + selector_str + ") {");
+            out.push_back(pad + label + "switch (" + selector_str + ") {");
             for (auto& c : sw->cases) {
                 if (c.is_default) out.push_back(pad + IND + "default:");
                 for (auto& v : c.values) out.push_back(pad + IND + "case " + v + ":");
