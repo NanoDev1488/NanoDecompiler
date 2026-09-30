@@ -210,7 +210,8 @@ namespace nd {
 // НОВОЕ v1.9.137: свертка константных массивов и локальная пропагация элементов (ArrayAccess folding, NewArray initializer simplification, propagate_local_constant_arrays).
 // НОВОЕ v1.9.138-ObfUpd.1: [ObfUpd 1/15] деобфускация строк Allatori (двухключевой/чередующийся XOR, str_decrypt_allatori), десугаринг multi-catch (catch (TypeA | TypeB e)), выравнивание вложенных try и свертка массивов.
 // НОВОЕ v1.9.139-ObfUpd.2: [ObfUpd 2/15] устранение непрозрачных предикатов (opaque predicates: is_same_expr, константные тождества) и отсечение ложных ветвей (prune_opaque_branches для IfStmt и WhileStmt).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.139-ObfUpd.2";
+// НОВОЕ v1.9.140-ObfUpd.3: [ObfUpd 3/15] расплющивание управляющего потока (Control Flow Unflattening: unflatten_switch_dispatchers, трассировка переходов состояний и устранение фиктивных switch-диспетчеров обфускаторов).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.140-ObfUpd.3";
 }
 
 

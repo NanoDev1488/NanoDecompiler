@@ -1,5 +1,15 @@
 # NanoDecompiler Changelog
 
+## [1.9.140-ObfUpd.3] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **[ObfUpd 3/15] Расплющивание управляющего потока (Control Flow Unflattening & State Dispatcher Elimination)**:
+  - `resources/engine_cpp/src/structure.cpp`: реализован оптимизационный проход `unflatten_switch_dispatchers` для деобфускации алгоритма сплющивания потока управления (Control Flow Flattening / Chenxi Wang pattern в Zelix KlassMaster и DashO).
+  - `resources/engine_cpp/src/structure.cpp`: автоматическое распознавание циклов диспетчеризации `while (state != exit) { switch (state) { ... } }`, детекция начального состояния и трассировка переходов между case-блоками.
+  - `resources/engine_cpp/src/structure.cpp`: сшивание линейных операторов в естественном порядке выполнения и полное удаление синтетической переменной состояния и фиктивного цикла.
+
+---
+
 ## [1.9.139-ObfUpd.2] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

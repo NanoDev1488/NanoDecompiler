@@ -2309,6 +2309,78 @@ std::vector<StmtPtr> prune_opaque_branches(std::vector<StmtPtr> stmts) {
     return out;
 }
 
+std::vector<StmtPtr> unflatten_switch_dispatchers(std::vector<StmtPtr> stmts) {
+    if (stmts.size() < 2) return stmts;
+    std::vector<StmtPtr> out;
+    size_t i = 0;
+    while (i < stmts.size()) {
+        if (i + 1 < stmts.size() && stmts[i]->kind == StmtKind::LocalDecl && stmts[i + 1]->kind == StmtKind::WhileStmt) {
+            auto* ld = static_cast<LocalDecl*>(stmts[i].get());
+            auto* w = static_cast<WhileStmt*>(stmts[i + 1].get());
+            if (ld->init && ld->init->kind == ExprKind::Const && w->body.size() == 1 && w->body[0]->kind == StmtKind::SwitchStmt) {
+                std::string var_name = ld->name;
+                std::string curr_state = static_cast<Const*>(ld->init.get())->literal;
+                auto* sw = static_cast<SwitchStmt*>(w->body[0].get());
+                if (sw->selector && sw->selector->kind == ExprKind::Local && static_cast<Local*>(sw->selector.get())->name == var_name) {
+                    std::map<std::string, const SwitchCase*> case_map;
+                    for (const auto& c : sw->cases) {
+                        for (const auto& v : c.values) {
+                            case_map[v] = &c;
+                        }
+                    }
+                    std::vector<StmtPtr> unflattened;
+                    std::set<std::string> visited;
+                    bool success = false;
+                    while (!curr_state.empty()) {
+                        if (visited.count(curr_state)) break;
+                        visited.insert(curr_state);
+                        auto it = case_map.find(curr_state);
+                        if (it == case_map.end()) {
+                            success = true;
+                            break;
+                        }
+                        const SwitchCase* sc = it->second;
+                        std::vector<StmtPtr> c_body = sc->body;
+                        while (!c_body.empty() && c_body.back()->kind == StmtKind::BreakStmt) {
+                            c_body.pop_back();
+                        }
+                        if (c_body.empty()) break;
+                        if (c_body.back()->kind == StmtKind::ReturnStmt) {
+                            for (auto& s_in_c : c_body) unflattened.push_back(s_in_c);
+                            success = true;
+                            break;
+                        }
+                        std::string next_state = "";
+                        if (c_body.back()->kind == StmtKind::ExprStmt) {
+                            auto* es = static_cast<ExprStmtNode*>(c_body.back().get());
+                            if (es->expr && es->expr->kind == ExprKind::Assign) {
+                                auto* as = static_cast<Assign*>(es->expr.get());
+                                if (as->target && as->target->kind == ExprKind::Local &&
+                                    static_cast<Local*>(as->target.get())->name == var_name &&
+                                    as->value && as->value->kind == ExprKind::Const) {
+                                    next_state = static_cast<Const*>(as->value.get())->literal;
+                                    c_body.pop_back();
+                                }
+                            }
+                        }
+                        if (next_state.empty()) break;
+                        for (auto& s_in_c : c_body) unflattened.push_back(s_in_c);
+                        curr_state = next_state;
+                    }
+                    if (success && !unflattened.empty()) {
+                        for (auto& us : unflattened) out.push_back(us);
+                        i += 2;
+                        continue;
+                    }
+                }
+            }
+        }
+        out.push_back(stmts[i]);
+        i += 1;
+    }
+    return out;
+}
+
 }  // namespace
 
 std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
@@ -2327,6 +2399,7 @@ std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
         out = propagate_local_constant_arrays(out);
         out = fold_try_catches(out);
         out = prune_opaque_branches(out);
+        out = unflatten_switch_dispatchers(out);
     }
     return out;
 }
