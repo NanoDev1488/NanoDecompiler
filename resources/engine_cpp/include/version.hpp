@@ -181,8 +181,9 @@ namespace nd {
 // автоматический fallback-хостинг убегающих переменных в корень метода (hoist_all_escaping_to_root) вместо отката на байткод.
 // НОВОЕ v1.9.113: устранение потери неструктурированных CFG блоков в декомпиляторе C++:
 // автоматическое восстановление непосещённых достижимых блоков через recover_unconsumed_blocks в Structurer::build,
-// поддержка trampoline-переходов и выходов try-блоков в build_try, точная проверка void-return в check_full_coverage.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.113";
+// НОВОЕ v1.9.114: устранение сбоев пересечения стека (multi-depth stack crossing resolution)
+// и безопасное сохранение остатков стека в __tempX вместо abort, включение автоотправки телеметрии по умолчанию.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.114";
 }
 
 

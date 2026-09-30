@@ -195,7 +195,7 @@ const DEFAULT_SETTINGS: Settings = {
   autoUpdateCheck: true,
   appIcon: "terminal",
   setupCompleted: false,
-  telemetryEnabled: false,
+  telemetryEnabled: true,
   telemetryUrl: "http://195.179.231.14:15015/report",
   language: "ru",
 };

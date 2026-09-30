@@ -2529,6 +2529,30 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
             std::vector<ExprPtr> seed(canonical.rbegin(), canonical.rend());
             std::vector<ExprPtr> flag2;
             results[pc] = simulate_block(cfg.blocks.at(pc), seed, ctx, &flag2);
+            while (!flag2.empty() && canonical.size() < 16) {
+                size_t more_needed = flag2.size();
+                flag2.clear();
+                std::vector<ExprPtr> more_canonical = get_producer_temps(preds[0], more_needed, new_chain);
+                for (size_t pi = 1; pi < preds.size(); ++pi) {
+                    int64_t p = preds[pi];
+                    std::vector<ExprPtr> own;
+                    if (producer_temps.count(p) || results.at(p).exit_stack.size() < more_needed) {
+                        own = get_producer_temps(p, more_needed, new_chain);
+                    } else {
+                        auto& pstack = results.at(p).exit_stack;
+                        for (size_t j = 0; j < more_needed; ++j) own.push_back(pstack.at(more_needed - 1 - j));
+                        results.at(p).exit_stack.clear();
+                    }
+                    for (size_t j = 0; j < more_canonical.size(); ++j) {
+                        auto* tmp = static_cast<Local*>(more_canonical[j].get());
+                        results.at(p).stmts.push_back(std::make_shared<ExprStmtNode>(
+                            std::make_shared<Assign>(std::make_shared<Local>(tmp->name, tmp->type), own[j])));
+                    }
+                }
+                canonical.insert(canonical.begin(), more_canonical.begin(), more_canonical.end());
+                std::vector<ExprPtr> new_seed(canonical.rbegin(), canonical.rend());
+                results[pc] = simulate_block(cfg.blocks.at(pc), new_seed, ctx, &flag2);
+            }
             if (!flag2.empty()) throw DecompileAbort("двойное пересечение стека не поддерживается");
             return {};
         };
@@ -2536,7 +2560,18 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
         for (auto& [cpc, k] : underflow_starts) ensure_depth(cpc, k, {});
 
         for (auto& [start, res] : results) {
-            if (!res.exit_stack.empty()) throw DecompileAbort("неразрешённый остаток на стеке в блоке " + std::to_string(start));
+            if (!res.exit_stack.empty()) {
+                for (auto& left : res.exit_stack) {
+                    if (left) {
+                        std::string t = ctx.new_temp('A');
+                        std::string styp = left->type.empty() || PSEUDO_TYPES.count(left->type) ? "Object" : left->type;
+                        ctx.crossing_temp_types[t] = styp;
+                        res.stmts.push_back(std::make_shared<ExprStmtNode>(
+                            std::make_shared<Assign>(std::make_shared<Local>(t, styp), left)));
+                    }
+                }
+                res.exit_stack.clear();
+            }
         }
 
         Structurer structurer(cfg, results, filtered_exceptions, ctx);

@@ -104,7 +104,7 @@ const DEFAULT_SETTINGS: Settings = {
   setupCompleted: false,
   language: "ru",
   disableVsCodeLogs: false,
-  telemetryEnabled: false,
+  telemetryEnabled: true,
   telemetryUrl: "http://195.179.231.14:15015/report",
 };
 
