@@ -2215,6 +2215,26 @@ std::vector<StmtPtr> fold_try_catches(std::vector<StmtPtr> stmts) {
             for (auto& c : t->catches) c.body = fold_try_catches(c.body);
             if (t->finally_body.has_value()) t->finally_body = fold_try_catches(*t->finally_body);
 
+            // 0. Neutralize fake exception trampolines: try { throw new E(); } catch (E e) { body; }
+            if (t->body.size() == 1 && t->body[0]->kind == StmtKind::ThrowStmt &&
+                !t->finally_body.has_value() && t->resources.empty() && t->catches.size() == 1) {
+                auto* ts = static_cast<ThrowStmt*>(t->body[0].get());
+                if (ts->expr && ts->expr->kind == ExprKind::NewObject) {
+                    auto* no = static_cast<NewObject*>(ts->expr.get());
+                    const std::string& cat_t = t->catches[0].type;
+                    if (no->type == cat_t || cat_t == "Throwable" || cat_t == "Exception" || cat_t == "RuntimeException" ||
+                        no->type.find("Exception") != std::string::npos || no->type.find("Error") != std::string::npos) {
+                        const std::string& vname = t->catches[0].var_name;
+                        std::vector<StmtPtr> unwrapped = t->catches[0].body;
+                        if (!vname.empty() && contains_local_ref_list(unwrapped, vname)) {
+                            unwrapped.insert(unwrapped.begin(), std::make_shared<LocalDecl>(vname, cat_t, ts->expr));
+                        }
+                        s = std::make_shared<BlockStmt>(unwrapped);
+                        continue;
+                    }
+                }
+            }
+
             // 1. Flatten single nested try without finally/resources into outer try
             if (t->body.size() == 1 && t->body[0]->kind == StmtKind::TryStmt) {
                 auto* inner = static_cast<TryStmt*>(t->body[0].get());

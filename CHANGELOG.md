@@ -1,5 +1,15 @@
 # NanoDecompiler Changelog
 
+## [1.9.141-ObfUpd.4] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **[ObfUpd 4/15] Нейтрализация фиктивных батутов исключений (Exception Trampoline Neutralization & Flow De-obfuscation)**:
+  - `resources/engine_cpp/src/structure.cpp`: реализована деобфускация обфускаторного паттерна батутов исключений (`try { throw new Exception(); } catch (Exception e) { ... }`), повсеместно используемого для запутывания линейного кода.
+  - `resources/engine_cpp/src/structure.cpp`: безопасная распаковка содержимого catch-блока в родительский блок операторов.
+  - `resources/engine_cpp/src/structure.cpp`: автоматическое определение использования переменной исключения в теле блока (`contains_local_ref_list`) с безопасной подстановкой локального объявления `Exception e = new Exception(...)` при необходимости.
+
+---
+
 ## [1.9.140-ObfUpd.3] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)
