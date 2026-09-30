@@ -3,6 +3,7 @@
 // эвристика "похоже ли имя на сгенерированное обфускатором".
 #pragma once
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <unordered_set>
