@@ -1212,6 +1212,9 @@ std::vector<StmtPtr> hoist_escaping_locals(const std::vector<StmtPtr>& stmts, st
                 std::set_difference(escaping.begin(), escaping.end(), declared_so_far.begin(), declared_so_far.end(),
                                      std::inserter(new_names, new_names.begin()));
                 for (auto& name : new_names) {
+                    if (name.rfind("__", 0) == 0 || (name.rfind("temp", 0) == 0 && name.size() > 4 && std::isdigit(static_cast<unsigned char>(name[4])))) {
+                        continue;
+                    }
                     std::string typ = (types.count(name) && !types[name].empty()) ? types[name] : "Object";
                     out.push_back(std::make_shared<LocalDecl>(typ, name, nullptr));
                 }
@@ -1354,6 +1357,9 @@ std::vector<StmtPtr> hoist_all_escaping_to_root(std::vector<StmtPtr> stmts, Meth
     std::vector<StmtPtr> prefix;
     for (auto& name : escaping) {
         if (root_declared.count(name)) continue;
+        if (name.rfind("__", 0) == 0 || (name.rfind("temp", 0) == 0 && name.size() > 4 && std::isdigit(static_cast<unsigned char>(name[4])))) {
+            continue;
+        }
         std::string typ = (types.count(name) && !types[name].empty()) ? types[name] : "Object";
         prefix.push_back(std::make_shared<LocalDecl>(typ, name, nullptr));
         root_declared.insert(name);
@@ -2839,6 +2845,9 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
                 std::vector<StmtPtr> prefix;
                 for (auto& name : all_escaping) {
                     if (root_declared.count(name)) continue;
+                    if (name.rfind("__", 0) == 0 || (name.rfind("temp", 0) == 0 && name.size() > 4 && std::isdigit(static_cast<unsigned char>(name[4])))) {
+                        continue;
+                    }
                     std::string typ = (types.count(name) && !types[name].empty()) ? types[name] : "Object";
                     prefix.push_back(std::make_shared<LocalDecl>(typ, name, nullptr));
                     root_declared.insert(name);

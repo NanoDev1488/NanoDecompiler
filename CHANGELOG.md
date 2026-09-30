@@ -1,5 +1,16 @@
 # NanoDecompiler Changelog
 
+## [1.9.147-ObfUpd.10] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **[ObfUpd 10/15] Устранение паразитных объявлений стековых переменных (Stack Temp Inlining & Anti-Hoisting)**:
+  - `resources/engine_cpp/src/structure.cpp`: расширен распознаватель `is_synth_temp` для поддержки генераторов стековых переменных `tempN` (ранее поддерживались только префиксы `__`).
+  - `resources/engine_cpp/src/structure.cpp`: `as_assign` расширен для распознавания инициализаций `LocalDecl`, позволяя инлайнить одиночные временные переменные из объявлений.
+  - `resources/engine_cpp/src/structure.cpp`: функция `substitute_temp_in_stmt` сделана рекурсивной по всем составным блокам (`IfStmt`, `WhileStmt`, `ForStmt`, `BlockStmt`, `TryStmt`, `SwitchStmt`, `SyncStmt`).
+  - `resources/engine_cpp/src/engine.cpp`: в функциях хостинга переменных (`hoist_escaping_locals`, `collect_all_escaping_names`) заблокировано паразитное всплытие стековых переменных (`tempN`, `__*`), полностью устраняя проблему мусорных объявлений типа `StringBuilder temp1; CommandSender temp2; ...` в начале методов.
+
+---
+
 ## [1.9.146-ObfUpd.9] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

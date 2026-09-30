@@ -1150,7 +1150,15 @@ std::pair<StmtPtr, std::optional<int64_t>> Structurer::build_try(int64_t pc, con
 namespace {
 
 bool is_synth_temp(const std::string& name) {
-    static const std::regex re(R"(^__(stk|temp|cross|sb|[a-zA-Z]+)\d+$)");
+    if (name.rfind("__", 0) == 0) return true;
+    if (name.rfind("temp", 0) == 0 && name.size() > 4) {
+        bool all_digits = true;
+        for (size_t i = 4; i < name.size(); ++i) {
+            if (!std::isdigit(static_cast<unsigned char>(name[i]))) { all_digits = false; break; }
+        }
+        if (all_digits) return true;
+    }
+    static const std::regex re(R"(^(__)?(stk|temp|cross|sb|[a-zA-Z]+)\d+$)");
     return std::regex_match(name, re);
 }
 
@@ -1160,6 +1168,12 @@ std::optional<std::pair<ExprPtr, ExprPtr>> as_assign(const StmtPtr& stmt) {
         if (es->expr && es->expr->kind == ExprKind::Assign) {
             auto* a = static_cast<Assign*>(es->expr.get());
             return std::make_pair(a->target, a->value);
+        }
+    }
+    if (stmt && stmt->kind == StmtKind::LocalDecl) {
+        auto* ld = static_cast<LocalDecl*>(stmt.get());
+        if (ld->init) {
+            return std::make_pair(std::make_shared<Local>(ld->name, ld->type), ld->init);
         }
     }
     return std::nullopt;
@@ -1802,11 +1816,49 @@ bool substitute_temp_in_stmt(const StmtPtr& stmt, const std::string& name, const
     }
     if (stmt->kind == StmtKind::IfStmt) {
         auto* i = static_cast<IfStmt*>(stmt.get());
-        return substitute_expr_or_root(i->cond, name, replacement);
+        bool done = substitute_expr_or_root(i->cond, name, replacement);
+        for (auto& s : i->then_body) if (substitute_temp_in_stmt(s, name, replacement)) done = true;
+        if (i->else_body.has_value()) {
+            for (auto& s : *i->else_body) if (substitute_temp_in_stmt(s, name, replacement)) done = true;
+        }
+        return done;
     }
     if (stmt->kind == StmtKind::WhileStmt) {
         auto* w = static_cast<WhileStmt*>(stmt.get());
-        return substitute_expr_or_root(w->cond, name, replacement);
+        bool done = substitute_expr_or_root(w->cond, name, replacement);
+        for (auto& s : w->body) if (substitute_temp_in_stmt(s, name, replacement)) done = true;
+        return done;
+    }
+    if (stmt->kind == StmtKind::DoWhileStmt) {
+        auto* dw = static_cast<DoWhileStmt*>(stmt.get());
+        bool done = substitute_expr_or_root(dw->cond, name, replacement);
+        for (auto& s : dw->body) if (substitute_temp_in_stmt(s, name, replacement)) done = true;
+        return done;
+    }
+    if (stmt->kind == StmtKind::ForStmt) {
+        auto* f = static_cast<ForStmt*>(stmt.get());
+        bool done = false;
+        if (f->init) done |= substitute_expr_or_root(f->init, name, replacement);
+        if (f->cond) done |= substitute_expr_or_root(f->cond, name, replacement);
+        if (f->update) done |= substitute_temp_in_stmt(f->update, name, replacement);
+        for (auto& s : f->body) if (substitute_temp_in_stmt(s, name, replacement)) done = true;
+        return done;
+    }
+    if (stmt->kind == StmtKind::BlockStmt) {
+        auto* b = static_cast<BlockStmt*>(stmt.get());
+        bool done = false;
+        for (auto& s : b->stmts) if (substitute_temp_in_stmt(s, name, replacement)) done = true;
+        return done;
+    }
+    if (stmt->kind == StmtKind::TryStmt) {
+        auto* t = static_cast<TryStmt*>(stmt.get());
+        bool done = false;
+        for (auto& s : t->body) if (substitute_temp_in_stmt(s, name, replacement)) done = true;
+        for (auto& c : t->catches) for (auto& s : c.body) if (substitute_temp_in_stmt(s, name, replacement)) done = true;
+        if (t->finally_body.has_value()) {
+            for (auto& s : *t->finally_body) if (substitute_temp_in_stmt(s, name, replacement)) done = true;
+        }
+        return done;
     }
     if (stmt->kind == StmtKind::LocalDecl) {
         auto* ld = static_cast<LocalDecl*>(stmt.get());
@@ -1814,11 +1866,17 @@ bool substitute_temp_in_stmt(const StmtPtr& stmt, const std::string& name, const
     }
     if (stmt->kind == StmtKind::SwitchStmt) {
         auto* sw = static_cast<SwitchStmt*>(stmt.get());
-        return substitute_expr_or_root(sw->selector, name, replacement);
+        bool done = substitute_expr_or_root(sw->selector, name, replacement);
+        for (auto& c : sw->cases) {
+            for (auto& s : c.body) if (substitute_temp_in_stmt(s, name, replacement)) done = true;
+        }
+        return done;
     }
     if (stmt->kind == StmtKind::SyncStmt) {
         auto* sy = static_cast<SyncStmt*>(stmt.get());
-        return substitute_expr_or_root(sy->expr, name, replacement);
+        bool done = substitute_expr_or_root(sy->expr, name, replacement);
+        for (auto& s : sy->body) if (substitute_temp_in_stmt(s, name, replacement)) done = true;
+        return done;
     }
     return false;
 }
