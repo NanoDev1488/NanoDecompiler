@@ -1442,6 +1442,53 @@ ExprPtr simplify_expr(ExprPtr e) {
                     }
                 }
             }
+
+            // StringBuilder / StringBuffer concatenation dechaining (ObfUpd 13)
+            if (mc->name == "toString" && mc->args.empty() && mc->target) {
+                std::vector<ExprPtr> append_args;
+                ExprPtr curr = mc->target;
+                bool is_sb_chain = false;
+                while (curr && curr->kind == ExprKind::MethodCall) {
+                    auto* app_mc = static_cast<MethodCall*>(curr.get());
+                    if (app_mc->name == "append" && app_mc->args.size() == 1) {
+                        append_args.push_back(app_mc->args[0]);
+                        curr = app_mc->target;
+                    } else {
+                        break;
+                    }
+                }
+                if (curr && curr->kind == ExprKind::NewObject) {
+                    auto* no = static_cast<NewObject*>(curr.get());
+                    if (no->type == "StringBuilder" || no->type == "StringBuffer" ||
+                        no->type.find("StringBuilder") != std::string::npos ||
+                        no->type.find("StringBuffer") != std::string::npos) {
+                        is_sb_chain = true;
+                        if (!no->args.empty() && no->args.size() == 1) {
+                            if (no->args[0]->type == "String" || (no->args[0]->kind == ExprKind::Const && !static_cast<Const*>(no->args[0].get())->literal.empty() && static_cast<Const*>(no->args[0].get())->literal.front() == '"')) {
+                                append_args.push_back(no->args[0]);
+                            }
+                        }
+                    }
+                }
+                if (is_sb_chain && !append_args.empty()) {
+                    std::reverse(append_args.begin(), append_args.end());
+                    ExprPtr result = nullptr;
+                    bool starts_with_str = (append_args[0]->type == "String" || 
+                                           (append_args[0]->kind == ExprKind::Const && !static_cast<Const*>(append_args[0].get())->literal.empty() && static_cast<Const*>(append_args[0].get())->literal.front() == '"'));
+                    if (!starts_with_str) {
+                        result = std::make_shared<Const>("""", "String");
+                        for (auto& a : append_args) {
+                            result = std::make_shared<BinOp>("+", result, a, "String");
+                        }
+                    } else {
+                        result = append_args[0];
+                        for (size_t a_i = 1; a_i < append_args.size(); ++a_i) {
+                            result = std::make_shared<BinOp>("+", result, append_args[a_i], "String");
+                        }
+                    }
+                    return simplify_expr(result);
+                }
+            }
             break;
         }
         case ExprKind::NewObject: {

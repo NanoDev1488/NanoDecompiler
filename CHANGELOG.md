@@ -1,5 +1,14 @@
 # NanoDecompiler Changelog
 
+## [1.9.150-ObfUpd.13] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **[ObfUpd 13/15] Нормализация строковых конкатенаций (StringBuilder Dechaining)**:
+  - `resources/engine_cpp/src/structure.cpp`: распознавание цепочек создания и наполнения `StringBuilder` / `StringBuffer` (`new StringBuilder().append(...).append(...).toString()`).
+  - `resources/engine_cpp/src/structure.cpp`: безопасная свертка цепочек `.append` в естественные операторы конкатенации строк (`+`) с сохранением семантики типов Java (добавление `"" + ...` при необходимости).
+
+---
+
 ## [1.9.149-ObfUpd.12] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)
