@@ -1,5 +1,15 @@
 # NanoDecompiler Changelog
 
+## [1.9.120] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **Синтаксическая реконструкция `try-with-resources` (Java 7+)**:
+  - `resources/engine_cpp/include/ast_nodes.hpp`: узел `TryStmt` дополнен полем `resources` для объявления инициализируемых ресурсов в заголовке `try (...)`.
+  - `resources/engine_cpp/src/structure.cpp`: добавлен проход `fold_try_with_resources`. Автоматически находит вызовы `.close()` закрываемых ресурсов в блоках `finally`, удаляет синтетический бойлерплейт подавления исключений и переносит инициализацию в заголовок `try (Resource r = init) { ... }`.
+  - `resources/engine_cpp/src/emit.cpp`: реализован вывод синтаксиса `try (Resource r = ...)`.
+
+---
+
 ## [1.9.119] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

@@ -1711,6 +1711,67 @@ std::vector<StmtPtr> merge_sequential_short_circuit_ifs(std::vector<StmtPtr> stm
     return out;
 }
 
+std::vector<StmtPtr> fold_try_with_resources(std::vector<StmtPtr> stmts) {
+    if (stmts.size() < 2) return stmts;
+    std::vector<StmtPtr> out;
+    size_t i = 0;
+    while (i < stmts.size()) {
+        if (i + 1 < stmts.size() && stmts[i]->kind == StmtKind::LocalDecl && stmts[i + 1]->kind == StmtKind::TryStmt) {
+            auto* ld = static_cast<LocalDecl*>(stmts[i].get());
+            auto* t = static_cast<TryStmt*>(stmts[i + 1].get());
+            std::string var_name = ld->name;
+            bool is_resource = false;
+            if (t->finally_body.has_value() && !t->finally_body->empty()) {
+                std::vector<StmtPtr> filtered_fb;
+                for (const auto& fs : *t->finally_body) {
+                    bool is_close = false;
+                    if (fs->kind == StmtKind::ExprStmt) {
+                        auto* es = static_cast<ExprStmtNode*>(fs.get());
+                        if (es->expr && es->expr->kind == ExprKind::MethodCall) {
+                            auto* mc = static_cast<MethodCall*>(es->expr.get());
+                            if (mc->name == "close" && mc->target && mc->target->kind == ExprKind::Local &&
+                                static_cast<Local*>(mc->target.get())->name == var_name) {
+                                is_close = true;
+                                is_resource = true;
+                            }
+                        }
+                    } else if (fs->kind == StmtKind::IfStmt) {
+                        auto* ifs = static_cast<IfStmt*>(fs.get());
+                        if (!ifs->then_body.empty() && ifs->then_body[0]->kind == StmtKind::ExprStmt) {
+                            auto* es = static_cast<ExprStmtNode*>(ifs->then_body[0].get());
+                            if (es->expr && es->expr->kind == ExprKind::MethodCall) {
+                                auto* mc = static_cast<MethodCall*>(es->expr.get());
+                                if (mc->name == "close" && mc->target && mc->target->kind == ExprKind::Local &&
+                                    static_cast<Local*>(mc->target.get())->name == var_name) {
+                                    is_close = true;
+                                    is_resource = true;
+                                }
+                            }
+                        }
+                    }
+                    if (!is_close) {
+                        filtered_fb.push_back(fs);
+                    }
+                }
+                if (is_resource) {
+                    t->resources.push_back(stmts[i]);
+                    if (filtered_fb.empty()) {
+                        t->finally_body = std::nullopt;
+                    } else {
+                        t->finally_body = filtered_fb;
+                    }
+                    out.push_back(stmts[i + 1]);
+                    i += 2;
+                    continue;
+                }
+            }
+        }
+        out.push_back(stmts[i]);
+        i += 1;
+    }
+    return out;
+}
+
 }  // namespace
 
 std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
@@ -1724,6 +1785,7 @@ std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
         out = inline_single_use_temps_anywhere(out);
         out = collapse_nested_if_conditions(out);
         out = merge_sequential_short_circuit_ifs(out);
+        out = fold_try_with_resources(out);
     }
     return out;
 }

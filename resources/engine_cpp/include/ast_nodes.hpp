@@ -390,9 +390,12 @@ public:
     std::vector<StmtPtr> body;
     std::vector<CatchClause> catches;
     std::optional<std::vector<StmtPtr>> finally_body;
+    std::vector<StmtPtr> resources;
     TryStmt(std::vector<StmtPtr> body_, std::vector<CatchClause> catches_,
-            std::optional<std::vector<StmtPtr>> finally_body_ = std::nullopt)
-        : Stmt(StmtKind::TryStmt), body(std::move(body_)), catches(std::move(catches_)), finally_body(std::move(finally_body_)) {}
+            std::optional<std::vector<StmtPtr>> finally_body_ = std::nullopt,
+            std::vector<StmtPtr> resources_ = {})
+        : Stmt(StmtKind::TryStmt), body(std::move(body_)), catches(std::move(catches_)),
+          finally_body(std::move(finally_body_)), resources(std::move(resources_)) {}
 };
 
 class SyncStmt : public Stmt {

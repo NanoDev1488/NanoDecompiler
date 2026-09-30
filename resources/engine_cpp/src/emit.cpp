@@ -400,7 +400,21 @@ std::vector<std::string> emit_stmt(const StmtPtr& s, int indent) {
         }
         case StmtKind::TryStmt: {
             const auto* t = static_cast<const TryStmt*>(s.get());
-            std::vector<std::string> out = {pad + "try {"};
+            std::string res_str;
+            if (!t->resources.empty()) {
+                std::vector<std::string> res_parts;
+                for (const auto& r : t->resources) {
+                    if (r->kind == StmtKind::LocalDecl) {
+                        const auto* ld = static_cast<const LocalDecl*>(r.get());
+                        std::string init = ld->init ? (" = " + emit_expr(ld->init)) : "";
+                        res_parts.push_back(simple(ld->type) + " " + ld->name + init);
+                    } else if (r->kind == StmtKind::ExprStmt) {
+                        res_parts.push_back(emit_expr(static_cast<const ExprStmtNode*>(r.get())->expr));
+                    }
+                }
+                res_str = " (" + join(res_parts, "; ") + ")";
+            }
+            std::vector<std::string> out = {pad + "try" + res_str + " {"};
             auto body_lines = emit_stmts(t->body, indent + 1);
             out.insert(out.end(), body_lines.begin(), body_lines.end());
             for (auto& c : t->catches) {
