@@ -208,7 +208,8 @@ namespace nd {
 // НОВОЕ v1.9.135: устойчивый парсинг дженерик-сигнатур для вложенных классов (Map.Entry вместо $), защита от обрезания и безопасный разбор границ параметров.
 // НОВОЕ v1.9.136: поддержка Sponge платформ (sponge_plugins.json), верификация дескрипторов и точек входа (main class verification), расширенный отчет README_RU.txt.
 // НОВОЕ v1.9.137: свертка константных массивов и локальная пропагация элементов (ArrayAccess folding, NewArray initializer simplification, propagate_local_constant_arrays).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.137";
+// НОВОЕ v1.9.138-ObfUpd.1: [ObfUpd 1/15] деобфускация строк Allatori (двухключевой/чередующийся XOR, str_decrypt_allatori), десугаринг multi-catch (catch (TypeA | TypeB e)), выравнивание вложенных try и свертка массивов.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.138-ObfUpd.1";
 }
 
 

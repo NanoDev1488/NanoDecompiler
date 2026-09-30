@@ -64,6 +64,7 @@ std::optional<std::string> str_decrypt_method_name(const ClassFile& cf);
 // Деобфускация строк XOR с одиночным/мульти-ключом
 std::optional<std::string> str_decrypt_xor(const std::string& input, int32_t key);
 std::optional<std::string> str_decrypt_xor_multikey(const std::string& input, const std::string& key);
+std::optional<std::string> str_decrypt_allatori(const std::string& input, int key1, int key2);
 bool is_likely_xor_decryptor(const Method& m);
 std::optional<int32_t> find_xor_fixed_key(const Method& m, const ClassFile& cf);
 

@@ -1,5 +1,16 @@
 # NanoDecompiler Changelog
 
+## [1.9.138-ObfUpd.1] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **[ObfUpd 1/15] Деобфускация строк Allatori, десугаринг Multi-Catch и выравнивание Try-блоков**:
+  - `resources/engine_cpp/src/str_decrypt.cpp` & `str_decrypt.hpp`: реализован алгоритм `str_decrypt_allatori` для расшифровки строк, зашифрованных обфускатором Allatori с чередующимися двухключевыми XOR-константами и проверкой печатных символов UTF-8.
+  - `resources/engine_cpp/src/structure.cpp`: устранена ошибка дублирования `case` в `simplify_expr` для `NewArray` и `ArrayAccess`.
+  - `resources/engine_cpp/src/structure.cpp`: реализован оптимизационный проход `fold_try_catches` — слияние смежных идентичных `catch`-блоков в единую конструкцию `catch (TypeA | TypeB e)` (Multi-Catch Java 7+).
+  - `resources/engine_cpp/src/structure.cpp`: автоматическое выравнивание избыточно вложенных одиночных `try`-блоков без `finally` и ресурсов в единый родительский блок.
+
+---
+
 ## [1.9.137] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

@@ -313,6 +313,25 @@ std::optional<std::string> str_decrypt_xor_multikey(const std::string& input, co
     return res;
 }
 
+std::optional<std::string> str_decrypt_allatori(const std::string& input, int key1, int key2) {
+    auto u16 = utf8_to_utf16(input);
+    if (u16.empty()) return "";
+    for (size_t i = 0; i < u16.size(); ++i) {
+        int k = (i % 2 == 0) ? key1 : key2;
+        u16[i] = static_cast<uint16_t>(u16[i] ^ static_cast<uint16_t>(k));
+    }
+    std::string res = utf16_to_utf8(u16);
+    if (!is_valid_utf8(res)) return std::nullopt;
+    size_t printable = 0;
+    for (unsigned char c : res) {
+        if ((c >= 32 && c <= 126) || c == '\t' || c == '\n' || c == '\r' || c >= 128) {
+            printable++;
+        }
+    }
+    if (printable * 10 < res.size() * 7) return std::nullopt;
+    return res;
+}
+
 bool is_likely_xor_decryptor(const Method& m) {
     if (!(m.access & 0x0008)) return false;
     if (!m.has_code || m.code.empty()) return false;
