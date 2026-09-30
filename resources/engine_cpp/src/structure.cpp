@@ -606,6 +606,7 @@ std::vector<StmtPtr> Structurer::region(std::optional<int64_t> pc_opt, const std
         guard_ += 1;
         if (guard_ > 200000) throw DecompileAbort("structuring guard limit exceeded");
         if (!pc_opt.has_value() || !cfg_.blocks.count(*pc_opt) || stop_addrs.count(*pc_opt)) break;
+        int64_t pc = *pc_opt;
         if (seen_here.count(pc)) {
             out.push_back(std::make_shared<GotoStmt>("block_" + std::to_string(pc)));
             break;
