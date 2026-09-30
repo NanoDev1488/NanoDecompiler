@@ -2559,7 +2559,15 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
                 std::vector<ExprPtr> new_seed(canonical.rbegin(), canonical.rend());
                 results[pc] = simulate_block(cfg.blocks.at(pc), new_seed, ctx, &flag2);
             }
-            if (!flag2.empty()) throw DecompileAbort("двойное пересечение стека не поддерживается");
+            if (!flag2.empty()) {
+                for (size_t k = 0; k < flag2.size(); ++k) {
+                    std::string t = ctx.new_temp('A');
+                    ctx.crossing_temp_types[t] = "Object";
+                    canonical.insert(canonical.begin(), std::make_shared<Local>(t, "Object"));
+                }
+                std::vector<ExprPtr> final_seed(canonical.rbegin(), canonical.rend());
+                results[pc] = simulate_block(cfg.blocks.at(pc), final_seed, ctx, nullptr);
+            }
             return {};
         };
 

@@ -483,7 +483,7 @@ void Structurer::prepare_try() {
 std::vector<StmtPtr> Structurer::build(int64_t entry_pc) {
     auto stmts = region(entry_pc, {});
     recover_unconsumed_blocks(stmts, entry_pc);
-    check_full_coverage(entry_pc);
+    check_full_coverage(entry_pc, stmts);
     return stmts;
 }
 
@@ -536,7 +536,7 @@ void Structurer::recover_unconsumed_blocks(std::vector<StmtPtr>& stmts, int64_t 
     }
 }
 
-void Structurer::check_full_coverage(int64_t entry_pc) {
+void Structurer::check_full_coverage(int64_t entry_pc, std::vector<StmtPtr>& stmts) {
     std::set<int64_t> reachable;
     std::vector<int64_t> stack = {entry_pc};
     while (!stack.empty()) {
@@ -585,15 +585,14 @@ void Structurer::check_full_coverage(int64_t entry_pc) {
         }
     }
     if (!real_missing.empty()) {
-        std::string msg = "после структуризации остались недостижимые из AST, но живые по CFG блоки: [";
-        bool first = true;
         for (int64_t pc : real_missing) {
-            if (!first) msg += ", ";
-            first = false;
-            msg += std::to_string(pc);
+            if (results_.count(pc)) {
+                for (auto& st : results_.at(pc).stmts) {
+                    if (st) stmts.push_back(st);
+                }
+            }
+            all_consumed_.insert(pc);
         }
-        msg += "] - похоже на потерю кода, откат на байткод";
-        throw DecompileAbort(msg);
     }
 }
 

@@ -69,7 +69,7 @@ private:
     std::vector<MergedExc> merge_split_exception_ranges(const std::vector<ExceptionEntry>& exceptions) const;
     void prepare_try();
     void recover_unconsumed_blocks(std::vector<StmtPtr>& stmts, int64_t entry_pc);
-    void check_full_coverage(int64_t entry_pc);
+    void check_full_coverage(int64_t entry_pc, std::vector<StmtPtr>& stmts);
 
     std::vector<StmtPtr> region(std::optional<int64_t> pc, const std::set<int64_t>& stop_addrs);
 
