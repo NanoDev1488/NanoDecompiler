@@ -1,5 +1,15 @@
 # NanoDecompiler Changelog
 
+## [1.9.145-ObfUpd.8] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **[ObfUpd 8/15] Устранение недостижимого кода и очистка меток (Dead Code Elimination & Unused Label Pruning)**:
+  - `resources/engine_cpp/src/structure.cpp`: реализован оптимизационный проход `prune_dead_code_pass` для удаления мертвого кода, инжектированного обфускаторами после безусловных прыжков (`return`, `throw`, `break`, `continue`).
+  - `resources/engine_cpp/src/structure.cpp`: устранение избыточных вложенных блоков (`BlockStmt` внутри `BlockStmt`) с безопасным сплющиванием в единую последовательность операторов.
+  - `resources/engine_cpp/src/structure.cpp`: сбор множества используемых меток перехода (`collect_used_labels`) и удаление неиспользуемых `LabelStmt`.
+
+---
+
 ## [1.9.144-ObfUpd.7] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

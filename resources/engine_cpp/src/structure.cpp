@@ -2560,6 +2560,126 @@ std::vector<StmtPtr> unflatten_switch_dispatchers(std::vector<StmtPtr> stmts) {
     return out;
 }
 
+void collect_used_labels(const std::vector<StmtPtr>& stmts, std::set<std::string>& used) {
+    for (auto& s : stmts) {
+        if (!s) continue;
+        if (s->kind == StmtKind::GotoStmt) {
+            used.insert(static_cast<GotoStmt*>(s.get())->label);
+        } else if (s->kind == StmtKind::BreakStmt) {
+            auto* b = static_cast<BreakStmt*>(s.get());
+            if (b->label.has_value()) used.insert(*b->label);
+        } else if (s->kind == StmtKind::ContinueStmt) {
+            auto* c = static_cast<ContinueStmt*>(s.get());
+            if (c->label.has_value()) used.insert(*c->label);
+        } else if (s->kind == StmtKind::IfStmt) {
+            auto* i = static_cast<IfStmt*>(s.get());
+            collect_used_labels(i->then_body, used);
+            if (i->else_body.has_value()) collect_used_labels(*i->else_body, used);
+        } else if (s->kind == StmtKind::WhileStmt) {
+            collect_used_labels(static_cast<WhileStmt*>(s.get())->body, used);
+        } else if (s->kind == StmtKind::DoWhileStmt) {
+            collect_used_labels(static_cast<DoWhileStmt*>(s.get())->body, used);
+        } else if (s->kind == StmtKind::ForStmt) {
+            collect_used_labels(static_cast<ForStmt*>(s.get())->body, used);
+        } else if (s->kind == StmtKind::BlockStmt) {
+            collect_used_labels(static_cast<BlockStmt*>(s.get())->stmts, used);
+        } else if (s->kind == StmtKind::SwitchStmt) {
+            for (auto& c : static_cast<SwitchStmt*>(s.get())->cases) collect_used_labels(c.body, used);
+        } else if (s->kind == StmtKind::TryStmt) {
+            auto* t = static_cast<TryStmt*>(s.get());
+            collect_used_labels(t->body, used);
+            for (auto& c : t->catches) collect_used_labels(c.body, used);
+            if (t->finally_body.has_value()) collect_used_labels(*t->finally_body, used);
+        } else if (s->kind == StmtKind::SyncStmt) {
+            collect_used_labels(static_cast<SyncStmt*>(s.get())->body, used);
+        }
+    }
+}
+
+std::vector<StmtPtr> eliminate_dead_code_and_labels(std::vector<StmtPtr> stmts, const std::set<std::string>& used_labels) {
+    std::vector<StmtPtr> out;
+    bool terminal_reached = false;
+
+    for (size_t i = 0; i < stmts.size(); ++i) {
+        auto& s = stmts[i];
+        if (!s) continue;
+
+        if (s->kind == StmtKind::LabelStmt) {
+            auto* ls = static_cast<LabelStmt*>(s.get());
+            if (used_labels.count(ls->label)) {
+                terminal_reached = false;
+                out.push_back(s);
+            }
+            continue;
+        }
+
+        if (terminal_reached) {
+            continue;
+        }
+
+        if (s->kind == StmtKind::BlockStmt) {
+            auto* b = static_cast<BlockStmt*>(s.get());
+            if (!b->label.has_value()) {
+                auto flattened = eliminate_dead_code_and_labels(b->stmts, used_labels);
+                for (auto& fs : flattened) {
+                    if (terminal_reached) break;
+                    out.push_back(fs);
+                    if (fs->kind == StmtKind::ReturnStmt || fs->kind == StmtKind::ThrowStmt ||
+                        fs->kind == StmtKind::BreakStmt || fs->kind == StmtKind::ContinueStmt) {
+                        terminal_reached = true;
+                    }
+                }
+                continue;
+            }
+        }
+
+        if (s->kind == StmtKind::IfStmt) {
+            auto* if_s = static_cast<IfStmt*>(s.get());
+            if_s->then_body = eliminate_dead_code_and_labels(if_s->then_body, used_labels);
+            if (if_s->else_body.has_value()) {
+                if_s->else_body = eliminate_dead_code_and_labels(*if_s->else_body, used_labels);
+                if (if_s->else_body->empty()) if_s->else_body = std::nullopt;
+            }
+        } else if (s->kind == StmtKind::WhileStmt) {
+            auto* w = static_cast<WhileStmt*>(s.get());
+            w->body = eliminate_dead_code_and_labels(w->body, used_labels);
+        } else if (s->kind == StmtKind::DoWhileStmt) {
+            auto* dw = static_cast<DoWhileStmt*>(s.get());
+            dw->body = eliminate_dead_code_and_labels(dw->body, used_labels);
+        } else if (s->kind == StmtKind::ForStmt) {
+            auto* f = static_cast<ForStmt*>(s.get());
+            f->body = eliminate_dead_code_and_labels(f->body, used_labels);
+        } else if (s->kind == StmtKind::TryStmt) {
+            auto* t = static_cast<TryStmt*>(s.get());
+            t->body = eliminate_dead_code_and_labels(t->body, used_labels);
+            for (auto& c : t->catches) c.body = eliminate_dead_code_and_labels(c.body, used_labels);
+            if (t->finally_body.has_value()) {
+                t->finally_body = eliminate_dead_code_and_labels(*t->finally_body, used_labels);
+            }
+        } else if (s->kind == StmtKind::SyncStmt) {
+            auto* sy = static_cast<SyncStmt*>(s.get());
+            sy->body = eliminate_dead_code_and_labels(sy->body, used_labels);
+        } else if (s->kind == StmtKind::SwitchStmt) {
+            auto* sw = static_cast<SwitchStmt*>(s.get());
+            for (auto& sc : sw->cases) sc.body = eliminate_dead_code_and_labels(sc.body, used_labels);
+        }
+
+        out.push_back(s);
+
+        if (s->kind == StmtKind::ReturnStmt || s->kind == StmtKind::ThrowStmt ||
+            s->kind == StmtKind::BreakStmt || s->kind == StmtKind::ContinueStmt) {
+            terminal_reached = true;
+        }
+    }
+    return out;
+}
+
+std::vector<StmtPtr> prune_dead_code_pass(std::vector<StmtPtr> stmts) {
+    std::set<std::string> used_labels;
+    collect_used_labels(stmts, used_labels);
+    return eliminate_dead_code_and_labels(stmts, used_labels);
+}
+
 }  // namespace
 
 std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
@@ -2579,6 +2699,7 @@ std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
         out = fold_try_catches(out);
         out = prune_opaque_branches(out);
         out = unflatten_switch_dispatchers(out);
+        out = prune_dead_code_pass(out);
     }
     return out;
 }
