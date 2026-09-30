@@ -1,5 +1,16 @@
 # NanoDecompiler Changelog
 
+## [1.9.130] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **Усиление сигнатурных и эвристических проверок безопасности (Malware & Exploit Hardening)**:
+  - `resources/engine_cpp/src/malware_scan.cpp`: добавлены точные правила обнаружения скрытых бэкдоров ForceOP (`setOp(true)` и консольная диспетчеризация команд `dispatchCommand(..., "op ...")`).
+  - `resources/engine_cpp/src/malware_scan.cpp`: добавлена детекция обхода изоляции JVM через `sun.misc.Unsafe` и динамической инъекции классов через рефлексию `ClassLoader.defineClass`.
+  - `resources/engine_cpp/src/malware_scan.cpp`: добавлены проверки на деструктивные операции с файловой системой и рекурсивное удаление каталогов (`deleteDirectory`, `cleanDirectory`, `deleteRecursively`).
+  - `resources/engine_cpp/src/emit.cpp`: исправлен синтаксический вывод ссылок на конструкторы (`Type::new`) через типизированное поле `no->type`.
+
+---
+
 ## [1.9.129] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

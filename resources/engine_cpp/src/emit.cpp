@@ -191,7 +191,7 @@ std::string emit_expr(const ExprPtr& e) {
                     }
                 } else if (l->body_method_ref->kind == ExprKind::NewObject) {
                     const auto* no = static_cast<const NewObject*>(l->body_method_ref.get());
-                    return simple(no->type_name) + "::new";
+                    return simple(no->type) + "::new";
                 }
             }
             std::vector<std::string> pnames;
