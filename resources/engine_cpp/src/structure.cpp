@@ -1394,6 +1394,40 @@ ExprPtr simplify_expr(ExprPtr e) {
             if (a->value) a->value = simplify_expr(a->value);
             break;
         }
+        case ExprKind::NewArray: {
+            auto* na = static_cast<NewArray*>(e.get());
+            for (auto& d : na->dims) {
+                if (d) d = simplify_expr(d);
+            }
+            if (na->initializer.has_value()) {
+                for (auto& item : *na->initializer) {
+                    if (item) item = simplify_expr(item);
+                }
+            }
+            break;
+        }
+        case ExprKind::ArrayAccess: {
+            auto* aa = static_cast<ArrayAccess*>(e.get());
+            if (aa->array) aa->array = simplify_expr(aa->array);
+            if (aa->index) aa->index = simplify_expr(aa->index);
+            ExprPtr arr = aa->array;
+            if (arr && arr->kind == ExprKind::Cast) {
+                arr = static_cast<Cast*>(arr.get())->expr;
+            }
+            if (arr && arr->kind == ExprKind::NewArray && aa->index && aa->index->kind == ExprKind::Const) {
+                auto* na = static_cast<NewArray*>(arr.get());
+                auto* idx_c = static_cast<Const*>(aa->index.get());
+                if (na->initializer.has_value()) {
+                    try {
+                        long long idx = std::stoll(idx_c->literal);
+                        if (idx >= 0 && static_cast<size_t>(idx) < na->initializer->size()) {
+                            return (*na->initializer)[static_cast<size_t>(idx)];
+                        }
+                    } catch (...) {}
+                }
+            }
+            break;
+        }
         default:
             break;
     }
@@ -1966,6 +2000,130 @@ std::vector<StmtPtr> fuse_for_initializers(std::vector<StmtPtr> stmts) {
     return stmts;
 }
 
+static bool expr_modifies_array(const ExprPtr& e, const std::string& name) {
+    if (!e) return false;
+    if (e->kind == ExprKind::Assign) {
+        auto* as = static_cast<Assign*>(e.get());
+        if (as->target && as->target->kind == ExprKind::Local && static_cast<Local*>(as->target.get())->name == name) return true;
+        if (as->target && as->target->kind == ExprKind::ArrayAccess) {
+            auto* aa = static_cast<ArrayAccess*>(as->target.get());
+            if (aa->array && aa->array->kind == ExprKind::Local && static_cast<Local*>(aa->array.get())->name == name) return true;
+        }
+    }
+    return false;
+}
+
+static ExprPtr fold_const_array_lookups_in_expr(ExprPtr e, const std::map<std::string, std::vector<ExprPtr>>& arrays) {
+    if (!e) return e;
+    if (e->kind == ExprKind::ArrayAccess) {
+        auto* aa = static_cast<ArrayAccess*>(e.get());
+        if (aa->array) aa->array = fold_const_array_lookups_in_expr(aa->array, arrays);
+        if (aa->index) aa->index = fold_const_array_lookups_in_expr(aa->index, arrays);
+        if (aa->array && aa->array->kind == ExprKind::Local && aa->index && aa->index->kind == ExprKind::Const) {
+            auto* loc = static_cast<Local*>(aa->array.get());
+            auto it = arrays.find(loc->name);
+            if (it != arrays.end()) {
+                auto* idx_c = static_cast<Const*>(aa->index.get());
+                try {
+                    long long idx = std::stoll(idx_c->literal);
+                    if (idx >= 0 && static_cast<size_t>(idx) < it->second.size()) {
+                        return it->second[static_cast<size_t>(idx)];
+                    }
+                } catch (...) {}
+            }
+        }
+        return e;
+    }
+    if (e->kind == ExprKind::BinOp) {
+        auto* b = static_cast<BinOp*>(e.get());
+        if (b->left) b->left = fold_const_array_lookups_in_expr(b->left, arrays);
+        if (b->right) b->right = fold_const_array_lookups_in_expr(b->right, arrays);
+        return e;
+    }
+    if (e->kind == ExprKind::UnOp) {
+        auto* u = static_cast<UnOp*>(e.get());
+        if (u->expr) u->expr = fold_const_array_lookups_in_expr(u->expr, arrays);
+        return e;
+    }
+    if (e->kind == ExprKind::Ternary) {
+        auto* t = static_cast<Ternary*>(e.get());
+        if (t->cond) t->cond = fold_const_array_lookups_in_expr(t->cond, arrays);
+        if (t->tval) t->tval = fold_const_array_lookups_in_expr(t->tval, arrays);
+        if (t->fval) t->fval = fold_const_array_lookups_in_expr(t->fval, arrays);
+        return e;
+    }
+    if (e->kind == ExprKind::MethodCall) {
+        auto* mc = static_cast<MethodCall*>(e.get());
+        if (mc->target) mc->target = fold_const_array_lookups_in_expr(mc->target, arrays);
+        for (auto& a : mc->args) if (a) a = fold_const_array_lookups_in_expr(a, arrays);
+        return e;
+    }
+    if (e->kind == ExprKind::Cast) {
+        auto* c = static_cast<Cast*>(e.get());
+        if (c->expr) c->expr = fold_const_array_lookups_in_expr(c->expr, arrays);
+        return e;
+    }
+    if (e->kind == ExprKind::Assign) {
+        auto* as = static_cast<Assign*>(e.get());
+        if (as->target) as->target = fold_const_array_lookups_in_expr(as->target, arrays);
+        if (as->value) as->value = fold_const_array_lookups_in_expr(as->value, arrays);
+        return e;
+    }
+    return e;
+}
+
+std::vector<StmtPtr> propagate_local_constant_arrays(std::vector<StmtPtr> stmts) {
+    std::map<std::string, std::vector<ExprPtr>> candidate_arrays;
+    for (auto& s : stmts) {
+        if (s->kind == StmtKind::LocalDecl) {
+            auto* ld = static_cast<LocalDecl*>(s.get());
+            if (ld->init && ld->init->kind == ExprKind::NewArray) {
+                auto* na = static_cast<NewArray*>(ld->init.get());
+                if (na->initializer.has_value() && !na->initializer->empty()) {
+                    candidate_arrays[ld->name] = *na->initializer;
+                }
+            }
+        }
+    }
+    if (candidate_arrays.empty()) return stmts;
+
+    for (auto& s : stmts) {
+        for (auto it = candidate_arrays.begin(); it != candidate_arrays.end(); ) {
+            bool modified = false;
+            if (s->kind == StmtKind::ExprStmt) {
+                auto* es = static_cast<ExprStmtNode*>(s.get());
+                if (expr_modifies_array(es->expr, it->first)) modified = true;
+            }
+            if (modified) {
+                it = candidate_arrays.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+    if (candidate_arrays.empty()) return stmts;
+
+    for (auto& s : stmts) {
+        if (s->kind == StmtKind::ExprStmt) {
+            auto* es = static_cast<ExprStmtNode*>(s.get());
+            if (es->expr) es->expr = fold_const_array_lookups_in_expr(es->expr, candidate_arrays);
+        } else if (s->kind == StmtKind::ReturnStmt) {
+            auto* r = static_cast<ReturnStmt*>(s.get());
+            if (r->expr) r->expr = fold_const_array_lookups_in_expr(r->expr, candidate_arrays);
+        } else if (s->kind == StmtKind::IfStmt) {
+            auto* i = static_cast<IfStmt*>(s.get());
+            if (i->cond) i->cond = fold_const_array_lookups_in_expr(i->cond, candidate_arrays);
+        } else if (s->kind == StmtKind::WhileStmt) {
+            auto* w = static_cast<WhileStmt*>(s.get());
+            if (w->cond) w->cond = fold_const_array_lookups_in_expr(w->cond, candidate_arrays);
+        } else if (s->kind == StmtKind::LocalDecl) {
+            auto* ld = static_cast<LocalDecl*>(s.get());
+            if (ld->init) ld->init = fold_const_array_lookups_in_expr(ld->init, candidate_arrays);
+        }
+    }
+    return stmts;
+}
+
 }  // namespace
 
 std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
@@ -1981,6 +2139,7 @@ std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
         out = merge_sequential_short_circuit_ifs(out);
         out = fold_try_with_resources(out);
         out = fuse_for_initializers(out);
+        out = propagate_local_constant_arrays(out);
     }
     return out;
 }
