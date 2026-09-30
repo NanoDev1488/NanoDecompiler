@@ -66,6 +66,8 @@ struct JarProcessResult {
 };
 
 extern const char* g_crash_class_name;
+extern const char* g_crash_method_name;
+extern const char* g_crash_pass_name;
 
 // Бросает std::runtime_error, если jar_path не открывается (битый zip и т.п.) -
 // зеркалит необработанное исключение zipfile.ZipFile(...) в оригинале

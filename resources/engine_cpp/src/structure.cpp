@@ -2,8 +2,10 @@
 #include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
 #include "structure.hpp"
 #include "emit.hpp"
+#include "process_jar.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <functional>
 #include <regex>
 
@@ -1184,6 +1186,7 @@ std::optional<int> as_bool_const(const ExprPtr& v) {
 }
 
 bool same_target(const ExprPtr& a, const ExprPtr& b) {
+    if (!a || !b) return false;
     if (a->kind == ExprKind::Local && b->kind == ExprKind::Local) {
         return static_cast<Local*>(a.get())->name == static_cast<Local*>(b.get())->name;
     }
@@ -1812,15 +1815,24 @@ ExprPtr simplify_expr(ExprPtr e) {
 std::vector<StmtPtr> fold_boolean_materialization(const std::vector<StmtPtr>& stmts) {
     std::vector<StmtPtr> out;
     for (auto& s : stmts) {
+        if (!s) continue;
         if (s->kind == StmtKind::IfStmt) {
             auto* i = static_cast<IfStmt*>(s.get());
             if (!i->then_body.empty() && i->then_body.size() == 1 && i->else_body.has_value() && i->else_body->size() == 1) {
+                if (!i->then_body[0] || !(*i->else_body)[0]) {
+                    out.push_back(s);
+                    continue;
+                }
                 ExprPtr v1, v2, tgt1, tgt2;
                 auto a1 = as_assign(i->then_body[0]);
                 auto a2 = as_assign((*i->else_body)[0]);
                 if (a1.has_value() && a2.has_value()) {
                     tgt1 = a1->first; v1 = a1->second;
                     tgt2 = a2->first; v2 = a2->second;
+                    if (!tgt1 || !tgt2 || !v1 || !v2) {
+                        out.push_back(s);
+                        continue;
+                    }
                     if (same_target(tgt1, tgt2)) {
                         auto b1 = as_bool_const(v1), b2 = as_bool_const(v2);
                         if (b1.has_value() && b2.has_value() && ((*b1 == 0 && *b2 == 1) || (*b1 == 1 && *b2 == 0))) {
@@ -1866,21 +1878,23 @@ std::vector<StmtPtr> collapse_temp_chains(std::vector<StmtPtr> stmts) {
         changed = false;
         size_t n = stmts.size();
         for (size_t i = 0; i < n; ++i) {
+            if (!stmts[i]) continue;
             auto a = as_assign(stmts[i]);
             if (!a.has_value()) continue;
             ExprPtr tgt = a->first, val = a->second;
-            if (!(tgt->kind == ExprKind::Local && is_synth_temp(static_cast<Local*>(tgt.get())->name))) continue;
+            if (!tgt || !(tgt->kind == ExprKind::Local && is_synth_temp(static_cast<Local*>(tgt.get())->name))) continue;
             std::string tgt_name = static_cast<Local*>(tgt.get())->name;
             std::vector<size_t> uses;
             for (size_t j = i + 1; j < n; ++j) {
-                if (contains_local_ref_stmt(stmts[j], tgt_name)) uses.push_back(j);
+                if (stmts[j] && contains_local_ref_stmt(stmts[j], tgt_name)) uses.push_back(j);
             }
             if (uses.size() != 1) continue;
             size_t j = uses[0];
+            if (!stmts[j]) continue;
             auto b = as_assign(stmts[j]);
             if (!b.has_value()) continue;
             ExprPtr tgt2 = b->first, val2 = b->second;
-            if (!(val2->kind == ExprKind::Local && static_cast<Local*>(val2.get())->name == tgt_name)) continue;
+            if (!val2 || !(val2->kind == ExprKind::Local && static_cast<Local*>(val2.get())->name == tgt_name)) continue;
             std::vector<StmtPtr> new_stmts;
             new_stmts.insert(new_stmts.end(), stmts.begin(), stmts.begin() + i);
             new_stmts.insert(new_stmts.end(), stmts.begin() + i + 1, stmts.begin() + j);
@@ -1897,17 +1911,20 @@ std::vector<StmtPtr> collapse_temp_chains(std::vector<StmtPtr> stmts) {
 std::vector<StmtPtr> hoist_common_branch_tail(const std::vector<StmtPtr>& stmts) {
     std::vector<StmtPtr> out;
     for (auto& s : stmts) {
+        if (!s) continue;
         if (s->kind == StmtKind::IfStmt) {
             auto* i = static_cast<IfStmt*>(s.get());
             if (!i->then_body.empty() && i->else_body.has_value() && !i->else_body->empty()) {
                 std::vector<StmtPtr> tb = i->then_body, eb = *i->else_body;
                 std::vector<StmtPtr> tail;
                 while (!tb.empty() && !eb.empty()) {
+                    if (!tb.back() || !eb.back()) break;
                     auto a1 = as_assign(tb.back());
                     auto a2 = as_assign(eb.back());
                     if (!a1.has_value() || !a2.has_value()) break;
                     ExprPtr t1 = a1->first, v1 = a1->second;
                     ExprPtr t2 = a2->first, v2 = a2->second;
+                    if (!t1 || !t2 || !v1 || !v2) break;
                     if (t1->kind == ExprKind::Local && t2->kind == ExprKind::Local &&
                         static_cast<Local*>(t1.get())->name == static_cast<Local*>(t2.get())->name &&
                         v1->kind == ExprKind::Local && v2->kind == ExprKind::Local &&
@@ -1939,13 +1956,14 @@ bool is_unconditional_exit(const StmtPtr& s) {
 }
 
 bool block_always_exits(const std::vector<StmtPtr>& block) {
-    if (block.empty()) return false;
+    if (block.empty() || !block.back()) return false;
     return is_unconditional_exit(block.back());
 }
 
 std::vector<StmtPtr> eliminate_redundant_else_after_return(const std::vector<StmtPtr>& stmts) {
     std::vector<StmtPtr> out;
     for (auto& s : stmts) {
+        if (!s) continue;
         if (s->kind == StmtKind::IfStmt) {
             auto* i = static_cast<IfStmt*>(s.get());
             if (i->else_body.has_value() && !i->else_body->empty() && block_always_exits(i->then_body)) {
@@ -2359,6 +2377,7 @@ std::vector<StmtPtr> fuse_for_initializers(std::vector<StmtPtr> stmts) {
         changed = false;
         size_t n = stmts.size();
         for (size_t i = 0; i + 1 < n; ++i) {
+            if (!stmts[i] || !stmts[i + 1]) continue;
             if (stmts[i + 1]->kind != StmtKind::ForStmt) continue;
             auto* f = static_cast<ForStmt*>(stmts[i + 1].get());
             if (f->init != nullptr) continue;
@@ -2598,68 +2617,6 @@ std::vector<StmtPtr> propagate_local_constant_arrays(std::vector<StmtPtr> stmts)
     return stmts;
 }
 
-static ExprPtr rename_local_in_expr(ExprPtr e, const std::string& from, const std::string& to) {
-    if (!e) return e;
-    if (e->kind == ExprKind::Local) {
-        auto* l = static_cast<Local*>(e.get());
-        if (l->name == from) {
-            return std::make_shared<Local>(to, l->type);
-        }
-        return e;
-    }
-    if (e->kind == ExprKind::MethodCall) {
-        auto* mc = static_cast<MethodCall*>(e.get());
-        ExprPtr tgt = rename_local_in_expr(mc->target, from, to);
-        std::vector<ExprPtr> args;
-        for (auto& a : mc->args) args.push_back(rename_local_in_expr(a, from, to));
-        return std::make_shared<MethodCall>(tgt, mc->name, args, mc->type, mc->is_static, mc->owner, mc->is_ctor, mc->is_super, mc->interface);
-    }
-    if (e->kind == ExprKind::BinOp) {
-        auto* b = static_cast<BinOp*>(e.get());
-        return std::make_shared<BinOp>(b->op, rename_local_in_expr(b->left, from, to), rename_local_in_expr(b->right, from, to), b->type);
-    }
-    if (e->kind == ExprKind::UnOp) {
-        auto* u = static_cast<UnOp*>(e.get());
-        return std::make_shared<UnOp>(u->op, rename_local_in_expr(u->expr, from, to), u->type, u->postfix);
-    }
-    if (e->kind == ExprKind::Ternary) {
-        auto* t = static_cast<Ternary*>(e.get());
-        return std::make_shared<Ternary>(rename_local_in_expr(t->cond, from, to), rename_local_in_expr(t->tval, from, to), rename_local_in_expr(t->fval, from, to), t->type);
-    }
-    if (e->kind == ExprKind::Assign) {
-        auto* a = static_cast<Assign*>(e.get());
-        return std::make_shared<Assign>(rename_local_in_expr(a->target, from, to), rename_local_in_expr(a->value, from, to), a->op);
-    }
-    if (e->kind == ExprKind::Cast) {
-        auto* c = static_cast<Cast*>(e.get());
-        return std::make_shared<Cast>(c->type, rename_local_in_expr(c->expr, from, to));
-    }
-    return e;
-}
-
-static StmtPtr rename_local_in_stmt(StmtPtr s, const std::string& from, const std::string& to) {
-    if (!s) return s;
-    if (s->kind == StmtKind::ExprStmt) {
-        auto* es = static_cast<ExprStmtNode*>(s.get());
-        return std::make_shared<ExprStmtNode>(rename_local_in_expr(es->expr, from, to));
-    }
-    if (s->kind == StmtKind::ReturnStmt) {
-        auto* r = static_cast<ReturnStmt*>(s.get());
-        return std::make_shared<ReturnStmt>(rename_local_in_expr(r->expr, from, to));
-    }
-    if (s->kind == StmtKind::ThrowStmt) {
-        auto* t = static_cast<ThrowStmt*>(s.get());
-        return std::make_shared<ThrowStmt>(rename_local_in_expr(t->expr, from, to));
-    }
-    return s;
-}
-
-static std::vector<StmtPtr> clone_stmts_renaming_local(const std::vector<StmtPtr>& stmts, const std::string& from, const std::string& to) {
-    std::vector<StmtPtr> out;
-    for (auto& s : stmts) out.push_back(rename_local_in_stmt(s, from, to));
-    return out;
-}
-
 std::vector<StmtPtr> fold_try_catches(std::vector<StmtPtr> stmts) {
     for (auto& s : stmts) {
         if (!s) continue;
@@ -2670,7 +2627,7 @@ std::vector<StmtPtr> fold_try_catches(std::vector<StmtPtr> stmts) {
             if (t->finally_body.has_value()) t->finally_body = fold_try_catches(*t->finally_body);
 
             // 0. Neutralize fake exception trampolines: try { throw new E(); } catch (E e) { body; }
-            if (t->body.size() == 1 && t->body[0]->kind == StmtKind::ThrowStmt &&
+            if (t->body.size() == 1 && t->body[0] && t->body[0]->kind == StmtKind::ThrowStmt &&
                 !t->finally_body.has_value() && t->resources.empty() && t->catches.size() == 1) {
                 auto* ts = static_cast<ThrowStmt*>(t->body[0].get());
                 if (ts->expr && ts->expr->kind == ExprKind::NewObject) {
@@ -2690,7 +2647,7 @@ std::vector<StmtPtr> fold_try_catches(std::vector<StmtPtr> stmts) {
             }
 
             // 1. Flatten single nested try without finally/resources into outer try
-            if (t->body.size() == 1 && t->body[0]->kind == StmtKind::TryStmt) {
+            if (t->body.size() == 1 && t->body[0] && t->body[0]->kind == StmtKind::TryStmt) {
                 auto* inner = static_cast<TryStmt*>(t->body[0].get());
                 if (!inner->finally_body.has_value() && inner->resources.empty() && !t->finally_body.has_value()) {
                     std::vector<CatchClause> merged = inner->catches;
@@ -2709,9 +2666,31 @@ std::vector<StmtPtr> fold_try_catches(std::vector<StmtPtr> stmts) {
                     same = true;
                 } else {
                     auto b1_lines = emit_stmts(c1.body, 0);
-                    auto c2_renamed = clone_stmts_renaming_local(c2.body, c2.var_name, c1.var_name);
-                    auto b2_lines = emit_stmts(c2_renamed, 0);
-                    if (b1_lines == b2_lines) same = true;
+                    auto b2_lines = emit_stmts(c2.body, 0);
+                    if (c1.var_name == c2.var_name) {
+                        same = (b1_lines == b2_lines);
+                    } else if (!c1.var_name.empty() && !c2.var_name.empty()) {
+                        auto replace_ident = [](std::string str, const std::string& from, const std::string& to) {
+                            size_t pos = 0;
+                            while ((pos = str.find(from, pos)) != std::string::npos) {
+                                bool left_ok = (pos == 0 || (!std::isalnum(static_cast<unsigned char>(str[pos - 1])) && str[pos - 1] != '_'));
+                                size_t end_pos = pos + from.size();
+                                bool right_ok = (end_pos == str.size() || (!std::isalnum(static_cast<unsigned char>(str[end_pos])) && str[end_pos] != '_'));
+                                if (left_ok && right_ok) {
+                                    str.replace(pos, from.size(), to);
+                                    pos += to.size();
+                                } else {
+                                    pos += from.size();
+                                }
+                            }
+                            return str;
+                        };
+                        std::vector<std::string> b2_norm;
+                        for (const auto& line : b2_lines) {
+                            b2_norm.push_back(replace_ident(line, c2.var_name, c1.var_name));
+                        }
+                        same = (b1_lines == b2_norm);
+                    }
                 }
                 if (same) {
                     c1.type = c1.type + "|" + c2.type;
@@ -2856,10 +2835,14 @@ std::vector<StmtPtr> unflatten_switch_dispatchers(std::vector<StmtPtr> stmts) {
     std::vector<StmtPtr> out;
     size_t i = 0;
     while (i < stmts.size()) {
-        if (i + 1 < stmts.size() && stmts[i]->kind == StmtKind::LocalDecl && stmts[i + 1]->kind == StmtKind::WhileStmt) {
+        if (!stmts[i]) {
+            i += 1;
+            continue;
+        }
+        if (i + 1 < stmts.size() && stmts[i] && stmts[i + 1] && stmts[i]->kind == StmtKind::LocalDecl && stmts[i + 1]->kind == StmtKind::WhileStmt) {
             auto* ld = static_cast<LocalDecl*>(stmts[i].get());
             auto* w = static_cast<WhileStmt*>(stmts[i + 1].get());
-            if (ld->init && ld->init->kind == ExprKind::Const && w->body.size() == 1 && w->body[0]->kind == StmtKind::SwitchStmt) {
+            if (ld->init && ld->init->kind == ExprKind::Const && w->body.size() == 1 && w->body[0] && w->body[0]->kind == StmtKind::SwitchStmt) {
                 std::string var_name = ld->name;
                 std::string curr_state = static_cast<Const*>(ld->init.get())->literal;
                 auto* sw = static_cast<SwitchStmt*>(w->body[0].get());
@@ -3046,24 +3029,42 @@ std::vector<StmtPtr> prune_dead_code_pass(std::vector<StmtPtr> stmts) {
 }  // namespace
 
 std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
+    nd::g_crash_pass_name = "simplify_stmt_initial";
     std::vector<StmtPtr> out;
-    for (auto& s : stmts) out.push_back(simplify_stmt(s));
+    for (auto& s : stmts) {
+        if (s) out.push_back(simplify_stmt(s));
+    }
     for (int iter = 0; iter < 4; ++iter) {
+        nd::g_crash_pass_name = "fold_boolean_materialization";
         out = fold_boolean_materialization(out);
+        nd::g_crash_pass_name = "collapse_temp_chains";
         out = collapse_temp_chains(out);
+        nd::g_crash_pass_name = "hoist_common_branch_tail";
         out = hoist_common_branch_tail(out);
+        nd::g_crash_pass_name = "eliminate_redundant_else_after_return";
         out = eliminate_redundant_else_after_return(out);
+        nd::g_crash_pass_name = "collapse_nested_if_conditions";
         out = collapse_nested_if_conditions(out);
+        nd::g_crash_pass_name = "merge_sequential_short_circuit_ifs";
         out = merge_sequential_short_circuit_ifs(out);
+        nd::g_crash_pass_name = "fold_try_with_resources";
         out = fold_try_with_resources(out);
+        nd::g_crash_pass_name = "fuse_for_initializers";
         out = fuse_for_initializers(out);
+        nd::g_crash_pass_name = "propagate_local_constant_arrays";
         out = propagate_local_constant_arrays(out);
+        nd::g_crash_pass_name = "fold_try_catches";
         out = fold_try_catches(out);
+        nd::g_crash_pass_name = "prune_opaque_branches";
         out = prune_opaque_branches(out);
+        nd::g_crash_pass_name = "unflatten_switch_dispatchers";
         out = unflatten_switch_dispatchers(out);
+        nd::g_crash_pass_name = "restore_assertions_pass";
         out = restore_assertions_pass(out);
+        nd::g_crash_pass_name = "prune_dead_code_pass";
         out = prune_dead_code_pass(out);
     }
+    nd::g_crash_pass_name = "simplify_stmts_done";
     return out;
 }
 

@@ -200,6 +200,8 @@ std::string strip_dollar_outside_literals(const std::string& text) {
 }  // namespace
 
 const char* g_crash_class_name = nullptr;
+const char* g_crash_method_name = nullptr;
+const char* g_crash_pass_name = nullptr;
 
 JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::string& out_dir, bool skip_legitimacy, bool print_progress) {
     JarProcessResult jr;

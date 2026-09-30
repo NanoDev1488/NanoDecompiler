@@ -571,6 +571,22 @@ static void sigsegv_handler(int sig) {
         if (write(STDERR_FILENO, nd::g_crash_class_name, len) < 0) {}
         if (write(STDERR_FILENO, "\n", 1) < 0) {}
     }
+    if (nd::g_crash_method_name != nullptr && nd::g_crash_method_name[0] != '\0') {
+        const char mmsg[] = "[CRASH] Processing method: ";
+        if (write(STDERR_FILENO, mmsg, sizeof(mmsg) - 1) < 0) {}
+        size_t len = 0;
+        while (nd::g_crash_method_name[len]) len++;
+        if (write(STDERR_FILENO, nd::g_crash_method_name, len) < 0) {}
+        if (write(STDERR_FILENO, "\n", 1) < 0) {}
+    }
+    if (nd::g_crash_pass_name != nullptr && nd::g_crash_pass_name[0] != '\0') {
+        const char pmsg[] = "[CRASH] Active pass: ";
+        if (write(STDERR_FILENO, pmsg, sizeof(pmsg) - 1) < 0) {}
+        size_t len = 0;
+        while (nd::g_crash_pass_name[len]) len++;
+        if (write(STDERR_FILENO, nd::g_crash_pass_name, len) < 0) {}
+        if (write(STDERR_FILENO, "\n", 1) < 0) {}
+    }
     void* callstack[64];
     int frames = backtrace(callstack, 64);
     backtrace_symbols_fd(callstack, frames, STDERR_FILENO);

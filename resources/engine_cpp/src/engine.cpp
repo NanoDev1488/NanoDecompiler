@@ -11,6 +11,7 @@
 #include "emit.hpp"
 #include "javatypes.hpp"
 #include "structure.hpp"
+#include "process_jar.hpp"
 
 namespace nd {
 
@@ -2654,6 +2655,7 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
     }
 
     try {
+        g_crash_method_name = method.name.c_str();
         DecodedMethod dm = decode_method(method.code);
         result.n_instructions = static_cast<int>(dm.order.size());
         auto [filtered_exceptions, junk_removed] = filter_junk_catches(method);
