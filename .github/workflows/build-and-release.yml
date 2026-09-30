@@ -566,26 +566,28 @@ jobs:
           client_ver = os.environ.get('CLIENT_VERSION', tag)
           api_ver = os.environ.get('API_VERSION', tag)
 
-          body = f"""## 🚀 NanoDecompiler {tag}
-
-### 📋 Список изменений
-{changelog_section}
-
-### 📦 Загрузки
-
-| Файл | Описание | Версия |
-|------|----------|--------|
-| `NanoDecompiler-Client-Setup.exe` | Клиент Windows (GUI, инсталлятор) | {client_ver} |
-| `NanoDecompiler-Client.AppImage` | Клиент Linux (GUI, AppImage) | {client_ver} |
-| `NanoDecompiler-Client.dmg` | Клиент macOS (GUI, DMG) | {client_ver} |
-| `NanoDecompilerClApi-windows.exe` | Движок Windows (CLI + API) | {api_ver} |
-| `NanoDecompilerClApi-linux` | Движок Linux (CLI + API) | {api_ver} |
-| `NanoDecompilerClApi-macos` | Движок macOS (CLI + API) | {api_ver} |
-| `versions.json` | Технический файл автообновления | - |
-
-### Как проверялось
-Все три клиентских сборки (Windows/Linux/macOS) и все три ClApi-бинарника перед публикацией прогонялись на тестовом .jar-плагине прямо в этом workflow.
-"""
+          lines = [
+              f"## 🚀 NanoDecompiler {tag}",
+              "",
+              "### 📋 Список изменений",
+              changelog_section,
+              "",
+              "### 📦 Загрузки",
+              "",
+              "| Файл | Описание | Версия |",
+              "|------|----------|--------|",
+              f"| `NanoDecompiler-Client-Setup.exe` | Клиент Windows (GUI, инсталлятор) | {client_ver} |",
+              f"| `NanoDecompiler-Client.AppImage` | Клиент Linux (GUI, AppImage) | {client_ver} |",
+              f"| `NanoDecompiler-Client.dmg` | Клиент macOS (GUI, DMG) | {client_ver} |",
+              f"| `NanoDecompilerClApi-windows.exe` | Движок Windows (CLI + API) | {api_ver} |",
+              f"| `NanoDecompilerClApi-linux` | Движок Linux (CLI + API) | {api_ver} |",
+              f"| `NanoDecompilerClApi-macos` | Движок macOS (CLI + API) | {api_ver} |",
+              "| `versions.json` | Технический файл автообновления | - |",
+              "",
+              "### Как проверялось",
+              "Все три клиентских сборки (Windows/Linux/macOS) и все три ClApi-бинарника перед публикацией прогонялись на тестовом .jar-плагине прямо в этом workflow.",
+          ]
+          body = "\n".join(lines)
           with open("release_notes.md", "w", encoding="utf-8") as f:
               f.write(body)
           print("Сгенерировано описание релиза:")
