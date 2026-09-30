@@ -1,5 +1,15 @@
 # NanoDecompiler Changelog
 
+## [1.9.133] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **Улучшенный десугаринг и нормализация циклов (For-Loop Resugaring & Initializer Fusion)**:
+  - `resources/engine_cpp/src/structure.cpp`: реализован оптимизационный проход `fuse_for_initializers` — автоматическое слияние предшествующих объявлений переменных `LocalDecl` (`int i = 0`) и присваиваний `Assign` (`i = 0`) непосредственно в заголовок цикла `for (int i = 0; i < n; i++)` при локальной области видимости счетчика.
+  - `resources/engine_cpp/src/structure.cpp`: в `simplify_stmt` для `WhileStmt` добавлена автоконверсия обычных циклов `while (cond) { ... update; }` со счетчиком в конце тела в эквивалентные циклы `for (; cond; update)`.
+  - `resources/engine_cpp/src/structure.cpp`: интеграция прохода слияния инициализаторов в многопроходный пайплайн оптимизации `simplify_stmts`.
+
+---
+
 ## [1.9.132] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

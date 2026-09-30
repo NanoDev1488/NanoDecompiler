@@ -203,7 +203,8 @@ namespace nd {
 // НОВОЕ v1.9.130: усиление эвристик безопасности (ForceOP бэкдоры, инъекции через ClassLoader.defineClass, низкоуровневый Unsafe и wiper/nuke паттерны).
 // НОВОЕ v1.9.131: движок деобфускации строк (однобайтовый и мульти-ключевой XOR, автоинлайнинг расшифрованных строк invokestatic).
 // НОВОЕ v1.9.132: тотальная отказоустойчивость stackvm (поддержка Java 11+ Condy/Dynamic, MethodType/MethodHandle в ldc, устранение DecompileAbort в полях, вызовах, классах, jsr/ret).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.132";
+// НОВОЕ v1.9.133: улучшенный десугаринг циклов for (int i = 0; i < n; i++), слияние инициализаторов объявлений и автоконверсия while с update.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.133";
 }
 
 

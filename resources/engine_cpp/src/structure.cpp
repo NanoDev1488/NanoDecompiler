@@ -1,6 +1,7 @@
 // structure.cpp - см. structure.hpp. 1:1 порт structure.py.
 #include <cstdint>  // БАГ-ФИКС: MinGW/Windows не тянет int64_t транзитивно через другие заголовки, как это молча делает libstdc++ на Linux - см. ошибку сборки Windows-раннера в этой сессии.
 #include "structure.hpp"
+#include "emit.hpp"
 
 #include <algorithm>
 #include <functional>
@@ -1620,6 +1621,10 @@ StmtPtr simplify_stmt(StmtPtr s) {
         if (w->cond->kind == ExprKind::Const && static_cast<Const*>(w->cond.get())->literal == "true") {
             return simplify_while_true(w);
         }
+        if (!w->body.empty() && looks_like_update(w->body.back())) {
+            StmtPtr last = w->body.back();
+            return std::make_shared<ForStmt>(nullptr, w->cond, last, std::vector<StmtPtr>(w->body.begin(), w->body.end() - 1), w->label);
+        }
         return w;
     }
     if (s->kind == StmtKind::DoWhileStmt) {
@@ -1805,6 +1810,74 @@ std::vector<StmtPtr> fold_try_with_resources(std::vector<StmtPtr> stmts) {
     return out;
 }
 
+std::vector<StmtPtr> fuse_for_initializers(std::vector<StmtPtr> stmts) {
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        size_t n = stmts.size();
+        for (size_t i = 0; i + 1 < n; ++i) {
+            if (stmts[i + 1]->kind != StmtKind::ForStmt) continue;
+            auto* f = static_cast<ForStmt*>(stmts[i + 1].get());
+            if (f->init != nullptr) continue;
+
+            std::string var_name;
+            std::string var_type = "int";
+            ExprPtr init_val = nullptr;
+            bool is_decl = false;
+
+            if (stmts[i]->kind == StmtKind::LocalDecl) {
+                auto* ld = static_cast<LocalDecl*>(stmts[i].get());
+                var_name = ld->name;
+                var_type = ld->type;
+                init_val = ld->init;
+                is_decl = true;
+            } else if (stmts[i]->kind == StmtKind::ExprStmt) {
+                auto* es = static_cast<ExprStmtNode*>(stmts[i].get());
+                if (es->expr && es->expr->kind == ExprKind::Assign) {
+                    auto* as = static_cast<Assign*>(es->expr.get());
+                    if (as->target && as->target->kind == ExprKind::Local) {
+                        var_name = static_cast<Local*>(as->target.get())->name;
+                        var_type = as->target->type;
+                        init_val = as->value;
+                        is_decl = false;
+                    }
+                }
+            }
+
+            if (var_name.empty()) continue;
+
+            bool in_cond = f->cond && contains_local_ref_expr(f->cond, var_name);
+            bool in_upd = f->update && contains_local_ref_stmt(f->update, var_name);
+            if (!in_cond && !in_upd) continue;
+
+            bool used_after = false;
+            for (size_t j = i + 2; j < n; ++j) {
+                if (contains_local_ref_stmt(stmts[j], var_name)) {
+                    used_after = true;
+                    break;
+                }
+            }
+
+            if (is_decl && !used_after) {
+                std::string init_val_str = init_val ? emit_expr(init_val) : "0";
+                f->init = std::make_shared<Raw>(var_type + " " + var_name + " = " + init_val_str);
+                stmts.erase(stmts.begin() + i);
+                changed = true;
+                break;
+            } else if (!is_decl) {
+                f->init = std::make_shared<Assign>(
+                    std::make_shared<Local>(var_name, var_type),
+                    init_val ? init_val : std::make_shared<Const>("0", "int")
+                );
+                stmts.erase(stmts.begin() + i);
+                changed = true;
+                break;
+            }
+        }
+    }
+    return stmts;
+}
+
 }  // namespace
 
 std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
@@ -1819,6 +1892,7 @@ std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
         out = collapse_nested_if_conditions(out);
         out = merge_sequential_short_circuit_ifs(out);
         out = fold_try_with_resources(out);
+        out = fuse_for_initializers(out);
     }
     return out;
 }
