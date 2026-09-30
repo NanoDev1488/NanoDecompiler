@@ -1,5 +1,16 @@
 # NanoDecompiler Changelog
 
+## [1.9.126] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **Универсальное распознавание и десугаринг switch-map таблиц enum (ECJ & javac switch recovery)**:
+  - `resources/engine_cpp/src/switchmap.cpp`: расширен сбор синтетических полей — поддержан префикс `$SWITCH_TABLE$` компилятора Eclipse (ECJ) и произвольные имена switch-map полей в синтетических классах.
+  - `resources/engine_cpp/src/switchmap.cpp`: метод `extract_table` переведён на скользящее окно (lookahead) для поиска последовательностей `getstatic` (enum константа), `invokevirtual ordinal`, `push` и `iastore`, устойчивое к перестановкам байткода и синтетическим обработчикам `NoSuchFieldError`.
+  - `resources/engine_cpp/src/engine.cpp`: в `try_desugar_one` реализован гибкий поиск в таблицах `switchmap_tables` с нормализацией точек и слэшей в пакетах (`com.pkg` vs `com/pkg`), суффиксным сопоставлением (`/MyClass$1`) и глобальным сопоставлением по имени поля.
+  - `resources/engine_cpp/src/engine.cpp`: улучшен фоллбек по известным ординалам `enum_ordinals` с автоматическим сопоставлением базовых типов enum и их коротких имен.
+
+---
+
 ## [1.9.125] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

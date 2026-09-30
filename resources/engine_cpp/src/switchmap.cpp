@@ -36,26 +36,41 @@ std::optional<SwitchmapFieldInfo> extract_table(const ClassFile& cf, const Decod
         if (ins.mnemonic == "getstatic" && ins.cp_index.has_value()) {
             auto r = cf.ref_string(static_cast<uint16_t>(*ins.cp_index));
             if (r.has_value() && std::get<1>(*r) == field_name && std::get<2>(*r) == "[I") {
-                if (i + 4 < n) {
-                    const Instruction& g2 = *seq[i + 1];
-                    const Instruction& ov = *seq[i + 2];
-                    const Instruction& push_ins = *seq[i + 3];
-                    const Instruction& store = *seq[i + 4];
-                    if (g2.mnemonic == "getstatic" && ov.mnemonic == "invokevirtual" && store.mnemonic == "iastore") {
-                        auto r2 = g2.cp_index.has_value() ? cf.ref_string(static_cast<uint16_t>(*g2.cp_index)) : std::nullopt;
-                        auto rv = ov.cp_index.has_value() ? cf.ref_string(static_cast<uint16_t>(*ov.cp_index)) : std::nullopt;
-                        if (r2.has_value() && rv.has_value() && std::get<1>(*rv) == "ordinal") {
-                            std::string owner = std::get<0>(*r2);
-                            std::string const_name = std::get<1>(*r2);
-                            auto val = push_int_value(push_ins);
-                            if (val.has_value()) {
-                                table[*val] = const_name;
-                                enum_owner = owner;
-                                i += 5;
-                                continue;
-                            }
+                // Ищем шаблон: getstatic enum.CONST, invokevirtual ordinal, push N, iastore
+                std::optional<std::string> cur_owner;
+                std::optional<std::string> cur_const;
+                std::optional<int64_t> cur_val;
+                bool has_ordinal = false;
+                bool has_iastore = false;
+
+                size_t lookahead = std::min(n, i + 8);
+                size_t j = i + 1;
+                for (; j < lookahead; ++j) {
+                    const Instruction& next_ins = *seq[j];
+                    if (next_ins.mnemonic == "getstatic" && next_ins.cp_index.has_value()) {
+                        auto r2 = cf.ref_string(static_cast<uint16_t>(*next_ins.cp_index));
+                        if (r2.has_value()) {
+                            cur_owner = std::get<0>(*r2);
+                            cur_const = std::get<1>(*r2);
                         }
+                    } else if (next_ins.mnemonic == "invokevirtual" && next_ins.cp_index.has_value()) {
+                        auto rv = cf.ref_string(static_cast<uint16_t>(*next_ins.cp_index));
+                        if (rv.has_value() && std::get<1>(*rv) == "ordinal") {
+                            has_ordinal = true;
+                        }
+                    } else if (auto v = push_int_value(next_ins); v.has_value()) {
+                        cur_val = *v;
+                    } else if (next_ins.mnemonic == "iastore") {
+                        has_iastore = true;
+                        break;
                     }
+                }
+
+                if (has_iastore && has_ordinal && cur_owner.has_value() && cur_const.has_value() && cur_val.has_value()) {
+                    table[*cur_val] = *cur_const;
+                    enum_owner = *cur_owner;
+                    i = j + 1;
+                    continue;
                 }
             }
         }
@@ -73,28 +88,29 @@ SwitchmapDetectionResult detect_switchmaps(const std::map<std::string, ClassFile
 
     for (auto& [internal, cf] : class_files) {
         std::vector<const Field*> candidate_fields;
-        for (auto& f : cf.fields)
-            if (f.descriptor == "[I" && f.name.rfind("$SwitchMap$", 0) == 0) candidate_fields.push_back(&f);
+        for (auto& f : cf.fields) {
+            if (f.descriptor == "[I" && (f.name.rfind("$SwitchMap$", 0) == 0 ||
+                                         f.name.rfind("$SWITCH_TABLE$", 0) == 0 ||
+                                         f.name.find("SwitchMap") != std::string::npos)) {
+                candidate_fields.push_back(&f);
+            }
+        }
         if (candidate_fields.empty()) continue;
 
-        const Method* clinit = nullptr;
-        for (auto& m : cf.methods)
-            if (m.name == "<clinit>") {
-                clinit = &m;
-                break;
+        for (auto& m : cf.methods) {
+            if ((m.name == "<clinit>" || m.name.rfind("$SWITCH_TABLE$", 0) == 0) && m.has_code) {
+                DecodedMethod dm;
+                try {
+                    dm = decode_method(m.code);
+                } catch (const std::exception&) {
+                    continue;
+                }
+
+                for (auto f : candidate_fields) {
+                    auto table = extract_table(cf, dm, f->name);
+                    if (table.has_value()) result.switchmap_fields[{internal, f->name}] = *table;
+                }
             }
-        if (clinit == nullptr || !clinit->has_code) continue;
-
-        DecodedMethod dm;
-        try {
-            dm = decode_method(clinit->code);
-        } catch (const std::exception&) {
-            continue;
-        }
-
-        for (auto f : candidate_fields) {
-            auto table = extract_table(cf, dm, f->name);
-            if (table.has_value()) result.switchmap_fields[{internal, f->name}] = *table;
         }
 
         // Класс целиком - синтетический switch-map холдер (не часть
@@ -106,7 +122,7 @@ SwitchmapDetectionResult detect_switchmaps(const std::map<std::string, ClassFile
                         [&](const Field* f) { return result.switchmap_fields.count({internal, f->name}) != 0; });
         size_t non_clinit_methods = 0;
         for (auto& m : cf.methods)
-            if (m.name != "<clinit>") non_clinit_methods++;
+            if (m.name != "<clinit>" && m.name.rfind("$SWITCH_TABLE$", 0) != 0) non_clinit_methods++;
         if (all_fields_are_switchmaps && non_clinit_methods == 0) result.synthetic_classes.insert(internal);
     }
 

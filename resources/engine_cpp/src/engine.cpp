@@ -1558,22 +1558,62 @@ void try_desugar_one(SwitchStmt* switch_stmt, const std::map<std::string, std::v
     ExprPtr sel = switch_stmt->selector;
     if (sel->kind != ExprKind::ArrayAccess) return;
     auto* aa = static_cast<ArrayAccess*>(sel.get());
-    if (!aa->array || aa->array->kind != ExprKind::FieldAccess) return;
-    auto* fa = static_cast<FieldAccess*>(aa->array.get());
-    if (!(fa->is_static && !fa->target && fa->name.find("SwitchMap") != std::string::npos)) return;
+    if (!aa->array) return;
+
+    std::string field_name;
+    std::optional<std::string> owner_name;
+    if (aa->array->kind == ExprKind::FieldAccess) {
+        auto* fa = static_cast<FieldAccess*>(aa->array.get());
+        field_name = fa->name;
+        owner_name = fa->owner;
+    } else if (aa->array->kind == ExprKind::MethodCall) {
+        auto* mca = static_cast<MethodCall*>(aa->array.get());
+        field_name = mca->name;
+        if (mca->target && mca->target->kind == ExprKind::TypeRef) {
+            owner_name = static_cast<TypeRef*>(mca->target.get())->name;
+        }
+    } else {
+        return;
+    }
+
     ExprPtr idx = aa->index;
     if (!idx || idx->kind != ExprKind::MethodCall) return;
     auto* mc = static_cast<MethodCall*>(idx.get());
     if (!(mc->name == "ordinal" && mc->args.empty() && mc->target)) return;
     ExprPtr enum_expr = mc->target;
     std::string enum_type = enum_expr->type;
-    if (enum_type.empty()) return;
 
     std::optional<std::map<int64_t, std::string>> exact;
-    if (fa->owner.has_value()) {
-        auto key = std::make_pair(*fa->owner, fa->name);
-        auto it = switchmap_tables.find(key);
-        if (it != switchmap_tables.end()) exact = it->second;
+    auto find_table = [&](const std::string& owner_str, const std::string& fname) -> std::optional<std::map<int64_t, std::string>> {
+        auto it = switchmap_tables.find({owner_str, fname});
+        if (it != switchmap_tables.end()) return it->second;
+        std::string slashed = owner_str;
+        for (char& c : slashed) if (c == '.') c = '/';
+        it = switchmap_tables.find({slashed, fname});
+        if (it != switchmap_tables.end()) return it->second;
+        for (auto& [pair, tbl] : switchmap_tables) {
+            if (pair.second == fname) {
+                if (pair.first == owner_str || pair.first == slashed) return tbl;
+                if (!owner_str.empty() && pair.first.size() > owner_str.size() &&
+                    pair.first.rfind("/" + owner_str) == pair.first.size() - owner_str.size() - 1) return tbl;
+                if (!owner_str.empty() && pair.first.size() > owner_str.size() &&
+                    pair.first.rfind("." + owner_str) == pair.first.size() - owner_str.size() - 1) return tbl;
+            }
+        }
+        int matches = 0;
+        const std::map<int64_t, std::string>* candidate = nullptr;
+        for (auto& [pair, tbl] : switchmap_tables) {
+            if (pair.second == fname) {
+                matches++;
+                candidate = &tbl;
+            }
+        }
+        if (matches == 1 && candidate) return *candidate;
+        return std::nullopt;
+    };
+
+    if (!field_name.empty()) {
+        exact = find_table(owner_name.value_or(""), field_name);
     }
 
     if (exact.has_value()) {
@@ -1599,15 +1639,41 @@ void try_desugar_one(SwitchStmt* switch_stmt, const std::map<std::string, std::v
         return;
     }
 
+    if (enum_type.empty()) return;
     std::string enum_type_base = enum_type;
     while (enum_type_base.size() >= 2 && enum_type_base.substr(enum_type_base.size() - 2) == "[]") {
         enum_type_base = enum_type_base.substr(0, enum_type_base.size() - 2);
     }
-    auto known_it = ctx.known.find(enum_type_base);
-    if (known_it == ctx.known.end()) return;
-    auto ord_it = enum_ordinals.find(known_it->second);
-    if (ord_it == enum_ordinals.end() || ord_it->second.empty()) return;
-    const std::vector<std::string>& names = ord_it->second;
+
+    const std::vector<std::string>* names_ptr = nullptr;
+    auto ord_it = enum_ordinals.find(enum_type_base);
+    if (ord_it != enum_ordinals.end()) {
+        names_ptr = &ord_it->second;
+    } else {
+        std::string slashed = enum_type_base;
+        for (char& c : slashed) if (c == '.') c = '/';
+        ord_it = enum_ordinals.find(slashed);
+        if (ord_it != enum_ordinals.end()) {
+            names_ptr = &ord_it->second;
+        } else {
+            auto known_it = ctx.known.find(enum_type_base);
+            if (known_it != ctx.known.end()) {
+                ord_it = enum_ordinals.find(known_it->second);
+                if (ord_it != enum_ordinals.end()) names_ptr = &ord_it->second;
+            }
+            if (!names_ptr) {
+                for (auto& [k, v] : enum_ordinals) {
+                    if (k.size() > enum_type_base.size() &&
+                        k.rfind("/" + enum_type_base) == k.size() - enum_type_base.size() - 1) {
+                        names_ptr = &v;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    if (!names_ptr || names_ptr->empty()) return;
+    const std::vector<std::string>& names = *names_ptr;
 
     std::vector<SwitchCase> new_cases;
     for (auto& c : switch_stmt->cases) {
