@@ -1,9 +1,11 @@
 import { memo, useMemo, useState, type ReactNode } from "react";
 import {
+  applyFancyFont,
   CHAIN_CALL_AFTER_PLUS_RE,
   COLOR_CONCAT_RE,
   COLOR_METHOD_CALL_RE,
   GENERIC_COLOR_CALL_RE,
+  isFancyFontMethod,
   lastColorHexInString,
   MC_CODE_RE,
   MC_COLOR_NAME_HEX,
@@ -70,6 +72,8 @@ interface Token {
   // чтобы сворачивать их ВМЕСТЕ со следующей цветной строкой в один чип
   isColorEnum?: boolean;
   colorEnumStart?: number;
+  // НОВОЕ: кастомный шрифт FancyFont / method1
+  isFancyFontCall?: boolean;
 }
 
 function tokenizeLine(line: string): Token[] {
@@ -116,12 +120,13 @@ function tokenizeLine(line: string): Token[] {
         colorEnumStart = m.index - prefixMatch[0].length;
       }
     }
+    let isFancyFontCall = false;
     if (str) {
-      // НОВОЕ v1.7.5 (по прямой просьбе - "детект вызовов цветовых
-      // методов, не только сырых &-кодов"): смотрим на текст ПЕРЕД этой
-      // строкой на ТОЙ ЖЕ строке кода - `line.slice(0, m.index)` - ищем
-      // паттерн вида `.GREEN(` прямо перед открывающей кавычкой аргумента.
+      // НОВОЕ v1.7.5: смотрим на текст ПЕРЕД строкой на той же строке кода
       const before = line.slice(0, m.index);
+      if (/\b(?:method1|stylize|fancyfont(?:\.stylize)?)\s*\(\s*$/i.test(before)) {
+        isFancyFontCall = true;
+      }
       const namedMatch = COLOR_METHOD_CALL_RE.exec(before) ?? COLOR_CONCAT_RE.exec(before);
       if (namedMatch) {
         colorMethod = namedMatch[1];
@@ -154,6 +159,7 @@ function tokenizeLine(line: string): Token[] {
       inheritedColor,
       isColorEnum,
       colorEnumStart,
+      isFancyFontCall,
     });
     last = m.index + m[0].length;
   }
@@ -344,6 +350,20 @@ function stripQuotes(text: string): string {
  * ВНЕ регионов, и для содержимого развёрнутого/свёрнутого чипа. */
 function renderToken(t: Token, i: number | string, textOverride?: string): ReactNode {
   const text = textOverride ?? t.text;
+  if (t.isStr && t.isFancyFontCall) {
+    const raw = stripQuotes(text);
+    const stylized = applyFancyFont(raw);
+    return (
+      <span
+        key={i}
+        className="tok-s cursor-help font-normal"
+        title={`Кастомный шрифт (method1 / FancyFont): исходный текст "${raw}"`}
+        style={t.inheritedColor ? { color: t.inheritedColor } : undefined}
+      >
+        "{stylized}"
+      </span>
+    );
+  }
   if (t.isStr && t.colorMethod) {
     return (
       <span key={i} className="tok-s">
@@ -476,7 +496,7 @@ function renderChipPreview(tokens: Token[], region: Region): ReactNode {
         continue;
       }
 
-      // Обфусцированный метод-дешифратор строк вида method1("string") или Class.decrypt("string")
+      // Обфусцированный метод-дешифратор строк / кастомный шрифт (method1 / FancyFont)
       if (!t.isStr && /^[a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)?$/.test(textTrim)) {
         let nextIdx = i + 1;
         while (nextIdx < limit && inRange[nextIdx].text.trim() === "") nextIdx++;
@@ -488,14 +508,21 @@ function renderChipPreview(tokens: Token[], region: Region): ReactNode {
             while (closeParenIdx < limit && inRange[closeParenIdx].text.trim() === "") closeParenIdx++;
             if (closeParenIdx < limit && inRange[closeParenIdx].text.trim().startsWith(")")) {
               const strToken = inRange[strIdx];
-              const unquoted = stripQuotes(strToken.text);
+              const rawUnquoted = stripQuotes(strToken.text);
+              const isFancy = isFancyFontMethod(textTrim);
+              const unquoted = isFancy ? applyFancyFont(rawUnquoted) : rawUnquoted;
+              const titleNote = isFancy
+                ? `Кастомный шрифт (${textTrim}): исходный текст "${rawUnquoted}"`
+                : undefined;
               parts.push(
                 activeColorHex ? (
-                  <span key={i} style={{ color: activeColorHex }}>
+                  <span key={i} style={{ color: activeColorHex }} title={titleNote}>
                     {unquoted}
                   </span>
                 ) : (
-                  renderToken(strToken, i, unquoted)
+                  <span key={i} title={titleNote}>
+                    {renderToken(strToken, i, unquoted)}
+                  </span>
                 )
               );
               const closeTok = inRange[closeParenIdx];

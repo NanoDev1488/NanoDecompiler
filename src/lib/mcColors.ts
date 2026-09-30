@@ -243,3 +243,77 @@ export function renderMcColored(text: string): ReactNode[] {
   pushText(text.slice(last));
   return out;
 }
+
+/** Таблица замены символов для методов стилизации шрифтов (FancyFont.stylize / method1) */
+export const FANCY_FONT_MAP: Record<string, string> = {
+  // Кириллица (Cyrillic Small Caps / Stylized)
+  "к": "ᴋ",
+  "е": "ᴇ",
+  "г": "ᴦ",
+  "ш": "ɯ",
+  "ф": "ɸ",
+  "в": "ʙ",
+  "а": "ᴀ",
+  "п": "ᴨ",
+  "р": "ᴩ",
+  "л": "ᴧ",
+  "э": "϶",
+  "с": "ᴄ",
+  "м": "ʍ",
+  "т": "ᴛ",
+  // Латиница (Latin Small Caps)
+  "a": "ᴀ",
+  "b": "ʙ",
+  "c": "ᴄ",
+  "d": "ᴅ",
+  "e": "ᴇ",
+  "f": "ғ",
+  "g": "ɢ",
+  "h": "ʜ",
+  "i": "ɪ",
+  "j": "ᴊ",
+  "k": "ᴋ",
+  "l": "ʟ",
+  "m": "ᴍ",
+  "n": "ɴ",
+  "o": "ᴏ",
+  "p": "ᴘ",
+  "q": "ǫ",
+  "r": "ʀ",
+  "s": "s",
+  "t": "ᴛ",
+  "u": "ᴜ",
+  "v": "ᴠ",
+  "w": "ᴡ",
+  "x": "x",
+  "y": "ʏ",
+  "z": "ᴢ",
+};
+
+/** Применяет замену букв "как в игре" для методов вроде method1("...") или FancyFont.stylize("...") */
+export function applyFancyFont(text: string): string {
+  let res = "";
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const lower = ch.toLowerCase();
+    if (FANCY_FONT_MAP[lower]) {
+      res += FANCY_FONT_MAP[lower];
+    } else {
+      res += ch;
+    }
+  }
+  return res;
+}
+
+/** Проверяет, является ли имя метода стилизацией шрифта (method1, stylize, FancyFont и т.д.) */
+export function isFancyFontMethod(methodName: string): boolean {
+  const lower = methodName.toLowerCase();
+  return (
+    lower === "method1" ||
+    lower === "stylize" ||
+    lower.includes("fancy") ||
+    lower.includes("smallcap") ||
+    lower.includes("font")
+  );
+}
+
