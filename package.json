@@ -37,7 +37,6 @@
       "dist/**",
       "dist-electron/**"
     ],
-    "compression": "maximum",
     "extraResources": [
       {
         "from": "resources/engine",
@@ -64,17 +63,13 @@
       "icon": "resources/engine/icon.png",
       "category": "Development"
     },
-    "appImage": {
-      "compression": "maximum"
-    },
     "mac": {
       "target": "dmg",
       "icon": "resources/engine/icon.png",
       "identity": null
     },
     "dmg": {
-      "format": "ULFO",
-      "writeUpdateInfo": false
+      "format": "ULFO"
     },
     "afterPack": "scripts/afterPack.cjs",
     "asar": true,
