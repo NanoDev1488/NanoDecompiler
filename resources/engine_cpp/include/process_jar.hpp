@@ -65,6 +65,8 @@ struct JarProcessResult {
     std::optional<std::string> rejected_reason;
 };
 
+extern const char* g_crash_class_name;
+
 // Бросает std::runtime_error, если jar_path не открывается (битый zip и т.п.) -
 // зеркалит необработанное исключение zipfile.ZipFile(...) в оригинале
 // (main.py тоже ничего не ловит на этом уровне - падает выше, в main()/GUI).

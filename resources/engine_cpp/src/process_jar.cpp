@@ -199,7 +199,7 @@ std::string strip_dollar_outside_literals(const std::string& text) {
 
 }  // namespace
 
-std::string g_current_decompile_class = "";
+const char* g_crash_class_name = nullptr;
 
 JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::string& out_dir, bool skip_legitimacy, bool print_progress) {
     JarProcessResult jr;
@@ -630,7 +630,7 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
 
     for (auto& [internal, cf] : class_files) {
         if (synthetic_switchmap_classes.count(internal)) continue;
-        g_current_decompile_class = internal;
+        g_crash_class_name = internal.c_str();
         std::string text;
         OrderedImports cls_imports;
         try {

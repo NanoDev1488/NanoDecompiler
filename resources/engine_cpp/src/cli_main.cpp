@@ -557,16 +557,18 @@ std::vector<std::string> get_utf8_argv() {
 #include <execinfo.h>
 #include <sys/resource.h>
 
-extern std::string g_current_decompile_class;
+#include "process_jar.hpp"
 
 static void sigsegv_handler(int sig) {
     (void)sig;
     const char msg[] = "\n[CRASH] Caught fatal signal (SIGSEGV/SIGBUS)!\n";
     if (write(STDERR_FILENO, msg, sizeof(msg) - 1) < 0) {}
-    if (!g_current_decompile_class.empty()) {
+    if (nd::g_crash_class_name != nullptr && nd::g_crash_class_name[0] != '\0') {
         const char cmsg[] = "[CRASH] Processing class: ";
         if (write(STDERR_FILENO, cmsg, sizeof(cmsg) - 1) < 0) {}
-        if (write(STDERR_FILENO, g_current_decompile_class.data(), g_current_decompile_class.size()) < 0) {}
+        size_t len = 0;
+        while (nd::g_crash_class_name[len]) len++;
+        if (write(STDERR_FILENO, nd::g_crash_class_name, len) < 0) {}
         if (write(STDERR_FILENO, "\n", 1) < 0) {}
     }
     void* callstack[64];
