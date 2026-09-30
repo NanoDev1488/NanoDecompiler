@@ -1,5 +1,16 @@
 # NanoDecompiler Changelog
 
+## [1.9.142-ObfUpd.5] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **[ObfUpd 5/15] Деобфускация числовых констант и побитовых выражений (Numeric & Bitwise Constant Folding)**:
+  - `resources/engine_cpp/src/structure.cpp`: полноценное вычисление и свертка константных арифметических и побитовых операций (`+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`, `<<`, `>>`, `>>>`) для целочисленных типов `int` и `long` (включая шестнадцатеричные литералы `0x` и суффиксы `L`).
+  - `resources/engine_cpp/src/structure.cpp`: устранение обфусцирующего расщепления строк (constant string folding: `"part1" + "part2" -> "part1part2"`).
+  - `resources/engine_cpp/src/structure.cpp`: свертка алгебраических побитовых свойств XOR: поглощение `((x ^ y) ^ y) -> x` и `(y ^ (x ^ y)) -> x`.
+  - `resources/engine_cpp/src/structure.cpp`: свертка унарных операторов (UnOp constant folding: `~lit`, `-lit`, `!lit`) и устранение двойного отрицания (`!(!x) -> x`, `~(~x) -> x`, `-(-x) -> x`).
+
+---
+
 ## [1.9.141-ObfUpd.4] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

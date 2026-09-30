@@ -1307,14 +1307,81 @@ ExprPtr simplify_expr(ExprPtr e) {
                 bool eq = (c1->literal == c2->literal);
                 if (b->op == "==") return std::make_shared<Const>(eq ? "true" : "false", "boolean");
                 if (b->op == "!=") return std::make_shared<Const>(eq ? "false" : "true", "boolean");
-                try {
-                    long long v1 = std::stoll(c1->literal);
-                    long long v2 = std::stoll(c2->literal);
-                    if (b->op == "<") return std::make_shared<Const>(v1 < v2 ? "true" : "false", "boolean");
-                    if (b->op == "<=") return std::make_shared<Const>(v1 <= v2 ? "true" : "false", "boolean");
-                    if (b->op == ">") return std::make_shared<Const>(v1 > v2 ? "true" : "false", "boolean");
-                    if (b->op == ">=") return std::make_shared<Const>(v1 >= v2 ? "true" : "false", "boolean");
-                } catch (...) {}
+
+                // Constant string folding: "hello " + "world" -> "hello world"
+                if (b->op == "+" && c1->literal.size() >= 2 && c1->literal.front() == '"' && c1->literal.back() == '"' &&
+                    c2->literal.size() >= 2 && c2->literal.front() == '"' && c2->literal.back() == '"') {
+                    std::string s1 = c1->literal.substr(1, c1->literal.size() - 2);
+                    std::string s2 = c2->literal.substr(1, c2->literal.size() - 2);
+                    return std::make_shared<Const>("\"" + s1 + s2 + "\"", "String");
+                }
+
+                // Numeric constant comparisons and operations
+                if (c1->literal != "true" && c1->literal != "false" && c1->literal != "null" &&
+                    c2->literal != "true" && c2->literal != "false" && c2->literal != "null" &&
+                    c1->literal.front() != '"' && c2->literal.front() != '"') {
+                    try {
+                        std::string s1 = c1->literal;
+                        std::string s2 = c2->literal;
+                        bool is_long = (!s1.empty() && (s1.back() == 'L' || s1.back() == 'l')) ||
+                                       (!s2.empty() && (s2.back() == 'L' || s2.back() == 'l')) ||
+                                       b->type == "long" || c1->type == "long" || c2->type == "long";
+                        if (!s1.empty() && (s1.back() == 'L' || s1.back() == 'l')) s1.pop_back();
+                        if (!s2.empty() && (s2.back() == 'L' || s2.back() == 'l')) s2.pop_back();
+                        long long v1 = (s1.rfind("0x", 0) == 0 || s1.rfind("0X", 0) == 0) ? std::stoll(s1, nullptr, 16) : std::stoll(s1, nullptr, 10);
+                        long long v2 = (s2.rfind("0x", 0) == 0 || s2.rfind("0X", 0) == 0) ? std::stoll(s2, nullptr, 16) : std::stoll(s2, nullptr, 10);
+
+                        if (b->op == "<") return std::make_shared<Const>(v1 < v2 ? "true" : "false", "boolean");
+                        if (b->op == "<=") return std::make_shared<Const>(v1 <= v2 ? "true" : "false", "boolean");
+                        if (b->op == ">") return std::make_shared<Const>(v1 > v2 ? "true" : "false", "boolean");
+                        if (b->op == ">=") return std::make_shared<Const>(v1 >= v2 ? "true" : "false", "boolean");
+
+                        if (b->op == "+") {
+                            long long res = is_long ? (v1 + v2) : (int32_t)((int32_t)v1 + (int32_t)v2);
+                            return std::make_shared<Const>(std::to_string(res) + (is_long ? "L" : ""), is_long ? "long" : "int");
+                        }
+                        if (b->op == "-") {
+                            long long res = is_long ? (v1 - v2) : (int32_t)((int32_t)v1 - (int32_t)v2);
+                            return std::make_shared<Const>(std::to_string(res) + (is_long ? "L" : ""), is_long ? "long" : "int");
+                        }
+                        if (b->op == "*") {
+                            long long res = is_long ? (v1 * v2) : (int32_t)((int32_t)v1 * (int32_t)v2);
+                            return std::make_shared<Const>(std::to_string(res) + (is_long ? "L" : ""), is_long ? "long" : "int");
+                        }
+                        if (b->op == "/" && v2 != 0) {
+                            long long res = is_long ? (v1 / v2) : (int32_t)((int32_t)v1 / (int32_t)v2);
+                            return std::make_shared<Const>(std::to_string(res) + (is_long ? "L" : ""), is_long ? "long" : "int");
+                        }
+                        if (b->op == "%" && v2 != 0) {
+                            long long res = is_long ? (v1 % v2) : (int32_t)((int32_t)v1 % (int32_t)v2);
+                            return std::make_shared<Const>(std::to_string(res) + (is_long ? "L" : ""), is_long ? "long" : "int");
+                        }
+                        if (b->op == "&") {
+                            long long res = is_long ? (v1 & v2) : (int32_t)((int32_t)v1 & (int32_t)v2);
+                            return std::make_shared<Const>(std::to_string(res) + (is_long ? "L" : ""), is_long ? "long" : "int");
+                        }
+                        if (b->op == "|") {
+                            long long res = is_long ? (v1 | v2) : (int32_t)((int32_t)v1 | (int32_t)v2);
+                            return std::make_shared<Const>(std::to_string(res) + (is_long ? "L" : ""), is_long ? "long" : "int");
+                        }
+                        if (b->op == "^") {
+                            long long res = is_long ? (v1 ^ v2) : (int32_t)((int32_t)v1 ^ (int32_t)v2);
+                            return std::make_shared<Const>(std::to_string(res) + (is_long ? "L" : ""), is_long ? "long" : "int");
+                        }
+                        if (b->op == "<<") {
+                            long long res = is_long ? (v1 << (v2 & 63)) : (int32_t)((int32_t)v1 << (v2 & 31));
+                            return std::make_shared<Const>(std::to_string(res) + (is_long ? "L" : ""), is_long ? "long" : "int");
+                        }
+                        if (b->op == ">>") {
+                            long long res = is_long ? (v1 >> (v2 & 63)) : (int32_t)((int32_t)v1 >> (v2 & 31));
+                            return std::make_shared<Const>(std::to_string(res) + (is_long ? "L" : ""), is_long ? "long" : "int");
+                        }
+                        if (b->op == ">>>") {
+                            long long res = is_long ? (long long)((uint64_t)v1 >> (v2 & 63)) : (int32_t)((uint32_t)v1 >> (v2 & 31));
+                            return std::make_shared<Const>(std::to_string(res) + (is_long ? "L" : ""), is_long ? "long" : "int");
+                        }
+                    } catch (...) {}
+                }
             }
             if (is_same_expr(b->left, b->right)) {
                 if (b->op == "==") return std::make_shared<Const>("true", "boolean");
@@ -1322,6 +1389,23 @@ ExprPtr simplify_expr(ExprPtr e) {
                 if (b->op == "<=" || b->op == ">=") return std::make_shared<Const>("true", "boolean");
                 if (b->op == "<" || b->op == ">") return std::make_shared<Const>("false", "boolean");
                 if (b->op == "^" || b->op == "-") return std::make_shared<Const>("0", b->type);
+                if (b->op == "&" || b->op == "|") return b->left;
+            }
+            if (b->op == "^") {
+                if (b->left && b->left->kind == ExprKind::BinOp) {
+                    auto* bl = static_cast<BinOp*>(b->left.get());
+                    if (bl->op == "^") {
+                        if (is_same_expr(bl->right, b->right)) return bl->left;
+                        if (is_same_expr(bl->left, b->right)) return bl->right;
+                    }
+                }
+                if (b->right && b->right->kind == ExprKind::BinOp) {
+                    auto* br = static_cast<BinOp*>(b->right.get());
+                    if (br->op == "^") {
+                        if (is_same_expr(br->right, b->left)) return br->left;
+                        if (is_same_expr(br->left, b->left)) return br->right;
+                    }
+                }
             }
             if (b->op == "==") {
                 if (b->right && b->right->kind == ExprKind::Const) {
@@ -1438,6 +1522,38 @@ ExprPtr simplify_expr(ExprPtr e) {
             if (u->op == "!" && u->expr && u->expr->kind == ExprKind::UnOp) {
                 auto* inner_u = static_cast<UnOp*>(u->expr.get());
                 if (inner_u->op == "!") return inner_u->expr;
+            }
+            if (u->op == "~" && u->expr && u->expr->kind == ExprKind::UnOp) {
+                auto* inner_u = static_cast<UnOp*>(u->expr.get());
+                if (inner_u->op == "~") return inner_u->expr;
+            }
+            if (u->op == "-" && u->expr && u->expr->kind == ExprKind::UnOp) {
+                auto* inner_u = static_cast<UnOp*>(u->expr.get());
+                if (inner_u->op == "-") return inner_u->expr;
+            }
+            if (u->expr && u->expr->kind == ExprKind::Const) {
+                auto* c = static_cast<Const*>(u->expr.get());
+                if (u->op == "!") {
+                    if (c->literal == "true") return std::make_shared<Const>("false", "boolean");
+                    if (c->literal == "false") return std::make_shared<Const>("true", "boolean");
+                } else if ((u->op == "~" || u->op == "-") && c->literal != "true" && c->literal != "false" &&
+                           c->literal != "null" && (c->literal.empty() || c->literal.front() != '"')) {
+                    try {
+                        std::string lit = c->literal;
+                        bool is_long = (!lit.empty() && (lit.back() == 'L' || lit.back() == 'l')) || u->type == "long" || c->type == "long";
+                        if (!lit.empty() && (lit.back() == 'L' || lit.back() == 'l')) lit.pop_back();
+                        long long val = (lit.rfind("0x", 0) == 0 || lit.rfind("0X", 0) == 0)
+                                            ? std::stoll(lit, nullptr, 16)
+                                            : std::stoll(lit, nullptr, 10);
+                        if (u->op == "~") val = ~val;
+                        else if (u->op == "-") val = -val;
+                        if (is_long) {
+                            return std::make_shared<Const>(std::to_string(val) + "L", "long");
+                        } else {
+                            return std::make_shared<Const>(std::to_string((int32_t)val), "int");
+                        }
+                    } catch (...) {}
+                }
             }
             break;
         }
