@@ -1359,7 +1359,7 @@ ExprPtr simplify_expr(ExprPtr e) {
                                 owner_class = static_cast<ClassLiteral*>(get_m->target.get())->type_name;
                             } else if (get_m->target->kind == ExprKind::MethodCall) {
                                 auto* for_name = static_cast<MethodCall*>(get_m->target.get());
-                                if (for_name->name == "forName" && !for_name->args.empty() && for_name->args[0]->kind == ExprKind::Const) {
+                                if (for_name->name == "forName" && !for_name->args.empty() && for_name->args[0] && for_name->args[0]->kind == ExprKind::Const) {
                                     std::string c_lit = static_cast<Const*>(for_name->args[0].get())->literal;
                                     if (c_lit.size() >= 2 && c_lit.front() == '"' && c_lit.back() == '"') {
                                         owner_class = c_lit.substr(1, c_lit.size() - 2);
@@ -1381,11 +1381,13 @@ ExprPtr simplify_expr(ExprPtr e) {
                             if (second && second->kind == ExprKind::NewArray) {
                                 auto* na = static_cast<NewArray*>(second.get());
                                 if (na->initializer.has_value()) {
-                                    call_args = *na->initializer;
+                                    for (const auto& a : *na->initializer) {
+                                        if (a) call_args.push_back(a);
+                                    }
                                 }
                             } else {
                                 for (size_t a_idx = 1; a_idx < mc->args.size(); ++a_idx) {
-                                    call_args.push_back(mc->args[a_idx]);
+                                    if (mc->args[a_idx]) call_args.push_back(mc->args[a_idx]);
                                 }
                             }
                         }
@@ -1413,7 +1415,7 @@ ExprPtr simplify_expr(ExprPtr e) {
                                 owner_class = static_cast<ClassLiteral*>(get_f->target.get())->type_name;
                             } else if (get_f->target->kind == ExprKind::MethodCall) {
                                 auto* for_name = static_cast<MethodCall*>(get_f->target.get());
-                                if (for_name->name == "forName" && !for_name->args.empty() && for_name->args[0]->kind == ExprKind::Const) {
+                                if (for_name->name == "forName" && !for_name->args.empty() && for_name->args[0] && for_name->args[0]->kind == ExprKind::Const) {
                                     std::string c_lit = static_cast<Const*>(for_name->args[0].get())->literal;
                                     if (c_lit.size() >= 2 && c_lit.front() == '"' && c_lit.back() == '"') {
                                         owner_class = c_lit.substr(1, c_lit.size() - 2);
@@ -2453,7 +2455,8 @@ static ExprPtr fold_const_array_lookups_in_expr(ExprPtr e, const std::map<std::s
                 try {
                     long long idx = std::stoll(idx_c->literal);
                     if (idx >= 0 && static_cast<size_t>(idx) < it->second.size()) {
-                        return it->second[static_cast<size_t>(idx)];
+                        ExprPtr val = it->second[static_cast<size_t>(idx)];
+                        if (val) return val;
                     }
                 } catch (...) {}
             }
@@ -2501,12 +2504,17 @@ static ExprPtr fold_const_array_lookups_in_expr(ExprPtr e, const std::map<std::s
 std::vector<StmtPtr> propagate_local_constant_arrays(std::vector<StmtPtr> stmts) {
     std::map<std::string, std::vector<ExprPtr>> candidate_arrays;
     for (auto& s : stmts) {
+        if (!s) continue;
         if (s->kind == StmtKind::LocalDecl) {
             auto* ld = static_cast<LocalDecl*>(s.get());
             if (ld->init && ld->init->kind == ExprKind::NewArray) {
                 auto* na = static_cast<NewArray*>(ld->init.get());
                 if (na->initializer.has_value() && !na->initializer->empty()) {
-                    candidate_arrays[ld->name] = *na->initializer;
+                    std::vector<ExprPtr> safe_items;
+                    for (const auto& item : *na->initializer) {
+                        if (item) safe_items.push_back(item);
+                    }
+                    if (!safe_items.empty()) candidate_arrays[ld->name] = std::move(safe_items);
                 }
             }
         } else if (s->kind == StmtKind::ExprStmt) {
@@ -2518,7 +2526,11 @@ std::vector<StmtPtr> propagate_local_constant_arrays(std::vector<StmtPtr> stmts)
                         auto* fa = static_cast<FieldAccess*>(as->target.get());
                         auto* na = static_cast<NewArray*>(as->value.get());
                         if (na->initializer.has_value() && !na->initializer->empty()) {
-                            candidate_arrays[fa->name] = *na->initializer;
+                            std::vector<ExprPtr> safe_items;
+                            for (const auto& item : *na->initializer) {
+                                if (item) safe_items.push_back(item);
+                            }
+                            if (!safe_items.empty()) candidate_arrays[fa->name] = std::move(safe_items);
                         }
                     } else if (as->target->kind == ExprKind::ArrayAccess && as->value->kind == ExprKind::Const) {
                         auto* aa = static_cast<ArrayAccess*>(as->target.get());
@@ -2528,14 +2540,15 @@ std::vector<StmtPtr> propagate_local_constant_arrays(std::vector<StmtPtr> stmts)
                         } else if (aa->array && aa->array->kind == ExprKind::Local) {
                             target_name = static_cast<Local*>(aa->array.get())->name;
                         }
-                        if (!target_name.empty() && aa->index && aa->index->kind == ExprKind::Const) {
+                        if (!target_name.empty() && candidate_arrays.count(target_name) && aa->index && aa->index->kind == ExprKind::Const) {
                             try {
                                 long long idx = std::stoll(static_cast<Const*>(aa->index.get())->literal);
-                                if (idx >= 0 && idx < 2048) {
-                                    if (candidate_arrays[target_name].size() <= static_cast<size_t>(idx)) {
-                                        candidate_arrays[target_name].resize(static_cast<size_t>(idx) + 1, std::make_shared<Const>("0", "int"));
+                                if (idx >= 0 && idx < 256) {
+                                    auto& arr = candidate_arrays[target_name];
+                                    if (arr.size() <= static_cast<size_t>(idx)) {
+                                        arr.resize(static_cast<size_t>(idx) + 1, std::make_shared<Const>("0", "int"));
                                     }
-                                    candidate_arrays[target_name][static_cast<size_t>(idx)] = as->value;
+                                    arr[static_cast<size_t>(idx)] = as->value;
                                 }
                             } catch (...) {}
                         }
@@ -2547,11 +2560,12 @@ std::vector<StmtPtr> propagate_local_constant_arrays(std::vector<StmtPtr> stmts)
     if (candidate_arrays.empty()) return stmts;
 
     for (auto& s : stmts) {
+        if (!s) continue;
         for (auto it = candidate_arrays.begin(); it != candidate_arrays.end(); ) {
             bool modified = false;
             if (s->kind == StmtKind::ExprStmt) {
                 auto* es = static_cast<ExprStmtNode*>(s.get());
-                if (expr_modifies_array(es->expr, it->first)) modified = true;
+                if (es->expr && expr_modifies_array(es->expr, it->first)) modified = true;
             }
             if (modified) {
                 it = candidate_arrays.erase(it);
@@ -2563,6 +2577,7 @@ std::vector<StmtPtr> propagate_local_constant_arrays(std::vector<StmtPtr> stmts)
     if (candidate_arrays.empty()) return stmts;
 
     for (auto& s : stmts) {
+        if (!s) continue;
         if (s->kind == StmtKind::ExprStmt) {
             auto* es = static_cast<ExprStmtNode*>(s.get());
             if (es->expr) es->expr = fold_const_array_lookups_in_expr(es->expr, candidate_arrays);
