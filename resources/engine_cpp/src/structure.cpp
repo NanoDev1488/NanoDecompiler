@@ -11,6 +11,7 @@ namespace nd {
 // ==================== negate / sentinel ====================
 
 ExprPtr negate(const ExprPtr& cond) {
+    if (!cond) return cond;
     if (cond->kind == ExprKind::UnOp) {
         auto* u = static_cast<UnOp*>(cond.get());
         if (u->op == "!") return u->expr;
@@ -22,6 +23,12 @@ ExprPtr negate(const ExprPtr& cond) {
         };
         auto it = flip.find(b->op);
         if (it != flip.end()) return std::make_shared<BinOp>(it->second, b->left, b->right, "boolean");
+        if (b->op == "&&") {
+            return std::make_shared<BinOp>("||", negate(b->left), negate(b->right), "boolean");
+        }
+        if (b->op == "||") {
+            return std::make_shared<BinOp>("&&", negate(b->left), negate(b->right), "boolean");
+        }
     }
     return std::make_shared<UnOp>("!", cond, "boolean");
 }
@@ -1635,6 +1642,75 @@ StmtPtr simplify_stmt(StmtPtr s) {
     return s;
 }
 
+static bool is_same_expr(const ExprPtr& a, const ExprPtr& b) {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    if (a->kind != b->kind) return false;
+    if (a->kind == ExprKind::Local) {
+        return static_cast<Local*>(a.get())->name == static_cast<Local*>(b.get())->name;
+    }
+    if (a->kind == ExprKind::Const) {
+        return static_cast<Const*>(a.get())->literal == static_cast<Const*>(b.get())->literal;
+    }
+    return false;
+}
+
+static bool is_same_stmt(const StmtPtr& a, const StmtPtr& b) {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    if (a->kind != b->kind) return false;
+    if (a->kind == StmtKind::ReturnStmt) {
+        return is_same_expr(static_cast<ReturnStmt*>(a.get())->expr, static_cast<ReturnStmt*>(b.get())->expr);
+    }
+    return false;
+}
+
+std::vector<StmtPtr> collapse_nested_if_conditions(std::vector<StmtPtr> stmts) {
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (auto& s : stmts) {
+            if (s->kind == StmtKind::IfStmt) {
+                auto* i = static_cast<IfStmt*>(s.get());
+                if (!i->else_body.has_value() && i->then_body.size() == 1 && i->then_body[0]->kind == StmtKind::IfStmt) {
+                    auto* inner = static_cast<IfStmt*>(i->then_body[0].get());
+                    if (!inner->else_body.has_value()) {
+                        i->cond = std::make_shared<BinOp>("&&", i->cond, inner->cond, "boolean");
+                        i->then_body = inner->then_body;
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    return stmts;
+}
+
+std::vector<StmtPtr> merge_sequential_short_circuit_ifs(std::vector<StmtPtr> stmts) {
+    if (stmts.size() < 2) return stmts;
+    std::vector<StmtPtr> out;
+    size_t idx = 0;
+    while (idx < stmts.size()) {
+        if (idx + 1 < stmts.size() && stmts[idx]->kind == StmtKind::IfStmt && stmts[idx + 1]->kind == StmtKind::IfStmt) {
+            auto* i1 = static_cast<IfStmt*>(stmts[idx].get());
+            auto* i2 = static_cast<IfStmt*>(stmts[idx + 1].get());
+            if (!i1->else_body.has_value() && !i2->else_body.has_value() &&
+                i1->then_body.size() == 1 && i2->then_body.size() == 1 &&
+                is_same_stmt(i1->then_body[0], i2->then_body[0])) {
+                auto merged_cond = std::make_shared<BinOp>("||", i1->cond, i2->cond, "boolean");
+                auto merged_if = std::make_shared<IfStmt>(merged_cond, i1->then_body, std::nullopt);
+                out.push_back(merged_if);
+                idx += 2;
+                continue;
+            }
+        }
+        out.push_back(stmts[idx]);
+        idx += 1;
+    }
+    return out;
+}
+
 }  // namespace
 
 std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
@@ -1646,6 +1722,8 @@ std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
         out = hoist_common_branch_tail(out);
         out = eliminate_redundant_else_after_return(out);
         out = inline_single_use_temps_anywhere(out);
+        out = collapse_nested_if_conditions(out);
+        out = merge_sequential_short_circuit_ifs(out);
     }
     return out;
 }
