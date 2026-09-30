@@ -248,9 +248,12 @@ static bool is_label_used_in_stmt(const StmtPtr& s, const std::string& lbl) {
             }
         }
     }
-    if (s->kind == StmtKind::TryCatchStmt) {
-        auto* tc = static_cast<const TryCatchStmt*>(s.get());
-        for (const auto& child : tc->try_body) {
+    if (s->kind == StmtKind::TryStmt) {
+        auto* tc = static_cast<const TryStmt*>(s.get());
+        for (const auto& child : tc->resources) {
+            if (is_label_used_in_stmt(child, lbl)) return true;
+        }
+        for (const auto& child : tc->body) {
             if (is_label_used_in_stmt(child, lbl)) return true;
         }
         for (const auto& c : tc->catches) {
