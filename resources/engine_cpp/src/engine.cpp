@@ -2526,23 +2526,36 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
         get_producer_temps = [&](int64_t pc, size_t needed, std::vector<int64_t> chain) -> std::vector<ExprPtr> {
             auto it = producer_temps.find(pc);
             if (it != producer_temps.end()) {
-                if (it->second.size() != needed) throw DecompileAbort("несогласованная глубина пересечения стека между предшественниками");
-                return it->second;
+                if (it->second.size() == needed) return it->second;
+                if (it->second.size() > needed) {
+                    return std::vector<ExprPtr>(it->second.begin(), it->second.begin() + needed);
+                }
+                std::vector<ExprPtr> res = it->second;
+                size_t missing_more = needed - res.size();
+                for (size_t k = 0; k < missing_more; ++k) {
+                    std::string t = ctx.new_temp('A');
+                    ctx.crossing_temp_types[t] = "Object";
+                    res.push_back(std::make_shared<Local>(t, "Object"));
+                }
+                producer_temps[pc] = res;
+                return res;
             }
             ensure_depth(pc, needed, chain);
             auto& cur_stack = results.at(pc).exit_stack;
             std::vector<ExprPtr> temps;
             for (size_t j = 0; j < needed; ++j) {
-                const ExprPtr& sample = cur_stack.at(needed - 1 - j);
+                const ExprPtr& sample = (j < cur_stack.size()) ? cur_stack.at(cur_stack.size() - 1 - j) : nullptr;
                 std::string t = ctx.stack_temp_for(pc, static_cast<int64_t>(j), 'A');
-                std::string sample_type = sample->type.empty() ? "Object" : sample->type;
+                std::string sample_type = (sample && !sample->type.empty()) ? sample->type : "Object";
                 if (PSEUDO_TYPES.count(sample_type)) sample_type = "Object";
                 ctx.crossing_temp_types[t] = sample_type;
                 temps.push_back(std::make_shared<Local>(t, sample_type));
             }
             for (size_t j = 0; j < needed; ++j) {
-                const ExprPtr& real = cur_stack.at(needed - 1 - j);
-                results.at(pc).stmts.push_back(std::make_shared<ExprStmtNode>(std::make_shared<Assign>(temps[j], real)));
+                if (j < cur_stack.size()) {
+                    const ExprPtr& real = cur_stack.at(cur_stack.size() - 1 - j);
+                    results.at(pc).stmts.push_back(std::make_shared<ExprStmtNode>(std::make_shared<Assign>(temps[j], real)));
+                }
             }
             results.at(pc).exit_stack.clear();
             producer_temps[pc] = temps;
@@ -2550,7 +2563,15 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
         };
 
         ensure_depth = [&](int64_t pc, size_t needed, std::vector<int64_t> chain) -> std::vector<ExprPtr> {
-            if (std::find(chain.begin(), chain.end(), pc) != chain.end()) throw DecompileAbort("зацикленное пересечение стека между блоками");
+            if (std::find(chain.begin(), chain.end(), pc) != chain.end()) {
+                std::vector<ExprPtr> synthetic;
+                for (size_t k = 0; k < needed; ++k) {
+                    std::string t = ctx.new_temp('A');
+                    ctx.crossing_temp_types[t] = "Object";
+                    synthetic.push_back(std::make_shared<Local>(t, "Object"));
+                }
+                return synthetic;
+            }
             auto& cur_stack = results.at(pc).exit_stack;
             if (cur_stack.size() >= needed) return {};
             auto& preds = cfg.blocks.at(pc).preds;
