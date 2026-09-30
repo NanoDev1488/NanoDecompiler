@@ -1,5 +1,16 @@
 # NanoDecompiler Changelog
 
+## [1.9.129] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **Обобщенная свертка тернарных операторов (Ternary Operator Folding for Returns & Fields)**:
+  - `resources/engine_cpp/src/engine.cpp`: в `fold_if_else_ternary` введена универсальная структура `SingleValueStmt` и предикат эквивалентности выражений `exprs_match`.
+  - `resources/engine_cpp/src/engine.cpp`: добавлена поддержка свертки ветвлений с операторами возврата `if (cond) return A; else return B;` в лаконичные `return cond ? A : B;`.
+  - `resources/engine_cpp/src/engine.cpp`: поддержана свертка присваиваний в поля объектов (`this.field = cond ? A : B;`), статические поля и элементы массивов (`arr[idx] = cond ? A : B;`).
+  - `resources/engine_cpp/src/engine.cpp`: обеспечена рекурсивная свертка вложенных цепочек в тернарные выражения `cond1 ? A : (cond2 ? B : C)`.
+
+---
+
 ## [1.9.128] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

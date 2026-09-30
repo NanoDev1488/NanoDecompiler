@@ -638,23 +638,59 @@ std::vector<StmtPtr> collapse_string_switch(const std::vector<StmtPtr>& stmts) {
 
 namespace {
 
-// Пытается извлечь из одноэлементного блока единственное присваивание
-// вида `target = value` (или LocalDecl target = value). Возвращает
-// {имя, значение}, или nullopt если не совпало.
-std::optional<std::pair<std::string, ExprPtr>> single_assign_stmt(const std::vector<StmtPtr>& body) {
+struct SingleValueStmt {
+    enum class Kind { Assign, Return } kind;
+    ExprPtr target;  // nullptr for Return
+    ExprPtr value;
+};
+
+bool exprs_match(const ExprPtr& a, const ExprPtr& b) {
+    if (!a || !b) return false;
+    if (a->kind != b->kind) return false;
+    if (a->kind == ExprKind::Local) {
+        return static_cast<Local*>(a.get())->name == static_cast<Local*>(b.get())->name;
+    }
+    if (a->kind == ExprKind::FieldAccess) {
+        auto* fa1 = static_cast<FieldAccess*>(a.get());
+        auto* fa2 = static_cast<FieldAccess*>(b.get());
+        if (fa1->name != fa2->name || fa1->is_static != fa2->is_static) return false;
+        if (fa1->is_static) return true;
+        if (fa1->target && fa2->target) return exprs_match(fa1->target, fa2->target);
+        return !fa1->target && !fa2->target;
+    }
+    if (a->kind == ExprKind::ArrayAccess) {
+        auto* aa1 = static_cast<ArrayAccess*>(a.get());
+        auto* aa2 = static_cast<ArrayAccess*>(b.get());
+        if (!exprs_match(aa1->array, aa2->array)) return false;
+        if (aa1->index->kind == ExprKind::Const && aa2->index->kind == ExprKind::Const) {
+            return static_cast<Const*>(aa1->index.get())->literal == static_cast<Const*>(aa2->index.get())->literal;
+        }
+        if (aa1->index->kind == ExprKind::Local && aa2->index->kind == ExprKind::Local) {
+            return static_cast<Local*>(aa1->index.get())->name == static_cast<Local*>(aa2->index.get())->name;
+        }
+    }
+    return false;
+}
+
+std::optional<SingleValueStmt> extract_single_value(const std::vector<StmtPtr>& body) {
     if (body.size() != 1) return std::nullopt;
     if (body[0]->kind == StmtKind::ExprStmt) {
         auto* es = static_cast<ExprStmtNode*>(body[0].get());
-        if (es->expr->kind == ExprKind::Assign) {
+        if (es->expr && es->expr->kind == ExprKind::Assign) {
             auto* a = static_cast<Assign*>(es->expr.get());
-            if (a->target->kind == ExprKind::Local && a->op == "=") {
-                return std::make_pair(static_cast<Local*>(a->target.get())->name, a->value);
+            if (a->op == "=" && a->target && a->value) {
+                return SingleValueStmt{SingleValueStmt::Kind::Assign, a->target, a->value};
             }
         }
     } else if (body[0]->kind == StmtKind::LocalDecl) {
         auto* ld = static_cast<LocalDecl*>(body[0].get());
         if (ld->init) {
-            return std::make_pair(ld->name, ld->init);
+            return SingleValueStmt{SingleValueStmt::Kind::Assign, std::make_shared<Local>(ld->name, ld->type), ld->init};
+        }
+    } else if (body[0]->kind == StmtKind::ReturnStmt) {
+        auto* rs = static_cast<ReturnStmt*>(body[0].get());
+        if (rs->value) {
+            return SingleValueStmt{SingleValueStmt::Kind::Return, nullptr, rs->value};
         }
     }
     return std::nullopt;
@@ -689,21 +725,30 @@ std::vector<StmtPtr> fold_if_else_ternary(const std::vector<StmtPtr>& stmts) {
             if (t->finally_body.has_value()) t->finally_body = fold_if_else_ternary(*t->finally_body);
         }
 
-        // Проверяем: if (cond) { x = A; } else { x = B; } → x = cond ? A : B
+        // Проверяем: if (cond) { target = A; } else { target = B; } → target = cond ? A : B
+        //           if (cond) { return A; } else { return B; } → return cond ? A : B;
         if (s->kind == StmtKind::IfStmt) {
             auto* i = static_cast<IfStmt*>(s.get());
             if (i->else_body.has_value()) {
-                auto thn = single_assign_stmt(i->then_body);
-                auto els = single_assign_stmt(*i->else_body);
-                if (thn.has_value() && els.has_value() && thn->first == els->first) {
-                    // Совпадают имена целевой переменной - можно свернуть в ternary
-                    std::string rtype = thn->second->type;
-                    if (rtype.empty()) rtype = els->second->type;
-                    if (rtype.empty()) rtype = "Object";
-                    auto ternary = std::make_shared<Ternary>(i->cond, thn->second, els->second, rtype);
-                    out.push_back(std::make_shared<ExprStmtNode>(
-                        std::make_shared<Assign>(std::make_shared<Local>(thn->first, rtype), ternary)));
-                    continue;
+                auto thn = extract_single_value(i->then_body);
+                auto els = extract_single_value(*i->else_body);
+                if (thn.has_value() && els.has_value() && thn->kind == els->kind) {
+                    if (thn->kind == SingleValueStmt::Kind::Assign && exprs_match(thn->target, els->target)) {
+                        std::string rtype = thn->value->type;
+                        if (rtype.empty()) rtype = els->value->type;
+                        if (rtype.empty()) rtype = "Object";
+                        auto ternary = std::make_shared<Ternary>(i->cond, thn->value, els->value, rtype);
+                        out.push_back(std::make_shared<ExprStmtNode>(std::make_shared<Assign>(thn->target, ternary)));
+                        continue;
+                    }
+                    if (thn->kind == SingleValueStmt::Kind::Return) {
+                        std::string rtype = thn->value->type;
+                        if (rtype.empty()) rtype = els->value->type;
+                        if (rtype.empty()) rtype = "Object";
+                        auto ternary = std::make_shared<Ternary>(i->cond, thn->value, els->value, rtype);
+                        out.push_back(std::make_shared<ReturnStmt>(ternary));
+                        continue;
+                    }
                 }
             }
         }

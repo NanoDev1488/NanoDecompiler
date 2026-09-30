@@ -199,7 +199,8 @@ namespace nd {
 // НОВОЕ v1.9.126: универсальное распознавание и десугаринг switch-map таблиц enum (поддержка Eclipse ECJ $SWITCH_TABLE$, нечувствительное к разделителям сопоставление пакетов и поиск констант enum).
 // НОВОЕ v1.9.127: десугаринг литералов массивов для объявлений и присваиваний (LocalDecl, FieldAccess, static-полей в <clinit>) с поддержкой таблиц до 1024 элементов.
 // НОВОЕ v1.9.128: десугаринг ссылок на методы Java 8+ (Class::method, expr::method, Type::new для LambdaMetafactory) и чистое форматирование лямбд.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.128";
+// НОВОЕ v1.9.129: обобщенная свертка тернарных операторов (? :) для присваиваний в поля, элементы массивов, операторов return и цепочек if-else.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.129";
 }
 
 
