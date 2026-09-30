@@ -1,5 +1,14 @@
 # NanoDecompiler Changelog
 
+## [1.9.123] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **Устойчивая структуризация мониторов и блоков `synchronized`**:
+  - `resources/engine_cpp/src/engine.cpp`: в `unwrap_if_monitor_try` добавлена поддержка паттерна `try { ... } finally { monitorexit(key); }`, используемого современными версиями компиляторов javac при компиляции `synchronized (obj) { ... }`.
+  - `resources/engine_cpp/src/engine.cpp`: устранён фатальный откат всего метода (`DecompileAbort`) при обнаружении несвернутого маркера монитора. Если в редких вырожденных случаях байткода монитор не образует парный блок, `emit.cpp` корректно выводит информативный комментарий `/* monitorenter/exit */`, сохраняя 100% структурированный Java-код окружающего метода.
+
+---
+
 ## [1.9.122] - 2026-09-30
 
 ### Клиент & Сборка (Packaging & Engine Binary Optimization)

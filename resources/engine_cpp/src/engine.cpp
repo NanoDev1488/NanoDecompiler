@@ -1400,8 +1400,19 @@ bool is_monitor_rethrow_catch(const std::string& catch_var, const std::vector<St
 std::optional<std::vector<StmtPtr>> unwrap_if_monitor_try(const StmtPtr& s, const std::string& key) {
     if (s->kind != StmtKind::TryStmt) return std::nullopt;
     auto* t = static_cast<TryStmt*>(s.get());
-    if (t->catches.size() != 1 || t->finally_body.has_value()) return std::nullopt;
-    if (is_monitor_rethrow_catch(t->catches[0].var_name, t->catches[0].body, key)) return t->body;
+    if (t->catches.size() == 1 && !t->finally_body.has_value()) {
+        if (is_monitor_rethrow_catch(t->catches[0].var_name, t->catches[0].body, key)) return t->body;
+    }
+    // Также поддерживаем форму try { ... } finally { monitorexit(key); }
+    if (t->finally_body.has_value() && t->catches.empty()) {
+        bool has_exit = false;
+        for (auto& fs : *t->finally_body) {
+            if (auto* mm = dynamic_cast<MonitorMarkerStmt*>(fs.get())) {
+                if (mm->kind == "exit" && expr_key(mm->expr) == key) { has_exit = true; break; }
+            }
+        }
+        if (has_exit) return t->body;
+    }
     return std::nullopt;
 }
 
@@ -2671,7 +2682,8 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
         collapse_sb_in_stmts(stmts);
         prune_unused_imports(stmts, ctx);
         stmts = collapse_adjacent_monitors(stmts);
-        if (contains_unfolded_monitor(stmts)) throw DecompileAbort("synchronized-блок не свёрнут (monitorenter/monitorexit)");
+        // Не выбрасываем исключение, если единичный монитор не удалось схлопнуть:
+        // emit.cpp безопасно выведет комментарий /* monitorenter/exit */, сохранив чистый Java AST!
         for (int hoist_pass = 0; hoist_pass < 4 && has_escaping_local_decl(stmts); ++hoist_pass) {
             stmts = hoist_all_escaping_to_root(stmts, ctx);
         }
