@@ -1569,9 +1569,7 @@ void try_desugar_one(SwitchStmt* switch_stmt, const std::map<std::string, std::v
     } else if (aa->array->kind == ExprKind::MethodCall) {
         auto* mca = static_cast<MethodCall*>(aa->array.get());
         field_name = mca->name;
-        if (mca->target && mca->target->kind == ExprKind::TypeRef) {
-            owner_name = static_cast<TypeRef*>(mca->target.get())->name;
-        }
+        owner_name = mca->owner;
     } else {
         return;
     }

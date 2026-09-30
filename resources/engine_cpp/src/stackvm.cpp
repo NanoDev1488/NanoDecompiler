@@ -301,31 +301,59 @@ namespace {
 // инициализатором, сама переменная и её дальнейшие использования
 // остаются буквально как есть (эквивалентная семантика: массив
 // объявляется УЖЕ заполненным, а не заполняется по шагам).
+bool is_same_array_target(const ExprPtr& a, const ExprPtr& b) {
+    if (!a || !b) return false;
+    if (a->kind != b->kind) return false;
+    if (a->kind == ExprKind::Local) {
+        return static_cast<Local*>(a.get())->name == static_cast<Local*>(b.get())->name;
+    }
+    if (a->kind == ExprKind::FieldAccess) {
+        auto* fa1 = static_cast<FieldAccess*>(a.get());
+        auto* fa2 = static_cast<FieldAccess*>(b.get());
+        if (fa1->name != fa2->name || fa1->is_static != fa2->is_static) return false;
+        if (fa1->is_static) return true;
+        if (fa1->target && fa2->target) {
+            return is_same_array_target(fa1->target, fa2->target);
+        }
+        return !fa1->target && !fa2->target;
+    }
+    return false;
+}
+
 bool try_collapse_array_literal(std::vector<StmtPtr>& stmts, size_t i) {
-    if (stmts[i]->kind != StmtKind::LocalDecl) return false;
-    auto* decl = static_cast<LocalDecl*>(stmts[i].get());
-    if (!decl->init || decl->init->kind != ExprKind::NewArray) return false;
-    auto* na = static_cast<NewArray*>(decl->init.get());
-    if (na->initializer.has_value()) return false;  // уже литерал - нечего сворачивать
+    ExprPtr target_expr;
+    NewArray* na = nullptr;
+
+    if (stmts[i]->kind == StmtKind::LocalDecl) {
+        auto* decl = static_cast<LocalDecl*>(stmts[i].get());
+        if (!decl->init || decl->init->kind != ExprKind::NewArray) return false;
+        na = static_cast<NewArray*>(decl->init.get());
+        target_expr = std::make_shared<Local>(decl->name);
+    } else if (stmts[i]->kind == StmtKind::ExprStmt) {
+        auto* es = static_cast<ExprStmtNode*>(stmts[i].get());
+        if (!es->expr || es->expr->kind != ExprKind::Assign) return false;
+        auto* asg = static_cast<Assign*>(es->expr.get());
+        if (asg->op != "=" || !asg->target || !asg->value || asg->value->kind != ExprKind::NewArray) return false;
+        target_expr = asg->target;
+        na = static_cast<NewArray*>(asg->value.get());
+    } else {
+        return false;
+    }
+
+    if (!na || na->initializer.has_value()) return false;
     if (na->dims.size() != 1 || !na->dims[0] || na->dims[0]->kind != ExprKind::Const) return false;
     auto* size_const = static_cast<Const*>(na->dims[0].get());
     long n = 0;
     try {
         size_t pos = 0;
         n = std::stol(size_const->literal, &pos);
-        if (pos != size_const->literal.size()) return false;  // не чисто число (например "N + 1")
+        if (pos != size_const->literal.size()) return false;
     } catch (...) {
         return false;
     }
-    // n==0 - валидный `new T[0]`, но сворачивать нечего (нет присваиваний).
-    // Верхний потолок - разумная страховка от случайного совпадения на
-    // гигантских массивах, где риск ложного матча по построению выше
-    // (собранных из цикла, а не литералом), да и выигрыш в читаемости
-    // там сомнителен - лес из 64+ присваиваний ничем не лучше литерала
-    // на 64+ элементов.
-    if (n <= 0 || n > 64) return false;
+    if (n <= 0 || n > 1024) return false;
     size_t un = static_cast<size_t>(n);
-    if (i + un >= stmts.size()) return false;  // не хватает последующих stmts под все n присваиваний
+    if (i + un >= stmts.size()) return false;
 
     std::vector<ExprPtr> values;
     values.reserve(un);
@@ -335,16 +363,10 @@ bool try_collapse_array_literal(std::vector<StmtPtr>& stmts, size_t i) {
         auto* es = static_cast<ExprStmtNode*>(cand.get());
         if (!es->expr || es->expr->kind != ExprKind::Assign) return false;
         auto* asg = static_cast<Assign*>(es->expr.get());
-        if (asg->op != "=") return false;
-        if (!asg->target || asg->target->kind != ExprKind::ArrayAccess) return false;
+        if (asg->op != "=" || !asg->target || asg->target->kind != ExprKind::ArrayAccess) return false;
         auto* aa = static_cast<ArrayAccess*>(asg->target.get());
-        if (!aa->array || aa->array->kind != ExprKind::Local) return false;
-        if (static_cast<Local*>(aa->array.get())->name != decl->name) return false;
+        if (!is_same_array_target(aa->array, target_expr)) return false;
         if (!aa->index || aa->index->kind != ExprKind::Const) return false;
-        // Индексы ДОЛЖНЫ идти строго по порядку 0..n-1 - никаких
-        // перестановок не допускаем (перестановка формально валидна для
-        // литерала, но повышает риск ложного совпадения на коде, который
-        // на самом деле не литерал, а частичное/условное заполнение).
         if (static_cast<Const*>(aa->index.get())->literal != std::to_string(k)) return false;
         values.push_back(asg->value);
     }

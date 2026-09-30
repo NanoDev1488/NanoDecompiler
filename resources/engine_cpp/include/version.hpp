@@ -197,7 +197,8 @@ namespace nd {
 // НОВОЕ v1.9.124: релаксация глубин пересечения стека (mismatched depth slicing/synthesis в get_producer_temps, безопасный разрыв циклических пересечений стека).
 // НОВОЕ v1.9.125: устойчивая структуризация сложных CFG (динамическая симуляция пропущенных блоков, безопасный выход по guard limit и нефатальная обработка глубоких if/else цепочек в structure.cpp).
 // НОВОЕ v1.9.126: универсальное распознавание и десугаринг switch-map таблиц enum (поддержка Eclipse ECJ $SWITCH_TABLE$, нечувствительное к разделителям сопоставление пакетов и поиск констант enum).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.126";
+// НОВОЕ v1.9.127: десугаринг литералов массивов для объявлений и присваиваний (LocalDecl, FieldAccess, static-полей в <clinit>) с поддержкой таблиц до 1024 элементов.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.127";
 }
 
 
