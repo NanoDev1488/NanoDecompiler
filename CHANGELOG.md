@@ -1,5 +1,14 @@
 # NanoDecompiler Changelog
 
+## [1.9.152-ObfUpd.15] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **[ObfUpd 15/15] Сводный аудит и метрики 15 этапов конвейера деобфускации (15-Stage Deobfuscation Pipeline Complete)**:
+  - `resources/engine_cpp/src/process_jar.cpp`: генерация структурированного раздела аудита деобфускации в `README_RU.txt` со статусом всех 15 оптимизационных фаз конвейера.
+  - Финализация полномасштабной серии 15 обновлений деобфускатора NanoDecompiler (`-ObfUpd.1` .. `-ObfUpd.15`).
+
+---
+
 ## [1.9.151-ObfUpd.14] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)
