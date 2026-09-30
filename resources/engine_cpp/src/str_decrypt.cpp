@@ -338,7 +338,8 @@ bool is_likely_xor_decryptor(const Method& m) {
     if (m.descriptor != "(Ljava/lang/String;I)Ljava/lang/String;" &&
         m.descriptor != "(Ljava/lang/String;C)Ljava/lang/String;" &&
         m.descriptor != "(Ljava/lang/String;)Ljava/lang/String;" &&
-        m.descriptor != "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;") {
+        m.descriptor != "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;" &&
+        m.descriptor != "(Ljava/lang/String;II)Ljava/lang/String;") {
         return false;
     }
     bool has_xor = false;

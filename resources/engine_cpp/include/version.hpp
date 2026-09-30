@@ -213,7 +213,8 @@ namespace nd {
 // НОВОЕ v1.9.140-ObfUpd.3: [ObfUpd 3/15] расплющивание управляющего потока (Control Flow Unflattening: unflatten_switch_dispatchers, трассировка переходов состояний и устранение фиктивных switch-диспетчеров обфускаторов).
 // НОВОЕ v1.9.141-ObfUpd.4: [ObfUpd 4/15] нейтрализация фиктивных батутов исключений (exception trampolines: try { throw new E(); } catch (E e) { body; }), распаковка в чистый поток с сохранением ссылок.
 // НОВОЕ v1.9.142-ObfUpd.5: [ObfUpd 5/15] деобфускация числовых констант и побитовых выражений (свертка констант +, -, *, /, %, &, |, ^, <<, >>, >>>, поглощение XOR (x^y)^y, двойное отрицание !/~/-, свертка строк).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.142-ObfUpd.5";
+// НОВОЕ v1.9.143-ObfUpd.6: [ObfUpd 6/15] деобфускация методов расшифровки строк (поддержка трехпараметрического Allatori str_decrypt_allatori, инлайнинг константных строковых вызовов intern/length/isEmpty/charAt/substring).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.143-ObfUpd.6";
 }
 
 

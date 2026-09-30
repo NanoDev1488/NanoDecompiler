@@ -1,5 +1,15 @@
 # NanoDecompiler Changelog
 
+## [1.9.143-ObfUpd.6] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **[ObfUpd 6/15] Деобфускация методов расшифровки строк (String Decryptor Caller Inlining & Constant API Folding)**:
+  - `resources/engine_cpp/src/str_decrypt.cpp`: расширен распознаватель `is_likely_xor_decryptor` для поддержки сигнатуры `(Ljava/lang/String;II)Ljava/lang/String;`.
+  - `resources/engine_cpp/src/stackvm.cpp`: добавлена автоматическая подстановка результатов Allatori-расшифровщика строк (`str_decrypt_allatori`) для вызовов с тремя аргументами `(str, key1, key2)`.
+  - `resources/engine_cpp/src/structure.cpp`: реализована свертка константных строковых методов, используемых обфускаторами для сокрытия строк (`.intern()`, `.length()`, `.isEmpty()`, `.charAt(idx)`, `.substring(begin)`, `.substring(begin, end)`).
+
+---
+
 ## [1.9.142-ObfUpd.5] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

@@ -1267,6 +1267,49 @@ ExprPtr simplify_expr(ExprPtr e) {
             auto* mc = static_cast<MethodCall*>(e.get());
             if (mc->target) mc->target = simplify_expr(mc->target);
             for (auto& arg : mc->args) arg = simplify_expr(arg);
+
+            // Inlining constant string methods used by obfuscators
+            if (mc->target && mc->target->kind == ExprKind::Const) {
+                auto* ct = static_cast<Const*>(mc->target.get());
+                if (ct->type == "String" && ct->literal.size() >= 2 && ct->literal.front() == '"' && ct->literal.back() == '"') {
+                    std::string raw_str = ct->literal.substr(1, ct->literal.size() - 2);
+                    if (mc->name == "intern" && mc->args.empty()) {
+                        return mc->target;
+                    }
+                    if (mc->name == "length" && mc->args.empty()) {
+                        return std::make_shared<Const>(std::to_string(raw_str.size()), "int");
+                    }
+                    if (mc->name == "isEmpty" && mc->args.empty()) {
+                        return std::make_shared<Const>(raw_str.empty() ? "true" : "false", "boolean");
+                    }
+                    if (mc->name == "charAt" && mc->args.size() == 1 && mc->args[0]->kind == ExprKind::Const) {
+                        try {
+                            int idx = std::stoi(static_cast<Const*>(mc->args[0].get())->literal);
+                            if (idx >= 0 && (size_t)idx < raw_str.size()) {
+                                std::string ch_lit = "'" + std::string(1, raw_str[idx]) + "'";
+                                return std::make_shared<Const>(ch_lit, "char");
+                            }
+                        } catch (...) {}
+                    }
+                    if (mc->name == "substring" && mc->args.size() == 1 && mc->args[0]->kind == ExprKind::Const) {
+                        try {
+                            int idx = std::stoi(static_cast<Const*>(mc->args[0].get())->literal);
+                            if (idx >= 0 && (size_t)idx <= raw_str.size()) {
+                                return std::make_shared<Const>("\"" + raw_str.substr(idx) + "\"", "String");
+                            }
+                        } catch (...) {}
+                    }
+                    if (mc->name == "substring" && mc->args.size() == 2 && mc->args[0]->kind == ExprKind::Const && mc->args[1]->kind == ExprKind::Const) {
+                        try {
+                            int start = std::stoi(static_cast<Const*>(mc->args[0].get())->literal);
+                            int end = std::stoi(static_cast<Const*>(mc->args[1].get())->literal);
+                            if (start >= 0 && end >= start && (size_t)end <= raw_str.size()) {
+                                return std::make_shared<Const>("\"" + raw_str.substr(start, end - start) + "\"", "String");
+                            }
+                        } catch (...) {}
+                    }
+                }
+            }
             break;
         }
         case ExprKind::NewObject: {

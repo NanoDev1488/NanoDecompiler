@@ -1868,6 +1868,24 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
                                     }
                                 }
                             }
+                        } else if (args.size() == 3 && args[0]->kind == ExprKind::Const &&
+                                   args[1]->kind == ExprKind::Const && args[2]->kind == ExprKind::Const) {
+                            auto* c0 = static_cast<Const*>(args[0].get());
+                            auto* c1 = static_cast<Const*>(args[1].get());
+                            auto* c2 = static_cast<Const*>(args[2].get());
+                            if (c0->type == "String" && c0->raw.has_value()) {
+                                try {
+                                    int32_t k1 = std::stoi(c1->value, nullptr, 0);
+                                    int32_t k2 = std::stoi(c2->value, nullptr, 0);
+                                    auto dec = str_decrypt_allatori(*c0->raw, k1, k2);
+                                    if (dec.has_value()) {
+                                        str_decrypt_increment_decrypted_count();
+                                        push(std::make_shared<Const>(java_string_literal(*dec), "String", *dec));
+                                        i += 1;
+                                        continue;
+                                    }
+                                } catch (...) {}
+                            }
                         } else if (args.size() == 1 && args[0]->kind == ExprKind::Const) {
                             auto* c0 = static_cast<Const*>(args[0].get());
                             if (c0->type == "String" && c0->raw.has_value()) {
