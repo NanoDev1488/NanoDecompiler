@@ -1,5 +1,5 @@
 import { ArrowDownToLine, ChevronDown, ChevronUp, Copy, ShieldAlert, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useEngine } from "../state/engine";
 import { fmtClock, type LogFilter, type LogLevel } from "../lib/model";
 import { t } from "../lib/i18n";
@@ -12,6 +12,49 @@ const TAG_COLOR: Record<LogLevel, string> = {
   warn: "text-warn",
   err: "text-err",
 };
+
+/** Форматирует строку терминала, делая ссылки и Telegram-теги кликабельными */
+function formatTerminalMessage(msg: string): ReactNode {
+  if (!/(?:https?:\/\/|t\.me\/|@)[a-zA-Z0-9_]+/i.test(msg)) {
+    return msg;
+  }
+  const parts: ReactNode[] = [];
+  const regex = /(https?:\/\/[^\s]+|t\.me\/[a-zA-Z0-9_]+|@[a-zA-Z0-9_]+)/g;
+  let lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(msg)) !== null) {
+    if (m.index > lastIndex) {
+      parts.push(msg.slice(lastIndex, m.index));
+    }
+    const token = m[0];
+    const url = token.startsWith("@")
+      ? `https://t.me/${token.slice(1)}`
+      : token.startsWith("t.me/")
+      ? `https://${token}`
+      : token;
+    parts.push(
+      <a
+        key={m.index}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => {
+          e.preventDefault();
+          window.nano?.openExternal(url).catch(() => {});
+        }}
+        className="text-acid hover:underline cursor-pointer font-medium"
+        title={`Открыть в браузере: ${url}`}
+      >
+        {token}
+      </a>
+    );
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < msg.length) {
+    parts.push(msg.slice(lastIndex));
+  }
+  return <>{parts}</>;
+}
 
 export function Terminal() {
   const { log, logFilter, setLogFilter, terminalOpen, toggleTerminal, clearLog, copyLog, copyText, runningJob, terminalHeight, setTerminalHeight, settings } =
@@ -259,9 +302,9 @@ export function Terminal() {
                 <span className="w-[64px] flex-none text-faint/70 tabular-nums">{fmtClock(l.at)}</span>
                 <span className={cn("w-[58px] flex-none", TAG_COLOR[l.level])}>[{l.tag}]</span>
                 <span
-                  className={cn("flex-1 break-words", l.level === "err" ? "text-err/90" : "text-ink/85")}
+                  className={cn("flex-1 break-words whitespace-pre-wrap font-mono", l.level === "err" ? "text-err/90" : "text-ink/85")}
                 >
-                  {l.msg}
+                  {formatTerminalMessage(l.msg)}
                 </span>
               </div>
             ))}

@@ -123,6 +123,10 @@ jobs:
           resources/engine/NanoDecompilerCLI.exe test_jars/large_legit/BukkitOfUtils-1_19_0.jar out_check_bukkit_utils --no-legitimacy-check
           if [ ! -d "out_check_bukkit_utils" ]; then echo "движок: out_check_bukkit_utils не создан"; exit 1; fi
 
+          echo "=== 4. Декомпиляция плагина скупщика NeoBuyer ==="
+          resources/engine/NanoDecompilerCLI.exe test_jars/NeoBuyer.jar out_check_neobuyer --no-legitimacy-check
+          if [ ! -d "out_check_neobuyer" ]; then echo "движок: out_check_neobuyer не создан"; exit 1; fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -415,6 +419,8 @@ jobs:
           if (-not (Test-Path "out_check_cli")) { throw "ClApi: out_dir (обычный режим) не создан - см. вывод движка выше" }
           $json = .\NanoDecompilerClApi.exe test_jars\smoketest_plugin.jar out_check_cli_json --json-output --no-legitimacy-check | ConvertFrom-Json
           if ($json.status -ne "ok") { throw "ClApi: --json-output вернул status=$($json.status), reason=$($json.reason)" }
+          $jsonNeo = .\NanoDecompilerClApi.exe test_jars\NeoBuyer.jar out_check_cli_neobuyer --json-output --no-legitimacy-check | ConvertFrom-Json
+          if ($jsonNeo.status -ne "ok") { throw "ClApi: NeoBuyer --json-output вернул status=$($jsonNeo.status), reason=$($jsonNeo.reason)" }
 
       - uses: actions/upload-artifact@v4
         with:
@@ -455,6 +461,8 @@ jobs:
           test -d out_check_cli || { echo "ClApi: out_dir не создан - см. вывод движка выше"; exit 1; }
           JSON=$(./NanoDecompilerClApi test_jars/smoketest_plugin.jar out_check_cli_json --json-output --no-legitimacy-check)
           echo "$JSON" | grep -q '"status":"ok"' || { echo "ClApi: --json-output вернул: $JSON"; exit 1; }
+          JSON_NEO=$(./NanoDecompilerClApi test_jars/NeoBuyer.jar out_check_cli_neobuyer --json-output --no-legitimacy-check)
+          echo "$JSON_NEO" | grep -q '"status":"ok"' || { echo "ClApi Linux: NeoBuyer вернул: $JSON_NEO"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:
@@ -494,6 +502,8 @@ jobs:
           test -d out_check_cli || { echo "ClApi: out_dir не создан - см. вывод движка выше"; exit 1; }
           JSON=$(./NanoDecompilerClApi test_jars/smoketest_plugin.jar out_check_cli_json --json-output --no-legitimacy-check)
           echo "$JSON" | grep -q '"status":"ok"' || { echo "ClApi: --json-output вернул: $JSON"; exit 1; }
+          JSON_NEO=$(./NanoDecompilerClApi test_jars/NeoBuyer.jar out_check_cli_neobuyer --json-output --no-legitimacy-check)
+          echo "$JSON_NEO" | grep -q '"status":"ok"' || { echo "ClApi macOS: NeoBuyer вернул: $JSON_NEO"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:

@@ -2170,10 +2170,10 @@ StmtPtr simplify_stmt(StmtPtr s) {
         if (w->cond) w->cond = simplify_expr(w->cond);
         w->body = simplify_stmts(w->body);
         while (!w->body.empty() && is_plain_continue(w->body.back())) w->body.pop_back();
-        if (w->cond && w->cond->kind == ExprKind::Const && static_cast<Const*>(w->cond.get())->literal == "false" && w->label.empty()) {
+        if (w->cond && w->cond->kind == ExprKind::Const && static_cast<Const*>(w->cond.get())->literal == "false" && (!w->label.has_value() || w->label->empty())) {
             bool has_break = false;
             for (auto& bs : w->body) {
-                if (bs && bs->kind == StmtKind::BreakStmt && static_cast<BreakStmt*>(bs.get())->label.empty()) {
+                if (bs && bs->kind == StmtKind::BreakStmt && (!static_cast<BreakStmt*>(bs.get())->label.has_value() || static_cast<BreakStmt*>(bs.get())->label->empty())) {
                     has_break = true;
                     break;
                 }
@@ -2182,6 +2182,7 @@ StmtPtr simplify_stmt(StmtPtr s) {
                 return w->body[0];
             }
         }
+
         return s;
     }
 

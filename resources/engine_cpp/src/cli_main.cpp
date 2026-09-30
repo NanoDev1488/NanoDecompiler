@@ -85,23 +85,41 @@ size_t utf8_display_width(const std::string& s) {
 std::string banner_text() {
     std::string line1 = std::string("\u273B ") + NANO_DECOMPILER_VERSION;
     std::string line2 = (g_lang == "en")
-        ? "   Java decompiler/deobfuscator for Bukkit plugins"
-        : "   Java-декомпилятор/деобфускатор для Bukkit-плагинов";
-    size_t w1 = utf8_display_width(line1);
-    size_t w2 = utf8_display_width(line2);
-    size_t width = w2 > w1 ? w2 : w1;
+        ? "Java decompiler & deobfuscator for Bukkit plugins"
+        : "Java-декомпилятор и деобфускатор Bukkit-плагинов";
+    std::string line3 = (g_lang == "en")
+        ? "Channel: t.me/nanodev_mc  \u2022  Dev: @radoqi"
+        : "Канал: t.me/nanodev_mc  \u2022  Личка в TG: @radoqi";
+
+    std::vector<std::string> lines = { line1, line2, line3 };
+    size_t max_w = 0;
+    for (const auto& l : lines) {
+        size_t w = utf8_display_width(l);
+        if (w > max_w) max_w = w;
+    }
+
+    // Внутренняя ширина: max_w + 2 пробела запаса
+    size_t inner_width = max_w + 2;
+
     std::string top = "\u256D";
-    for (size_t i = 0; i < width + 2; ++i) top += "\u2500";
+    for (size_t i = 0; i < inner_width + 4; ++i) top += "\u2500";
     top += "\u256E";
+
+    std::string sep = "\u251C";
+    for (size_t i = 0; i < inner_width + 4; ++i) sep += "\u2500";
+    sep += "\u2524";
+
     std::string bot = "\u2570";
-    for (size_t i = 0; i < width + 2; ++i) bot += "\u2500";
+    for (size_t i = 0; i < inner_width + 4; ++i) bot += "\u2500";
     bot += "\u256F";
-    auto pad = [&](const std::string& s, size_t visible_width) {
-        std::string padded = s;
-        if (visible_width < width) padded += std::string(width - visible_width, ' ');
-        return "\u2502 " + padded + " \u2502";
+
+    auto pad = [&](const std::string& s) {
+        size_t visible_w = utf8_display_width(s);
+        size_t right_pad = (visible_w <= inner_width) ? (inner_width - visible_w) : 0;
+        return "\u2502  " + s + std::string(right_pad, ' ') + "  \u2502";
     };
-    return top + "\n" + pad(line1, w1) + "\n" + pad(line2, w2) + "\n" + bot;
+
+    return top + "\n" + pad(line1) + "\n" + pad(line2) + "\n" + sep + "\n" + pad(line3) + "\n" + bot;
 }
 
 void print_usage() {

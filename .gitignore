@@ -45,6 +45,7 @@ Thumbs.db
 # Test JARs and scratch tests (local only, never committed)
 temp_test_jars/
 *.jar
+!test_jars/NeoBuyer.jar
 out_decompile_test/
 erybuyer_src/
 erybuyer_v3.zip

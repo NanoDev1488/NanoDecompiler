@@ -423,53 +423,83 @@ function renderRawStringWithBreaks(text: string): ReactNode {
 /** Рендер ОДНОГО токена - тот же выбор функции раскраски, что и раньше,
  * вынесенный в отдельную функцию: переиспользуется и для обычных строк
  * ВНЕ регионов, и для содержимого развёрнутого/свёрнутого чипа. */
-function renderToken(t: Token, i: number | string, textOverride?: string): ReactNode {
+function renderToken(t: Token, i: number | string, textOverride?: string, raw?: boolean): ReactNode {
   const text = textOverride ?? t.text;
-  if (t.isStr && t.isFancyFontCall) {
-    const raw = stripQuotes(text);
-    const stylized = applyFancyFont(raw);
-    return (
-      <span
-        key={i}
-        className="tok-s cursor-help font-normal"
-        title={`Кастомный шрифт (method1 / FancyFont): исходный текст "${raw}"`}
-        style={t.inheritedColor ? { color: t.inheritedColor } : undefined}
-      >
-        "{stylized}"
-      </span>
-    );
-  }
-  if (t.isStr && t.colorMethod) {
-    return (
-      <span key={i} className="tok-s">
-        {renderNamedColorText(text, t.colorMethod)}
-      </span>
-    );
-  }
-  if (t.isStr && (t.isGenericColorCall || t.isChainedColorCall)) {
-    return (
-      <span key={i} className="tok-s">
-        {renderUnknownColorMarked(text, t.inheritedColor)}
-      </span>
-    );
-  }
-  if (t.isStr && MC_CODE_RE.test(text)) {
-    return (
-      <span key={i} className="tok-s">
-        {renderMcColored(text)}
-      </span>
-    );
+  if (!raw) {
+    if (t.isStr && t.isFancyFontCall) {
+      const rawStr = stripQuotes(text);
+      const stylized = applyFancyFont(rawStr);
+      return (
+        <span
+          key={i}
+          className="tok-s cursor-help font-normal"
+          title={`Кастомный шрифт (method1 / FancyFont): исходный текст "${rawStr}"`}
+          style={t.inheritedColor ? { color: t.inheritedColor } : undefined}
+        >
+          "{stylized}"
+        </span>
+      );
+    }
+    if (t.isStr && t.colorMethod) {
+      return (
+        <span key={i} className="tok-s">
+          {renderNamedColorText(text, t.colorMethod)}
+        </span>
+      );
+    }
+    if (t.isStr && (t.isGenericColorCall || t.isChainedColorCall)) {
+      return (
+        <span key={i} className="tok-s">
+          {renderUnknownColorMarked(text, t.inheritedColor)}
+        </span>
+      );
+    }
+    if (t.isStr && MC_CODE_RE.test(text)) {
+      return (
+        <span key={i} className="tok-s">
+          {renderMcColored(text)}
+        </span>
+      );
+    }
   }
   if (t.cls) {
     return (
       <span key={i} className={t.cls}>
-        {t.isStr ? renderRawStringWithBreaks(text) : text}
+        {(!raw && t.isStr) ? renderRawStringWithBreaks(text) : text}
       </span>
     );
   }
   return <span key={i}>{text}</span>;
 }
 
+/** Интерактивный чип серверного runtime-выражения: предотвращает случайное сворачивание
+ * родительского блока, копирует выражение при клике и отображает понятное объяснение. */
+const RuntimeValueChip = memo(function RuntimeValueChip({ exprStr }: { exprStr: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      className="mono rounded bg-acid/20 px-1 py-0.2 text-[11px] text-acid font-semibold cursor-pointer hover:bg-acid/35 hover:scale-105 active:scale-95 transition-all mx-0.5 select-none inline-flex items-center gap-1 border border-acid/30"
+      title={`Динамическое выражение сервера:\n${exprStr}\n(Клик: скопировать выражение и показать подробности)`}
+      onClick={(e) => {
+        e.stopPropagation();
+        try {
+          navigator.clipboard?.writeText(exprStr);
+        } catch {}
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }}
+    >
+      <span>&#123;&#125;</span>
+      {copied && (
+        <span className="text-[9px] text-acid font-bold animate-pulse">
+          ✓ {exprStr.length > 25 ? exprStr.slice(0, 22) + "..." : exprStr}
+        </span>
+      )}
+    </span>
+  );
+});
 
 const LOG_LEVEL_SEVERITY = new Set(["severe", "warning", "error"]);
 
@@ -549,7 +579,7 @@ function renderChipPreview(tokens: Token[], region: Region): ReactNode {
     // 3. Если был вызов logger.log(Level.XXX, ...), пропускаем аргумент Level.XXX,
     // чтобы он не превращался в ненужный {} в VS Code стиле
     while (i < limit) {
-      const combined = inRange.slice(i, i + 5).map(t => t.text).join("");
+      const combined = inRange.slice(i, Math.min(i + 15, limit)).map(t => t.text).join("");
       const levelPrefixMatch = /^\s*(?:(?:[a-zA-Z0-9_.]+\.)?Level\.)?[A-Z_]+\s*,\s*/i.exec(combined);
       if (levelPrefixMatch) {
         let matchedLen = levelPrefixMatch[0].length;
@@ -651,7 +681,6 @@ function renderChipPreview(tokens: Token[], region: Region): ReactNode {
         continue;
       }
 
-
       // Конкатенация '+'
       if (textTrim === "+") {
         i++;
@@ -690,37 +719,38 @@ function renderChipPreview(tokens: Token[], region: Region): ReactNode {
 
       if (exprTokens.length > 0) {
         let exprStr = exprTokens.map(et => et.text).join("").trim();
-        exprStr = exprStr.replace(/\)+$/, "").trim();
+        let openCount = (exprStr.match(/\(/g) || []).length;
+        let closeCount = (exprStr.match(/\)/g) || []).length;
+        while (closeCount > openCount && exprStr.endsWith(")")) {
+          exprStr = exprStr.slice(0, -1).trim();
+          closeCount--;
+        }
         if (exprStr && exprStr !== ")" && exprStr !== "(" && exprStr !== "))" && exprStr !== ")))") {
           parts.push(
-            <span
-              key={`rt-${exprStart}`}
-              className="mono rounded bg-acid/20 px-1 py-0.2 text-[11px] text-acid font-semibold cursor-help hover:bg-acid/30 transition-colors mx-0.5"
-              title={`Runtime-значение сервера: ${exprStr}`}
-            >
-              &#123;&#125;
-            </span>
+            <RuntimeValueChip key={`rt-${exprStart}`} exprStr={exprStr} />
           );
         }
       }
     }
 
     let tagLabel = region.logLevel ? region.logLevel.toUpperCase() : "LOG";
-    if (tagLabel === "SENDMESSAGE") tagLabel = "MSG";
+    if (tagLabel === "SENDMESSAGE" || tagLabel === "SENDRAWMESSAGE" || tagLabel === "BROADCASTMESSAGE" || tagLabel === "BROADCAST") tagLabel = "MSG";
     else if (tagLabel === "SENDACTIONBAR") tagLabel = "ACTIONBAR";
     else if (tagLabel === "SENDTITLE") tagLabel = "TITLE";
     else if (tagLabel === "PRINTLN" || tagLabel === "PRINT") tagLabel = "OUT";
+    else if (tagLabel === "SEVERE") tagLabel = "ERROR";
+    else if (tagLabel === "WARNING") tagLabel = "WARN";
 
     const isSevere = region.logLevel === "severe" || region.logLevel === "error";
     const isWarn = region.logLevel === "warning" || region.logLevel === "warn";
 
     return (
       <>
-        <span className="chain-chip-divider select-none text-[11px] text-faint/60 mr-1">│</span>
+        <span className="chain-chip-divider select-none text-[11px] text-faint/60 mr-1.5">│</span>
         <span
           className={
-            "chain-chip-tag" +
-            (isSevere ? " tag-err text-err font-bold" : isWarn ? " tag-warn text-warn font-semibold" : "")
+            "chain-chip-tag mr-2 " +
+            (isSevere ? "tag-err text-err font-bold" : isWarn ? "tag-warn text-warn font-semibold" : "")
           }
         >
           {tagLabel}
@@ -729,21 +759,124 @@ function renderChipPreview(tokens: Token[], region: Region): ReactNode {
       </>
     );
   }
-  const inRange = tokensInRange(tokens, region.start, region.end).filter(t => t.isStr);
-  return (
-    <>
-      {inRange.map((t, i) => (
+
+  // region.kind === "color"
+  const inRange = tokensInRange(tokens, region.start, region.end);
+  const parts: ReactNode[] = [];
+  let activeColorHex: string | null = null;
+  let i = 0;
+  const limit = inRange.length;
+
+  while (i < limit) {
+    const t = inRange[i];
+    const textTrim = t.text.trim();
+    if (!textTrim) {
+      i++;
+      continue;
+    }
+
+    // ChatColor.COLOR или NamedTextColor.COLOR
+    if (
+      (textTrim === "ChatColor" || textTrim === "NamedTextColor" || textTrim === "TextColor") &&
+      i + 2 < limit &&
+      inRange[i + 1].text.trim() === "."
+    ) {
+      const colorName = inRange[i + 2].text.trim().toLowerCase();
+      if (MC_COLOR_NAME_HEX[colorName]) {
+        activeColorHex = MC_COLOR_NAME_HEX[colorName];
+        i += 3;
+        if (i < limit && inRange[i].text.trim() === "+") i++;
+        continue;
+      }
+    }
+
+    if (t.isColorEnum && MC_COLOR_NAME_HEX[textTrim.toLowerCase()]) {
+      activeColorHex = MC_COLOR_NAME_HEX[textTrim.toLowerCase()];
+      i++;
+      if (i < limit && inRange[i].text.trim() === "+") i++;
+      continue;
+    }
+
+    // Обфусцированный метод-дешифратор строк / кастомный шрифт (method1 / FancyFont)
+    if (!t.isStr && /^[a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)?$/.test(textTrim)) {
+      let nextIdx = i + 1;
+      while (nextIdx < limit && inRange[nextIdx].text.trim() === "") nextIdx++;
+      if (nextIdx < limit && inRange[nextIdx].text.trim() === "(") {
+        let strIdx = nextIdx + 1;
+        while (strIdx < limit && inRange[strIdx].text.trim() === "") strIdx++;
+        if (strIdx < limit && inRange[strIdx].isStr) {
+          let closeParenIdx = strIdx + 1;
+          while (closeParenIdx < limit && inRange[closeParenIdx].text.trim() === "") closeParenIdx++;
+          if (closeParenIdx < limit && inRange[closeParenIdx].text.trim().startsWith(")")) {
+            const strToken = inRange[strIdx];
+            const isFancy = isFancyFontMethod(textTrim);
+            const titleNote = isFancy ? `Кастомный шрифт (${textTrim})` : undefined;
+            parts.push(
+              <span key={i}>
+                {renderStringContent(
+                  strToken.text,
+                  activeColorHex,
+                  titleNote,
+                  isFancy ? applyFancyFont : undefined,
+                )}
+              </span>
+            );
+            const closeTok = inRange[closeParenIdx];
+            const parenPos = closeTok.text.indexOf(")");
+            const remainder = closeTok.text.slice(parenPos + 1);
+            if (remainder.trim()) {
+              inRange[closeParenIdx] = { ...closeTok, text: remainder };
+              i = closeParenIdx;
+            } else {
+              i = closeParenIdx + 1;
+            }
+            continue;
+          }
+        }
+      }
+    }
+
+    if (t.isStr) {
+      parts.push(
         <span key={i}>
-          {renderStringContent(
-            t.text,
-            t.inheritedColor ?? null,
-            undefined,
-            t.isFancyFontCall ? applyFancyFont : undefined,
-          )}
+          {renderStringContent(t.text, activeColorHex ?? t.inheritedColor ?? null, undefined, t.isFancyFontCall ? applyFancyFont : undefined)}
         </span>
-      ))}
-    </>
-  );
+      );
+      i++;
+      continue;
+    }
+
+    if (textTrim === "+") {
+      i++;
+      continue;
+    }
+
+    // Runtime-выражения в цепочке цветов (например getDescription().getVersion() или Bukkit.getVersion())
+    const exprTokens: Token[] = [];
+    const exprStart = i;
+    while (i < limit) {
+      const cur = inRange[i];
+      const ct = cur.text.trim();
+      if (ct === "+" || cur.isStr || ct.startsWith(",")) break;
+      exprTokens.push(cur);
+      i++;
+    }
+
+    if (exprTokens.length > 0) {
+      let exprStr = exprTokens.map(et => et.text).join("").trim();
+      let openCount = (exprStr.match(/\(/g) || []).length;
+      let closeCount = (exprStr.match(/\)/g) || []).length;
+      while (closeCount > openCount && exprStr.endsWith(")")) {
+        exprStr = exprStr.slice(0, -1).trim();
+        closeCount--;
+      }
+      if (exprStr && exprStr !== ")" && exprStr !== "(" && exprStr !== "))" && exprStr !== ")))") {
+        parts.push(<RuntimeValueChip key={`color-rt-${exprStart}`} exprStr={exprStr} />);
+      }
+    }
+  }
+
+  return <>{parts}</>;
 }
 
 // БАГ-ФИКС v1.9.13 (tsc TS2322 "'key' does not exist in type" - та же
@@ -767,7 +900,7 @@ function ChainChip({
     const inRange = tokensInRange(tokens, region.start, region.end);
     return (
       <span className="chain-chip-expanded" title="Свернуть обратно" onClick={() => onToggle(chipKey)}>
-        {inRange.map((t, i) => renderToken(t, i))}
+        {inRange.map((t, i) => renderToken(t, i, undefined, true))}
       </span>
     );
   }
