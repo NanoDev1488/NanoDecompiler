@@ -216,7 +216,8 @@ namespace nd {
 // НОВОЕ v1.9.143-ObfUpd.6: [ObfUpd 6/15] деобфускация методов расшифровки строк (поддержка трехпараметрического Allatori str_decrypt_allatori, инлайнинг константных строковых вызовов intern/length/isEmpty/charAt/substring).
 // НОВОЕ v1.9.144-ObfUpd.7: [ObfUpd 7/15] инлайнинг синтетических аксессоров и мостов (Synthetic Accessors: access$000 getter/setter/call инлайнинг в прямые обращения к полям и методам).
 // НОВОЕ v1.9.145-ObfUpd.8: [ObfUpd 8/15] устранение недостижимого мертвого кода и неиспользуемых меток (Dead Code Elimination: отсечение операторов после terminal-прыжков return/throw/break/continue, сплющивание вложенных блоков).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.145-ObfUpd.8";
+// НОВОЕ v1.9.146-ObfUpd.9: [ObfUpd 9/15] усиление эвристик деобфускации идентификаторов (ProGuard 2-символьные имена, непечатные символы и омоглифы/Il1/O0 паттерны Zelix KlassMaster и Allatori в looks_obfuscated).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.146-ObfUpd.9";
 }
 
 

@@ -473,7 +473,38 @@ bool looks_obfuscated(const std::optional<std::string>& name_opt, const std::str
         base = name;
     }
 
-    if ((kind == "class" || kind == "method" || kind == "field") && base.size() == 1) return true;
+    // 1. Check for non-ASCII, unprintable, or invalid identifier characters
+    for (unsigned char c : base) {
+        if (c < 0x20 || c == 0x7F || c >= 0x80) return true;
+    }
+
+    // 2. Check for ProGuard 1-2 character obfuscated names
+    if (kind == "class" || kind == "method" || kind == "field") {
+        if (base.size() == 1) return true;
+        if (base.size() == 2) {
+            static const std::unordered_set<std::string> kCommonShortWords = {
+                "id", "io", "in", "to", "of", "by", "on", "as", "at", "if", "do", "go", "is", "it", "me", "my", "no", "ok", "up", "we"
+            };
+            std::string lower2 = base;
+            for (char& c : lower2) c = std::tolower(static_cast<unsigned char>(c));
+            if (!kCommonShortWords.count(lower2)) {
+                return true;
+            }
+        }
+    }
+
+    // 3. Check for Zelix KlassMaster / Allatori Il1 / O0 confusion patterns
+    if (base.size() >= 3) {
+        bool all_il1 = true;
+        bool all_o0 = true;
+        bool all_underscore = true;
+        for (char c : base) {
+            if (c != 'I' && c != 'l' && c != '1' && c != '_') all_il1 = false;
+            if (c != 'O' && c != '0' && c != 'o' && c != '_') all_o0 = false;
+            if (c != '_') all_underscore = false;
+        }
+        if (all_il1 || all_o0 || all_underscore) return true;
+    }
 
     std::string lower = base;
     std::transform(lower.begin(), lower.end(), lower.begin(),

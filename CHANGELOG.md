@@ -1,5 +1,15 @@
 # NanoDecompiler Changelog
 
+## [1.9.146-ObfUpd.9] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **[ObfUpd 9/15] Усиление эвристик деобфускации идентификаторов (Identifier Deobfuscation Heuristic Refinement)**:
+  - `resources/engine_cpp/src/javatypes.cpp`: расширен алгоритм `looks_obfuscated` для распознавания 2-символьных имен ProGuard (`aa`, `a1`, `b2`, `_a` и т.д.) с исключением легитимных коротких слов (`id`, `io`, `in`, `ok`, `is`, `it`).
+  - `resources/engine_cpp/src/javatypes.cpp`: детекция непечатных и не-ASCII символов в идентификаторах (невидимый unicode, невалидные байты).
+  - `resources/engine_cpp/src/javatypes.cpp`: детекция гомоглифных и визуально неразличимых паттернов Zelix KlassMaster и Allatori (строки из комбинаций `I`, `l`, `1`, `O`, `0`, `_`).
+
+---
+
 ## [1.9.145-ObfUpd.8] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)
