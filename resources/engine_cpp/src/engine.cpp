@@ -662,6 +662,7 @@ bool exprs_match(const ExprPtr& a, const ExprPtr& b) {
         auto* aa1 = static_cast<ArrayAccess*>(a.get());
         auto* aa2 = static_cast<ArrayAccess*>(b.get());
         if (!exprs_match(aa1->array, aa2->array)) return false;
+        if (!aa1->index || !aa2->index) return false;
         if (aa1->index->kind == ExprKind::Const && aa2->index->kind == ExprKind::Const) {
             return static_cast<Const*>(aa1->index.get())->literal == static_cast<Const*>(aa2->index.get())->literal;
         }
@@ -689,8 +690,8 @@ std::optional<SingleValueStmt> extract_single_value(const std::vector<StmtPtr>& 
         }
     } else if (body[0]->kind == StmtKind::ReturnStmt) {
         auto* rs = static_cast<ReturnStmt*>(body[0].get());
-        if (rs->value) {
-            return SingleValueStmt{SingleValueStmt::Kind::Return, nullptr, rs->value};
+        if (rs->expr) {
+            return SingleValueStmt{SingleValueStmt::Kind::Return, nullptr, rs->expr};
         }
     }
     return std::nullopt;
