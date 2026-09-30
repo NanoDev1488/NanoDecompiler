@@ -187,7 +187,8 @@ namespace nd {
 // обработка унаследованного стека без предшественников, безопасное ветвление нередуцируемых переходов внутри регионов CFG.
 // НОВОЕ v1.9.116: полное устранение DecompileAbort в check_full_coverage через сохранение недостижимых операторов в AST,
 // защита от двойного переполнения стека через локальный синтез типов, финальная стабилизация C++ движка.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.116";
+// НОВОЕ v1.9.117: интеграция базы знаний (100 монографий), контекстуальное разрешение 32-битных примитивов (boolean/char/byte/short/int) в javatypes.cpp.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.117";
 }
 
 

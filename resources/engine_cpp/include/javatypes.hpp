@@ -61,7 +61,10 @@ std::optional<ClassSignature> parse_class_signature(const std::string& sig);
 
 bool is_safe_local_name(const std::string& name);
 
-// kind: "class" | "method" | "field" | "package"
 bool looks_obfuscated(const std::optional<std::string>& name, const std::string& kind = "class");
+
+// ---- Разрешение 32-битных JVM-примитивов (Article 047) ----
+// Контекстуальное распознавание boolean, byte, char, short, int
+std::string disambiguate_primitive(int64_t min_val, int64_t max_val, bool only_zero_one, bool used_in_branch, const std::string& context_hint = "");
 
 }  // namespace nd

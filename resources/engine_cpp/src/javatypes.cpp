@@ -493,4 +493,27 @@ bool looks_obfuscated(const std::optional<std::string>& name_opt, const std::str
     return false;
 }
 
+std::string disambiguate_primitive(int64_t min_val, int64_t max_val, bool only_zero_one, bool used_in_branch, const std::string& context_hint) {
+    if (!context_hint.empty()) {
+        if (context_hint == "Z" || context_hint == "boolean") return "boolean";
+        if (context_hint == "B" || context_hint == "byte") return "byte";
+        if (context_hint == "C" || context_hint == "char") return "char";
+        if (context_hint == "S" || context_hint == "short") return "short";
+        if (context_hint == "I" || context_hint == "int") return "int";
+    }
+    if (only_zero_one && used_in_branch) {
+        return "boolean";
+    }
+    if (min_val >= 0 && max_val <= 65535 && context_hint == "char_hint") {
+        return "char";
+    }
+    if (min_val >= -128 && max_val <= 127 && context_hint == "byte_hint") {
+        return "byte";
+    }
+    if (min_val >= -32768 && max_val <= 32767 && context_hint == "short_hint") {
+        return "short";
+    }
+    return "int";
+}
+
 }  // namespace nd
