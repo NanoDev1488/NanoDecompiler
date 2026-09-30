@@ -1,5 +1,15 @@
 # NanoDecompiler Changelog
 
+## [1.9.149-ObfUpd.12] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **[ObfUpd 12/15] Десугаринг рефлексивных вызовов (Reflection Desugaring)**:
+  - `resources/engine_cpp/src/structure.cpp`: распознавание цепочек рефлексии `Class.forName(...).getMethod(...).invoke(instance, args...)` и `ClassLiteral.getMethod(...).invoke(...)` с автоматическим превращением в чистые статические и экземплярные вызовы методов `instance.methodName(...)` / `ClassName.methodName(...)`.
+  - `resources/engine_cpp/src/structure.cpp`: распаковка рефлексивного доступа к полям через `getField("fieldName").get(instance)` / `set(instance, val)` в прямые чтения `instance.fieldName` и присваивания `instance.fieldName = val`.
+  - `resources/engine_cpp/src/structure.cpp`: автоматическая распаковка массивов аргументов `new Object[] { ... }` в аргументы вызова.
+
+---
+
 ## [1.9.148-ObfUpd.11] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

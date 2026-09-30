@@ -219,7 +219,8 @@ namespace nd {
 // НОВОЕ v1.9.146-ObfUpd.9: [ObfUpd 9/15] усиление эвристик деобфускации идентификаторов (ProGuard 2-символьные имена, непечатные символы и омоглифы/Il1/O0 паттерны Zelix KlassMaster и Allatori в looks_obfuscated).
 // НОВОЕ v1.9.147-ObfUpd.10: [ObfUpd 10/15] устранение промежуточных временных переменных стека (tempN / __stk / __sb inlining: рекурсивная подстановка в составные блоки, исключение паразитных объявлений StringBuilder tempN в заголовках методов).
 // НОВОЕ v1.9.148-ObfUpd.11: [ObfUpd 11/15] восстановление assert ($assertionsDisabled десугаринг в assert cond; / assert cond : msg;) и устранение паразитного автобоксинга/распаковки примитивов (Boolean/Integer/Long/Double/Float/Byte/Short/Character unbox deobfuscation).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.148-ObfUpd.11";
+// НОВОЕ v1.9.149-ObfUpd.12: [ObfUpd 12/15] десугаринг рефлексии (Reflection Desugaring: Class.forName/getMethod/invoke в прямые вызовы методов, getField/get/set в доступ к полям, распаковка new Class[0]/new Object[0]).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.149-ObfUpd.12";
 }
 
 

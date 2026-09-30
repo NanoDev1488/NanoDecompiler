@@ -1346,6 +1346,102 @@ ExprPtr simplify_expr(ExprPtr e) {
                     if (c->expr) return c->expr;
                 }
             }
+
+            // Reflection desugaring (ObfUpd 12): Class.forName(...).getMethod(...).invoke(...)
+            if (mc->name == "invoke" && !mc->args.empty() && mc->target && mc->target->kind == ExprKind::MethodCall) {
+                auto* get_m = static_cast<MethodCall*>(mc->target.get());
+                if ((get_m->name == "getMethod" || get_m->name == "getDeclaredMethod") && !get_m->args.empty()) {
+                    ExprPtr name_arg = get_m->args[0];
+                    if (name_arg && name_arg->kind == ExprKind::Const) {
+                        auto* cname = static_cast<Const*>(name_arg.get());
+                        std::string method_name = cname->literal;
+                        if (method_name.size() >= 2 && method_name.front() == '"' && method_name.back() == '"') {
+                            method_name = method_name.substr(1, method_name.size() - 2);
+                        }
+                        
+                        std::string owner_class = "";
+                        if (get_m->target) {
+                            if (get_m->target->kind == ExprKind::ClassLiteral) {
+                                owner_class = static_cast<ClassLiteral*>(get_m->target.get())->type_name;
+                            } else if (get_m->target->kind == ExprKind::MethodCall) {
+                                auto* for_name = static_cast<MethodCall*>(get_m->target.get());
+                                if (for_name->name == "forName" && !for_name->args.empty() && for_name->args[0]->kind == ExprKind::Const) {
+                                    std::string c_lit = static_cast<Const*>(for_name->args[0].get())->literal;
+                                    if (c_lit.size() >= 2 && c_lit.front() == '"' && c_lit.back() == '"') {
+                                        owner_class = c_lit.substr(1, c_lit.size() - 2);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        ExprPtr instance = mc->args[0];
+                        bool is_static = false;
+                        if (instance && instance->kind == ExprKind::Const && static_cast<Const*>(instance.get())->literal == "null") {
+                            is_static = true;
+                            instance = nullptr;
+                        }
+                        
+                        std::vector<ExprPtr> call_args;
+                        if (mc->args.size() > 1) {
+                            ExprPtr second = mc->args[1];
+                            if (second && second->kind == ExprKind::NewArray) {
+                                auto* na = static_cast<NewArray*>(second.get());
+                                if (na->initializer.has_value()) {
+                                    call_args = *na->initializer;
+                                }
+                            } else {
+                                for (size_t a_idx = 1; a_idx < mc->args.size(); ++a_idx) {
+                                    call_args.push_back(mc->args[a_idx]);
+                                }
+                            }
+                        }
+                        
+                        std::optional<std::string> owner_opt = owner_class.empty() ? std::nullopt : std::optional<std::string>(owner_class);
+                        return std::make_shared<MethodCall>(instance, method_name, call_args, "Object", is_static, owner_opt);
+                    }
+                }
+            }
+            
+            // Reflection field access: getField("field").get(instance) / set(instance, val)
+            if ((mc->name == "get" || mc->name == "set") && !mc->args.empty() && mc->target && mc->target->kind == ExprKind::MethodCall) {
+                auto* get_f = static_cast<MethodCall*>(mc->target.get());
+                if ((get_f->name == "getField" || get_f->name == "getDeclaredField") && !get_f->args.empty()) {
+                    ExprPtr name_arg = get_f->args[0];
+                    if (name_arg && name_arg->kind == ExprKind::Const) {
+                        auto* cname = static_cast<Const*>(name_arg.get());
+                        std::string field_name = cname->literal;
+                        if (field_name.size() >= 2 && field_name.front() == '"' && field_name.back() == '"') {
+                            field_name = field_name.substr(1, field_name.size() - 2);
+                        }
+                        std::string owner_class = "";
+                        if (get_f->target) {
+                            if (get_f->target->kind == ExprKind::ClassLiteral) {
+                                owner_class = static_cast<ClassLiteral*>(get_f->target.get())->type_name;
+                            } else if (get_f->target->kind == ExprKind::MethodCall) {
+                                auto* for_name = static_cast<MethodCall*>(get_f->target.get());
+                                if (for_name->name == "forName" && !for_name->args.empty() && for_name->args[0]->kind == ExprKind::Const) {
+                                    std::string c_lit = static_cast<Const*>(for_name->args[0].get())->literal;
+                                    if (c_lit.size() >= 2 && c_lit.front() == '"' && c_lit.back() == '"') {
+                                        owner_class = c_lit.substr(1, c_lit.size() - 2);
+                                    }
+                                }
+                            }
+                        }
+                        ExprPtr instance = mc->args[0];
+                        bool is_static = false;
+                        if (instance && instance->kind == ExprKind::Const && static_cast<Const*>(instance.get())->literal == "null") {
+                            is_static = true;
+                            instance = nullptr;
+                        }
+                        std::optional<std::string> owner_opt = owner_class.empty() ? std::nullopt : std::optional<std::string>(owner_class);
+                        auto fa = std::make_shared<FieldAccess>(instance, field_name, "Object", is_static, owner_opt);
+                        if (mc->name == "set" && mc->args.size() >= 2) {
+                            return std::make_shared<Assign>(fa, mc->args[1], "=");
+                        }
+                        return fa;
+                    }
+                }
+            }
             break;
         }
         case ExprKind::NewObject: {
