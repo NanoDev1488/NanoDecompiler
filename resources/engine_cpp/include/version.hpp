@@ -195,7 +195,8 @@ namespace nd {
 // НОВОЕ v1.9.122: экстремальная оптимизация размера бинарника движка (strip -s, -Wl,--gc-sections, -ffunction-sections, -fdata-sections, -fno-ident) и клиента (maximum compression, очистка lproj/locales, вырезание лишних ресурсов).
 // НОВОЕ v1.9.123: устойчивая структуризация synchronized-блоков (поддержка try-finally с monitorexit в unwrap_if_monitor_try, безопасный комментарий-фоллбек без сброса метода в байткод).
 // НОВОЕ v1.9.124: релаксация глубин пересечения стека (mismatched depth slicing/synthesis в get_producer_temps, безопасный разрыв циклических пересечений стека).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.124";
+// НОВОЕ v1.9.125: устойчивая структуризация сложных CFG (динамическая симуляция пропущенных блоков, безопасный выход по guard limit и нефатальная обработка глубоких if/else цепочек в structure.cpp).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.125";
 }
 
 

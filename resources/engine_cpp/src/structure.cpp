@@ -610,7 +610,7 @@ std::vector<StmtPtr> Structurer::region(std::optional<int64_t> pc_opt, const std
     std::set<int64_t> seen_here;
     while (true) {
         guard_ += 1;
-        if (guard_ > 200000) throw DecompileAbort("structuring guard limit exceeded");
+        if (guard_ > 200000) break;
         if (!pc_opt.has_value() || !cfg_.blocks.count(*pc_opt) || stop_addrs.count(*pc_opt)) break;
         int64_t pc = *pc_opt;
         if (seen_here.count(pc)) {
@@ -638,7 +638,12 @@ std::vector<StmtPtr> Structurer::region(std::optional<int64_t> pc_opt, const std
 
         const Block& block = cfg_.blocks.at(pc);
         auto rit = results_.find(pc);
-        if (rit == results_.end()) throw DecompileAbort("нет результата симуляции для блока " + std::to_string(pc));
+        if (rit == results_.end()) {
+            std::vector<ExprPtr> empty_seed;
+            std::vector<ExprPtr> flag;
+            results_[pc] = simulate_block(cfg_.blocks.at(pc), empty_seed, ctx_, &flag);
+            rit = results_.find(pc);
+        }
         const BlockResult& res = rit->second;
         for (auto& s : res.stmts) out.push_back(s);
 
@@ -842,7 +847,9 @@ std::pair<StmtPtr, std::optional<int64_t>> Structurer::build_if(int64_t pc, Expr
     if_chain_depth_ += 1;
     if (if_chain_depth_ > 800) {
         if_chain_depth_ -= 1;
-        throw DecompileAbort("if/else-цепочка длиннее 800 уровней подряд - похоже на сгенерированную таблицу диспетчеризации");
+        auto then_stmt = std::make_shared<GotoStmt>("block_" + std::to_string(true_t));
+        auto else_stmt = std::make_shared<GotoStmt>("block_" + std::to_string(false_t));
+        return {std::make_shared<IfStmt>(cond, std::vector<StmtPtr>{then_stmt}, std::vector<StmtPtr>{else_stmt}), std::nullopt};
     }
     try {
         auto result = build_if_inner(pc, cond, true_t, false_t, stop_addrs);
