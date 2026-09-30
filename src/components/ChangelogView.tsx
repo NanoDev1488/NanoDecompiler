@@ -85,7 +85,24 @@ export const ChangelogView = memo(function ChangelogView({
     );
   }
 
-  const lines = content.split(/\r?\n/);
+  const rawLines = content.split(/\r?\n/);
+  const lines: string[] = [];
+  for (const line of rawLines) {
+    const trimmed = line.trim();
+    if (/^(?:#+\s*)?(?:📦\s*Загрузки|📦\s*Downloads|Загрузки)\b/i.test(trimmed) || /📦\s*Загрузки/i.test(trimmed)) {
+      break;
+    }
+    lines.push(line);
+  }
+
+  if (lines.every(l => !l.trim())) {
+    return (
+      <p className="mono py-4 text-center text-[11.5px] text-faint">
+        // нет описания изменений для этой версии
+      </p>
+    );
+  }
+
   const elements: ReactNode[] = [];
 
   for (let i = 0; i < lines.length; i++) {

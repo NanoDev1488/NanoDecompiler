@@ -46,4 +46,8 @@ Thumbs.db
 temp_test_jars/
 *.jar
 out_decompile_test/
+erybuyer_src/
+erybuyer_v3.zip
+/*.js
+/*.cpp
 

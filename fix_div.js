@@ -1,1 +1,0 @@
-﻿const fs=require("fs"); let c=fs.readFileSync("src/components/SettingsModal.tsx", "utf8"); c=c.replace(/<Row\s+label=\{t\(draft\.language, "settings\.disable_vscode_logs"\)\}/, `<div className="h-px bg-line" />\n              <Row\n                label={t(draft.language, "settings.disable_vscode_logs")}`); fs.writeFileSync("src/components/SettingsModal.tsx", c);

@@ -163,8 +163,17 @@ function tokenizeLine(line: string): Token[] {
 
 // НОВОЕ 1.9.6 + v1.9.17: распознаём уровни java.util.logging.Level, Bukkit Logger,
 // SLF4J, Log4j, System.out/err и sendMessage/sendActionBar/sendTitle.
-const LOG_METHOD_RE = /\.(warning|severe|error|info|config|fine|finer|finest|debug|log|println|print|sendMessage|sendActionBar|sendTitle|sendRawMessage)\s*\(/g;
-const LOG_RECEIVER_RE = /(?:getLogger\(\)|\blog(?:ger)?|Bukkit\.getLogger\(\)|System\.(?:out|err)|\bsender|\bplayer|\btarget|\bp|\buser|\bcommandSender|\bctx|\baudience|\brecipient)\s*$/i;
+const MESSAGE_METHODS = new Set([
+  "sendMessage",
+  "sendActionBar",
+  "sendTitle",
+  "sendRawMessage",
+  "broadcastMessage",
+  "broadcast",
+]);
+
+const LOG_METHOD_RE = /(?:(\.)\s*)?\b(warning|severe|error|info|config|fine|finer|finest|debug|log|println|print|sendMessage|sendActionBar|sendTitle|sendRawMessage|broadcastMessage|broadcast)\s*\(/g;
+const LOG_RECEIVER_RE = /(?:getLogger\(\)|\blog(?:ger)?|Bukkit\.getLogger\(\)|System\.(?:out|err)|\bsender|\bplayer|\btarget|\bp|\buser|\bcommandSender|\bcs|\bs|\bctx|\baudience|\brecipient)\s*$/i;
 
 interface Region {
   start: number;
@@ -173,29 +182,39 @@ interface Region {
   logLevel?: string;
 }
 
-/** Ищет логгер-вызовы `logger.warning(...)` (включая plugin.getLogger().x(...))
- * на строке и возвращает символьные диапазоны ОТ имени метода ДО закрывающей
- * скобки включительно. Скобки/кавычки внутри строковых литералов-аргументов
- * не считаются структурными - простой посимвольный сканер, учитывающий
- * границы `"..."` (с учётом экранирования `\"`). */
+/** Ищет логгер-вызовы `logger.warning(...)`, `logger.log(Level.XXX, ...)`,
+ * и Minecraft-сообщения `sender.sendMessage(...)` на строке и возвращает
+ * символьные диапазоны от начала вызова (включая ресивер) до закрывающей
+ * скобки включительно. */
 function findLogRegions(line: string): Region[] {
   const regions: Region[] = [];
   LOG_METHOD_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = LOG_METHOD_RE.exec(line)) !== null) {
-    const dotIndex = m.index;
-    const before = line.slice(0, dotIndex);
-    if (!LOG_RECEIVER_RE.test(before)) continue;
-    const methodStart = dotIndex + 1; // сразу после точки, с имени метода
-    const openParenIndex = m.index + m[0].length - 1; // позиция самой "("
+    const hasDot = !!m[1];
+    const methodName = m[2];
+    const isMsg = MESSAGE_METHODS.has(methodName);
+    const methodCallIndex = m.index + (hasDot ? m[0].indexOf(methodName) : 0);
+    const before = line.slice(0, methodCallIndex - (hasDot ? 1 : 0));
+
+    if (hasDot) {
+      if (!isMsg && !LOG_RECEIVER_RE.test(before) && !/(?:log|logger)/i.test(before)) {
+        continue;
+      }
+    } else {
+      // Bare function call: разрешаем log(Level.XXX, ...) или прямое sendMessage
+      if (methodName !== "log" && !isMsg) {
+        continue;
+      }
+    }
+
+    const openParenIndex = m.index + m[0].length - 1;
     let depth = 1;
     let i = openParenIndex + 1;
     let closeIndex = -1;
     while (i < line.length) {
       const ch = line[i];
       if (ch === '"') {
-        // пропускаем строковый литерал целиком - его содержимое не влияет
-        // на баланс скобок вызова.
         i++;
         while (i < line.length && line[i] !== '"') {
           if (line[i] === "\\") i++;
@@ -214,8 +233,34 @@ function findLogRegions(line: string): Region[] {
       }
       i++;
     }
-    if (closeIndex === -1) continue; // не нашли пару на этой строке - не трогаем
-    regions.push({ start: methodStart, end: closeIndex + 1, kind: "log", logLevel: m[1] });
+    if (closeIndex === -1) continue;
+
+    // Распознаём уровень в logger.log(Level.XXX, ...)
+    let logLevel = methodName;
+    if (methodName === "log") {
+      const insideCall = line.slice(openParenIndex + 1, closeIndex);
+      const levelMatch = /^\s*(?:(?:[a-zA-Z0-9_.]+\.)?Level\.)?([A-Z_]+)\s*,/i.exec(insideCall);
+      if (levelMatch) {
+        const lvl = levelMatch[1].toUpperCase();
+        if (lvl === "SEVERE" || lvl === "ERROR") logLevel = "severe";
+        else if (lvl === "WARNING" || lvl === "WARN") logLevel = "warning";
+        else if (lvl === "INFO") logLevel = "info";
+        else if (lvl === "FINE" || lvl === "FINER" || lvl === "FINEST" || lvl === "DEBUG") logLevel = "debug";
+        else if (lvl === "CONFIG") logLevel = "config";
+      }
+    }
+
+    // Включаем ресивер (sender, logger и т.д.) в диапазон для чистого скрытия
+    let start = methodCallIndex;
+    if (hasDot) {
+      const dotIndex = methodCallIndex - 1;
+      const receiverMatch = /(?:[a-zA-Z_$][\w$]*(?:\(\))?\.)*[a-zA-Z_$][\w$]*(?:\(\))?$/.exec(line.slice(0, dotIndex));
+      if (receiverMatch) {
+        start = dotIndex - receiverMatch[0].length;
+      }
+    }
+
+    regions.push({ start, end: closeIndex + 1, kind: "log", logLevel });
   }
   return regions;
 }
@@ -286,10 +331,12 @@ function tokensInRange(tokens: Token[], start: number, end: number): Token[] {
 }
 
 /** Убирает окружающие кавычки строкового литерала для показа "как будет
- * выглядеть в игре" внутри свёрнутого чипа - сырые кавычки там не нужны. */
+ * выглядеть в игре" внутри свёрнутого чипа - сырые кавычки там не нужны,
+ * а переносы строк заменяются на символ ↵ чтобы свёрнутый чип оставался в одну аккуратную строку. */
 function stripQuotes(text: string): string {
-  if (text.length >= 2 && text[0] === '"' && text[text.length - 1] === '"') return text.slice(1, -1);
-  return text;
+  let s = text;
+  if (s.length >= 2 && s[0] === '"' && s[s.length - 1] === '"') s = s.slice(1, -1);
+  return s.replace(/\r?\n|\\n/g, " ↵ ");
 }
 
 /** Рендер ОДНОГО токена - тот же выбор функции раскраски, что и раньше,
@@ -331,20 +378,10 @@ function renderToken(t: Token, i: number | string, textOverride?: string): React
 const LOG_LEVEL_SEVERITY = new Set(["severe", "warning", "error"]);
 
 /** Содержимое СВЁРНУТОГО чипа. Для color-региона - раскрашенные строковые
- * куски (нестроковые токены туда физически попасть не могут - любое
- * нестроковое выражение уже обрывает цепочку в findColorChainRegions,
- * см. isBreaker). Для log-региона - ДРУГАЯ история: аргументом может
- * быть произвольное выражение (`getDescription().getVersion()`), а не
- * только строка.
- *
- * БАГ-ФИКС 1.9.10 (реальный репорт - "метод после лог-строки заменяется
- * на пустоту"): раньше здесь фильтровались ТОЛЬКО строковые токены -
- * нестроковая часть (вызовы методов, переменные) молча выбрасывалась из
- * превью, из-за чего казалось, что кусок сообщения просто исчез. Теперь
- * для log-региона рендерятся ВСЕ токены внутри (кроме самого имени
- * метода и открывающей/закрывающей скобки вызова - см. filter ниже) -
- * строки раскрашиваются и лишаются кавычек, как раньше, а код (вызовы
- * методов, `+`, переменные) показывается как есть. */
+ * куски. Для log-региона - скрывает внешние скобки вызова и ресивер,
+ * разворачивает обфусцированные дешифраторы (method1("...")), определяет
+ * уровень (Level.WARNING -> WARN), удаляет Level.XXX из тела и красиво
+ * оборачивает переменные в {} и исключения в ⚡. */
 function renderChipPreview(tokens: Token[], region: Region): ReactNode {
   if (region.kind === "log") {
     const inRange = tokensInRange(tokens, region.start, region.end);
@@ -352,31 +389,71 @@ function renderChipPreview(tokens: Token[], region: Region): ReactNode {
     let activeColorHex: string | null = null;
     let i = 0;
 
-    // Filter out the initial method word and opening parenthesis
+    // 1. Пропускаем имя метода/вызов и открывающую скобку '('
     while (i < inRange.length) {
       const t = inRange[i];
-      if (i === 0 && !t.isStr) {
-        i++;
-        continue;
+      if (t.text.includes("(")) {
+        const parenIdx = t.text.indexOf("(");
+        const remainder = t.text.slice(parenIdx + 1);
+        if (remainder.trim()) {
+          inRange[i] = { ...t, text: remainder };
+        } else {
+          i++;
+        }
+        break;
       }
-      if (i === 1 && t.text.trim() === "(") {
-        i++;
-        continue;
+      i++;
+    }
+
+    // 2. Отсекаем закрывающую скобку внешнего вызова с правого края
+    let limit = inRange.length;
+    if (limit > i) {
+      const lastTok = inRange[limit - 1];
+      const trimText = lastTok.text.trim();
+      if (trimText === ")") {
+        limit--;
+      } else if (trimText.endsWith(")")) {
+        inRange[limit - 1] = {
+          ...lastTok,
+          text: lastTok.text.slice(0, lastTok.text.lastIndexOf(")")),
+        };
+        if (inRange[limit - 1].text.trim() === "") {
+          limit--;
+        }
+      }
+    }
+
+    // 3. Если был вызов logger.log(Level.XXX, ...), пропускаем аргумент Level.XXX,
+    // чтобы он не превращался в ненужный {} в VS Code стиле
+    while (i < limit) {
+      const combined = inRange.slice(i, i + 5).map(t => t.text).join("");
+      const levelPrefixMatch = /^\s*(?:(?:[a-zA-Z0-9_.]+\.)?Level\.)?[A-Z_]+\s*,\s*/i.exec(combined);
+      if (levelPrefixMatch) {
+        let matchedLen = levelPrefixMatch[0].length;
+        while (i < limit && matchedLen > 0) {
+          if (inRange[i].text.length <= matchedLen) {
+            matchedLen -= inRange[i].text.length;
+            i++;
+          } else {
+            inRange[i] = { ...inRange[i], text: inRange[i].text.slice(matchedLen) };
+            matchedLen = 0;
+          }
+        }
+        break;
       }
       break;
     }
 
-    // Also strip trailing closing parenthesis of the outer call
-    let limit = inRange.length;
-    if (limit > i && inRange[limit - 1].text.endsWith(")")) {
-      limit--;
-    }
-
+    // 4. Разбираем аргументы внутри
     while (i < limit) {
       const t = inRange[i];
       const textTrim = t.text.trim();
+      if (!textTrim) {
+        i++;
+        continue;
+      }
 
-      // Check for ChatColor.COLOR or NamedTextColor.COLOR
+      // Проверка на ChatColor.COLOR или NamedTextColor.COLOR
       if (
         (textTrim === "ChatColor" || textTrim === "NamedTextColor" || textTrim === "TextColor") &&
         i + 2 < limit &&
@@ -391,7 +468,7 @@ function renderChipPreview(tokens: Token[], region: Region): ReactNode {
         }
       }
 
-      // Check for standalone color enum token
+      // Одиночный цветовой enum токен
       if (t.isColorEnum && MC_COLOR_NAME_HEX[textTrim.toLowerCase()]) {
         activeColorHex = MC_COLOR_NAME_HEX[textTrim.toLowerCase()];
         i++;
@@ -399,31 +476,44 @@ function renderChipPreview(tokens: Token[], region: Region): ReactNode {
         continue;
       }
 
-      // Check for obfuscated decryptor method wrapper like method1("string") or someFunc("string")
-      if (
-        !t.isStr &&
-        /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(textTrim) &&
-        i + 3 < limit &&
-        inRange[i + 1].text.trim() === "(" &&
-        inRange[i + 2].isStr &&
-        inRange[i + 3].text.trim() === ")"
-      ) {
-        const strToken = inRange[i + 2];
-        const unquoted = stripQuotes(strToken.text);
-        parts.push(
-          activeColorHex ? (
-            <span key={i} style={{ color: activeColorHex }}>
-              {unquoted}
-            </span>
-          ) : (
-            renderToken(strToken, i, unquoted)
-          )
-        );
-        i += 4;
-        continue;
+      // Обфусцированный метод-дешифратор строк вида method1("string") или Class.decrypt("string")
+      if (!t.isStr && /^[a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)?$/.test(textTrim)) {
+        let nextIdx = i + 1;
+        while (nextIdx < limit && inRange[nextIdx].text.trim() === "") nextIdx++;
+        if (nextIdx < limit && inRange[nextIdx].text.trim() === "(") {
+          let strIdx = nextIdx + 1;
+          while (strIdx < limit && inRange[strIdx].text.trim() === "") strIdx++;
+          if (strIdx < limit && inRange[strIdx].isStr) {
+            let closeParenIdx = strIdx + 1;
+            while (closeParenIdx < limit && inRange[closeParenIdx].text.trim() === "") closeParenIdx++;
+            if (closeParenIdx < limit && inRange[closeParenIdx].text.trim().startsWith(")")) {
+              const strToken = inRange[strIdx];
+              const unquoted = stripQuotes(strToken.text);
+              parts.push(
+                activeColorHex ? (
+                  <span key={i} style={{ color: activeColorHex }}>
+                    {unquoted}
+                  </span>
+                ) : (
+                  renderToken(strToken, i, unquoted)
+                )
+              );
+              const closeTok = inRange[closeParenIdx];
+              const parenPos = closeTok.text.indexOf(")");
+              const remainder = closeTok.text.slice(parenPos + 1);
+              if (remainder.trim()) {
+                inRange[closeParenIdx] = { ...closeTok, text: remainder };
+                i = closeParenIdx;
+              } else {
+                i = closeParenIdx + 1;
+              }
+              continue;
+            }
+          }
+        }
       }
 
-      // String literal
+      // Строковый литерал
       if (t.isStr) {
         const unquoted = stripQuotes(t.text);
         parts.push(
@@ -439,46 +529,76 @@ function renderChipPreview(tokens: Token[], region: Region): ReactNode {
         continue;
       }
 
-      // Concatenation '+'
+      // Конкатенация '+'
       if (textTrim === "+") {
         i++;
         continue;
       }
 
-      // Runtime server calls like manager.getAddons().size() or obj.method()
+      // Хвостовой аргумент исключения/Throwable, например ', e1' или ', ex'
+      if (textTrim.startsWith(",") || (textTrim === "," && i + 1 < limit)) {
+        const restTokens = inRange.slice(i, limit);
+        const restText = restTokens.map(rt => rt.text).join("").trim();
+        const exMatch = /^,\s*([a-zA-Z_$][\w$]*)$/.exec(restText);
+        if (exMatch) {
+          parts.push(
+            <span
+              key={`ex-${i}`}
+              className="mono rounded bg-raised px-1.5 py-0.2 text-[10px] text-faint border border-line font-medium ml-1 select-none"
+              title={`Исключение: ${exMatch[1]}`}
+            >
+              ⚡ {exMatch[1]}
+            </span>
+          );
+          break;
+        }
+      }
+
+      // Runtime server calls like manager.getAddons().size() or variable like permission
       const exprTokens: Token[] = [];
       const exprStart = i;
       while (i < limit) {
         const cur = inRange[i];
         const ct = cur.text.trim();
-        if (ct === "+" || cur.isStr) break;
+        if (ct === "+" || cur.isStr || ct.startsWith(",")) break;
         exprTokens.push(cur);
         i++;
       }
 
       if (exprTokens.length > 0) {
         const exprStr = exprTokens.map(et => et.text).join("").trim();
-        parts.push(
-          <span
-            key={`rt-${exprStart}`}
-            className="mono rounded bg-acid/20 px-1 py-0.2 text-[11px] text-acid font-semibold cursor-help hover:bg-acid/30 transition-colors mx-0.5"
-            title={`Runtime-значение сервера: ${exprStr}`}
-          >
-            &#123;&#125;
-          </span>
-        );
+        if (exprStr && exprStr !== ")") {
+          parts.push(
+            <span
+              key={`rt-${exprStart}`}
+              className="mono rounded bg-acid/20 px-1 py-0.2 text-[11px] text-acid font-semibold cursor-help hover:bg-acid/30 transition-colors mx-0.5"
+              title={`Runtime-значение сервера: ${exprStr}`}
+            >
+              &#123;&#125;
+            </span>
+          );
+        }
       }
     }
 
-    let tagLabel = region.logLevel ?? "log";
-    if (tagLabel === "sendMessage") tagLabel = "msg";
-    else if (tagLabel === "sendActionBar") tagLabel = "actionbar";
-    else if (tagLabel === "sendTitle") tagLabel = "title";
-    else if (tagLabel === "println" || tagLabel === "print") tagLabel = "out";
+    let tagLabel = region.logLevel ? region.logLevel.toUpperCase() : "LOG";
+    if (tagLabel === "SENDMESSAGE") tagLabel = "MSG";
+    else if (tagLabel === "SENDACTIONBAR") tagLabel = "ACTIONBAR";
+    else if (tagLabel === "SENDTITLE") tagLabel = "TITLE";
+    else if (tagLabel === "PRINTLN" || tagLabel === "PRINT") tagLabel = "OUT";
+
+    const isSevere = region.logLevel === "severe" || region.logLevel === "error";
+    const isWarn = region.logLevel === "warning" || region.logLevel === "warn";
 
     return (
       <>
-        <span className={"chain-chip-tag" + (LOG_LEVEL_SEVERITY.has(region.logLevel ?? "") ? " tag-warn" : "")}>
+        <span className="chain-chip-divider select-none text-[11px] text-faint/60 mr-1">│</span>
+        <span
+          className={
+            "chain-chip-tag" +
+            (isSevere ? " tag-err text-err font-bold" : isWarn ? " tag-warn text-warn font-semibold" : "")
+          }
+        >
           {tagLabel}
         </span>
         {parts}

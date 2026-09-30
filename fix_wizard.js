@@ -1,1 +1,0 @@
-﻿const fs=require("fs"); let c=fs.readFileSync("src/components/SetupWizard.tsx", "utf8"); c=c.replace("`"Java `${javaEnv.major} (`${javaEnv.path})`"", "`"Java `${javaEnv.text}`""); fs.writeFileSync("src/components/SetupWizard.tsx", c);

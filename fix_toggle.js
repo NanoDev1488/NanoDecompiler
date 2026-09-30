@@ -1,1 +1,0 @@
-﻿const fs=require("fs"); let c=fs.readFileSync("src/components/SettingsModal.tsx", "utf8"); c=c.replace(/<Toggle\s+checked=\{draft\.disableVsCodeLogs\}/, `<Toggle label="" checked={draft.disableVsCodeLogs}`); fs.writeFileSync("src/components/SettingsModal.tsx", c);

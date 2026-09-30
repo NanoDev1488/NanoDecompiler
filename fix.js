@@ -1,1 +1,0 @@
-﻿const fs=require('fs'); let c=fs.readFileSync('src/state/engine.tsx', 'utf8'); c=c.replace('pkg: pkg || t(settings.language, "toast.root_pkg"),', 'pkg: pkg || "(корень)",'); fs.writeFileSync('src/state/engine.tsx', c);
