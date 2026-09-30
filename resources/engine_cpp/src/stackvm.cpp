@@ -1781,17 +1781,29 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
                 ExprPtr recv = pop();
                 if (name == "<init>") {
                     auto* pn = dynamic_cast<PendingNew*>(recv.get());
-                    if (pn && !pn->initialized) {
+                    if (pn) {
                         pn->args = args;
                         pn->initialized = true;
-                        // ничего не пушим: <init> ничего не возвращает
-                    } else if (recv->kind == ExprKind::This && mn == "invokespecial") {
-                        bool is_super = owner != ctx.class_internal;
+                        // Если на стеке больше нет других ссылок на этот PendingNew,
+                        // значит это отдельный вызов `new Foo(args);` без сохранения результата
+                        bool on_stack = false;
+                        for (const auto& sitem : stack) {
+                            if (sitem.get() == pn) { on_stack = true; break; }
+                        }
+                        if (!on_stack) {
+                            emit(std::make_shared<ExprStmtNode>(recv));
+                        }
+                    } else if (recv->kind == ExprKind::This) {
+                        bool is_super = (owner != ctx.class_internal);
                         ExprPtr call = std::make_shared<MethodCall>(nullptr, is_super ? "super" : "this", args, "void",
                                                                      false, std::nullopt, true, is_super, false);
                         emit(std::make_shared<ExprStmtNode>(call));
+                    } else if (recv->kind == ExprKind::Local) {
+                        ExprPtr new_obj = std::make_shared<NewObject>(ctx.owner_display(owner), args);
+                        emit(std::make_shared<ExprStmtNode>(std::make_shared<Assign>(recv, new_obj)));
                     } else {
-                        throw DecompileAbort("unrecognized <init> pattern");
+                        ExprPtr new_obj = std::make_shared<NewObject>(ctx.owner_display(owner), args);
+                        emit(std::make_shared<ExprStmtNode>(new_obj));
                     }
                 } else {
                     std::string mname = ctx.method_name(owner, name, desc);

@@ -75,6 +75,7 @@ declare global {
         downloadUrl?: string | null;
         clientDownloadUrl?: string | null;
         releaseUrl?: string;
+        changelog?: string;
         error?: string;
       }>;
       applyUpdate: (downloadUrl: string, latestApiVersion?: string) => Promise<{ ok: boolean; error?: string }>;

@@ -128,6 +128,7 @@ interface EngineApi {
   fileTreeWidth: number;
   terminalHeight: number;
   updateInfo: UpdateInfo;
+  downloadProgress: DownloadProgress | null;
   toasts: Toast[];
   queuedCount: number;
 
@@ -203,13 +204,22 @@ const DEFAULT_SETTINGS: Settings = {
 export interface UpdateInfo {
   checking: boolean;
   applying: boolean;
+  applyingKind?: "client" | "engine";
   kind: "none" | "engine" | "client" | "closed_beta" | null;
   currentVersion?: string;
   latestVersion?: string;
   downloadUrl?: string | null;
   clientDownloadUrl?: string | null;
   releaseUrl?: string;
+  changelog?: string;
   error?: string;
+}
+
+export interface DownloadProgress {
+  downloaded: number;
+  total: number | null;
+  percent: number | null;
+  kind: "client" | "engine";
 }
 
 export function EngineProvider({ children }: { children: ReactNode }) {
@@ -251,6 +261,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const [engineVersion, setEngineVersion] = useState<string | null>(null);
   const [guiVersion, setGuiVersion] = useState<string | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo>({ checking: false, applying: false, kind: null });
+  const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
   // БАГ-ФИКС: раньше envIssue переключался вручную (toggleEnvIssue), без
   // единой реальной проверки java/mvn (см. env:check в main.ts). javaEnv/
   // mavenEnv - настоящий результат "java -version"/"mvn -version" через
@@ -439,6 +450,20 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     [installingTool, checkEnv, toast],
   );
 
+  useEffect(() => {
+    if (!window.nano?.onDownloadProgress) return;
+    const unsub = window.nano.onDownloadProgress((p) => {
+      const percent = p.total && p.total > 0 ? Math.min(100, Math.round((p.downloaded / p.total) * 100)) : null;
+      setDownloadProgress({
+        downloaded: p.downloaded,
+        total: p.total,
+        percent,
+        kind: p.kind,
+      });
+    });
+    return unsub;
+  }, []);
+
   const checkForUpdates = useCallback((silent = false) => {
     setUpdateInfo(u => ({ ...u, checking: true, error: undefined }));
     window.nano
@@ -458,6 +483,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
           downloadUrl: r.downloadUrl,
           clientDownloadUrl: r.clientDownloadUrl,
           releaseUrl: r.releaseUrl,
+          changelog: r.changelog,
         });
         if (!silent) {
           if (r.updateKind === "none") toast("У вас последняя версия", "ok");
@@ -474,12 +500,14 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const applyClientUpdate = useCallback(() => {
     const url = updateInfo.clientDownloadUrl ?? updateInfo.releaseUrl;
     if (!url) return;
-    setUpdateInfo(u => ({ ...u, applying: true }));
+    setUpdateInfo(u => ({ ...u, applying: true, applyingKind: "client" }));
+    setDownloadProgress({ downloaded: 0, total: null, percent: 0, kind: "client" });
     window.nano
       .installClientAndRestart(url)
       .then(res => {
         if (!res.ok) {
-          setUpdateInfo(u => ({ ...u, applying: false, error: res.error }));
+          setUpdateInfo(u => ({ ...u, applying: false, applyingKind: undefined, error: res.error }));
+          setDownloadProgress(null);
           if (res.manual) {
             window.nano.openExternal(url).catch(() => toast(t(settings.language, "toast.link_failed"), "err"));
           } else {
@@ -488,18 +516,21 @@ export function EngineProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(e => {
-        setUpdateInfo(u => ({ ...u, applying: false, error: String(e) }));
+        setUpdateInfo(u => ({ ...u, applying: false, applyingKind: undefined, error: String(e) }));
+        setDownloadProgress(null);
         toast(t(settings.language, "toast.update_failed"), "err");
       });
   }, [updateInfo.clientDownloadUrl, updateInfo.releaseUrl, toast, settings.language]);
 
   const applyEngineUpdate = useCallback(() => {
     if (!updateInfo.downloadUrl) return;
-    setUpdateInfo(u => ({ ...u, applying: true }));
+    setUpdateInfo(u => ({ ...u, applying: true, applyingKind: "engine" }));
+    setDownloadProgress({ downloaded: 0, total: null, percent: 0, kind: "engine" });
     window.nano
       .applyUpdate(updateInfo.downloadUrl, updateInfo.latestVersion)
       .then(r => {
-        setUpdateInfo(u => ({ ...u, applying: false }));
+        setUpdateInfo(u => ({ ...u, applying: false, applyingKind: undefined }));
+        setDownloadProgress(null);
         if (r.ok) {
           toast("Движок обновлён", "ok");
           setUpdateInfo(u => ({ ...u, kind: "none" }));
@@ -508,7 +539,8 @@ export function EngineProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(() => {
-        setUpdateInfo(u => ({ ...u, applying: false }));
+        setUpdateInfo(u => ({ ...u, applying: false, applyingKind: undefined }));
+        setDownloadProgress(null);
         toast("Не удалось обновить движок", "err");
       });
   }, [toast, updateInfo.downloadUrl, updateInfo.latestVersion]);
@@ -1395,7 +1427,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
   const api: EngineApi = {
     jobs, log, runningJob, runningElapsed, selectedJobId, selectedJob, openFileByJob,
-    terminalOpen, logFilter, settings, settingsLoaded, settingsOpen, updateModalOpen, paletteOpen, projectSearchOpen, bugReportOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, installingTool, installProgress, iconThumbnails, updateInfo, toasts, queuedCount, sidebarWidth, fileTreeWidth, terminalHeight,
+    terminalOpen, logFilter, settings, settingsLoaded, settingsOpen, updateModalOpen, paletteOpen, projectSearchOpen, bugReportOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, installingTool, installProgress, iconThumbnails, updateInfo, downloadProgress, toasts, queuedCount, sidebarWidth, fileTreeWidth, terminalHeight,
     addFiles, addJarPaths, openFileDialog, startQueue, stopRunning, stopAll, cancelJob, removeJob, clearQueue,
     selectJob, selectFile, updateFileCode, setLogFilter, toggleTerminal, clearLog, copyLog, copyText,
     openOutput, setSettingsOpen, setUpdateModalOpen, setSidebarWidth, setFileTreeWidth, setTerminalHeight, saveSettings, completeSetup, setPaletteOpen, setProjectSearchOpen, setBugReportOpen,

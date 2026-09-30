@@ -38,6 +38,7 @@ interface GhAsset {
 interface GhRelease {
   tag_name: string;
   html_url: string;
+  body?: string;
   assets: GhAsset[];
 }
 interface VersionsJson {
@@ -477,6 +478,7 @@ export function registerUpdateHandlers(
           downloadUrl: cliAsset ? cliAsset.browser_download_url : null,
           clientDownloadUrl: null,
           releaseUrl: release.html_url,
+          changelog: release.body || "",
         };
       }
 
@@ -518,6 +520,7 @@ export function registerUpdateHandlers(
         downloadUrl: cliAsset ? cliAsset.browser_download_url : null,
         clientDownloadUrl: setupAsset ? setupAsset.browser_download_url : release.html_url,
         releaseUrl: release.html_url,
+        changelog: release.body || "",
       };
     } catch (e) {
       return { ok: false, error: String(e) };

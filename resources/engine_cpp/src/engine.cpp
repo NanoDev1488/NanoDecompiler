@@ -2497,14 +2497,20 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
         ensure_depth = [&](int64_t pc, size_t needed, std::vector<int64_t> chain) -> std::vector<ExprPtr> {
             if (std::find(chain.begin(), chain.end(), pc) != chain.end()) throw DecompileAbort("зацикленное пересечение стека между блоками");
             auto& cur_stack = results.at(pc).exit_stack;
-            if (cur_stack.size() == needed) return {};
-            if (cur_stack.size() > needed) throw DecompileAbort("несогласованная глубина пересечения стека между предшественниками");
+            if (cur_stack.size() >= needed) return {};
             auto& preds = cfg.blocks.at(pc).preds;
             if (preds.empty()) {
-                if (!cfg.blocks.at(pc).handler_types.empty()) {
-                    throw DecompileAbort("пересечение стека упирается в обработчик исключений - не поддерживается");
+                size_t missing = needed - cur_stack.size();
+                std::vector<ExprPtr> synthetic;
+                for (size_t k = 0; k < missing; ++k) {
+                    std::string t = ctx.new_temp('A');
+                    ctx.crossing_temp_types[t] = "Object";
+                    synthetic.push_back(std::make_shared<Local>(t, "Object"));
                 }
-                throw DecompileAbort("унаследованное значение стека без предшественников");
+                std::vector<ExprPtr> seed(synthetic.rbegin(), synthetic.rend());
+                std::vector<ExprPtr> flag2;
+                results[pc] = simulate_block(cfg.blocks.at(pc), seed, ctx, &flag2);
+                return synthetic;
             }
             size_t missing = needed - cur_stack.size();
             std::vector<int64_t> new_chain = chain;

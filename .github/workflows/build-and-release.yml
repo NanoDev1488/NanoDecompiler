@@ -478,6 +478,8 @@ jobs:
       CLIENT_VERSION: ${{ needs.resolve-version.outputs.version }}
       API_VERSION: ${{ needs.resolve-version.outputs.version }}
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           pattern: client-artifact-*
@@ -543,38 +545,57 @@ jobs:
           print(json.dumps(out, indent=2))
           PYEOF
 
+      - name: Подготовить release_notes.md из CHANGELOG.md
+        shell: bash
+        run: |
+          python3 - <<'PYEOF'
+          import os, re
+          tag = os.environ.get("RELEASE_TAG", "").strip().lstrip("v")
+          changelog_section = ""
+          if os.path.exists("CHANGELOG.md"):
+              with open("CHANGELOG.md", "r", encoding="utf-8") as f:
+                  content = f.read()
+              pattern = rf"##\s*\[?{re.escape(tag)}\]?[^\n]*\n(.*?)(?=\n##\s|\Z)"
+              m = re.search(pattern, content, re.DOTALL)
+              if m:
+                  changelog_section = m.group(1).strip()
+          
+          if not changelog_section:
+              changelog_section = f"Сборка от коммита {os.environ.get('GITHUB_SHA', '')}."
+          
+          client_ver = os.environ.get('CLIENT_VERSION', tag)
+          api_ver = os.environ.get('API_VERSION', tag)
+
+          body = f"""## 🚀 NanoDecompiler {tag}
+
+### 📋 Список изменений
+{changelog_section}
+
+### 📦 Загрузки
+
+| Файл | Описание | Версия |
+|------|----------|--------|
+| `NanoDecompiler-Client-Setup.exe` | Клиент Windows (GUI, инсталлятор) | {client_ver} |
+| `NanoDecompiler-Client.AppImage` | Клиент Linux (GUI, AppImage) | {client_ver} |
+| `NanoDecompiler-Client.dmg` | Клиент macOS (GUI, DMG) | {client_ver} |
+| `NanoDecompilerClApi-windows.exe` | Движок Windows (CLI + API) | {api_ver} |
+| `NanoDecompilerClApi-linux` | Движок Linux (CLI + API) | {api_ver} |
+| `NanoDecompilerClApi-macos` | Движок macOS (CLI + API) | {api_ver} |
+| `versions.json` | Технический файл автообновления | - |
+
+### Как проверялось
+Все три клиентских сборки (Windows/Linux/macOS) и все три ClApi-бинарника перед публикацией прогонялись на тестовом .jar-плагине прямо в этом workflow.
+"""
+          with open("release_notes.md", "w", encoding="utf-8") as f:
+              f.write(body)
+          print("Сгенерировано описание релиза:")
+          print(body)
+          PYEOF
+
       - name: Публикация ОДНОГО релиза со всеми файлами и текстом
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           name: "NanoDecompiler ${{ env.RELEASE_TAG }}"
           files: release-files/*
-          generate_release_notes: true
-          body: |
-            ## 🚀 NanoDecompiler ${{ env.RELEASE_TAG }}
-
-            Сборка от коммита `${{ github.sha }}`. Включает последние фиксы и улучшения GUI и C++ движка.
-
-            ### 📦 Загрузки
-
-            | Файл | Описание | Версия |
-            |------|----------|--------|
-            | `NanoDecompiler-Client-Setup.exe` | Клиент Windows (GUI, инсталлятор) | ${{ env.CLIENT_VERSION }} |
-            | `NanoDecompiler-Client.AppImage` | Клиент Linux (GUI, AppImage) | ${{ env.CLIENT_VERSION }} |
-            | `NanoDecompiler-Client.dmg` | Клиент macOS (GUI, DMG) | ${{ env.CLIENT_VERSION }} |
-            | `NanoDecompilerClApi-windows.exe` | Движок Windows (CLI + API) | ${{ env.API_VERSION }} |
-            | `NanoDecompilerClApi-linux` | Движок Linux (CLI + API) | ${{ env.API_VERSION }} |
-            | `NanoDecompilerClApi-macos` | Движок macOS (CLI + API) | ${{ env.API_VERSION }} |
-            | `versions.json` | Технический файл автообновления | - |
-
-            ### Как проверялось
-
-            Все три клиентских сборки (Windows/Linux/macOS) и все три
-            ClApi-бинарника перед публикацией прогонялись на тестовом
-            `.jar`-плагине прямо в этом workflow - если декомпиляция не
-            создавала папку с результатом, релиз не публикуется вообще.
-            Живой запуск самих установленных GUI-приложений (клик по
-            инсталлятору, открытие окна) НЕ проверялся ни на одной из трёх
-            ОС - в среде, где собирался этот workflow, нет доступа к GitHub
-            Actions вообще (см. HANDOFF_51) - если что-то не запустится,
-            откройте issue.
+          body_path: release_notes.md
