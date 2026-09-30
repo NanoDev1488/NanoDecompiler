@@ -1,5 +1,14 @@
 # NanoDecompiler Changelog
 
+## [1.9.151-ObfUpd.14] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **[ObfUpd 14/15] Распаковка статических таблиц и массивов в `<clinit>` (Static Constant Table Unpacker)**:
+  - `resources/engine_cpp/src/structure.cpp`: расширен проход `fold_const_array_lookups_in_expr` для поддержки статических полей `FieldAccess` (ранее поддерживались только локальные переменные `Local`).
+  - `resources/engine_cpp/src/structure.cpp`: в `propagate_local_constant_arrays` добавлена трассировка статических массивов, инициализируемых в `<clinit>` через блочные `NewArray` литералы и последовательные присваивания `TABLE[idx] = val`.
+
+---
+
 ## [1.9.150-ObfUpd.13] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

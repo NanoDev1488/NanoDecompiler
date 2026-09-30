@@ -221,7 +221,8 @@ namespace nd {
 // НОВОЕ v1.9.148-ObfUpd.11: [ObfUpd 11/15] восстановление assert ($assertionsDisabled десугаринг в assert cond; / assert cond : msg;) и устранение паразитного автобоксинга/распаковки примитивов (Boolean/Integer/Long/Double/Float/Byte/Short/Character unbox deobfuscation).
 // НОВОЕ v1.9.149-ObfUpd.12: [ObfUpd 12/15] десугаринг рефлексии (Reflection Desugaring: Class.forName/getMethod/invoke в прямые вызовы методов, getField/get/set в доступ к полям, распаковка new Class[0]/new Object[0]).
 // НОВОЕ v1.9.150-ObfUpd.13: [ObfUpd 13/15] нормализация строковых конкатенаций (StringBuilder/StringBuffer dechaining: свертка цепочек .append(...).toString() в чистые операторы +).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.150-ObfUpd.13";
+// НОВОЕ v1.9.151-ObfUpd.14: [ObfUpd 14/15] распаковка статических таблиц и массивов в <clinit> (Static Constant Table & Array Unpacker: свертка статических таблиц FieldAccess[const_idx] в литералы, трассировка поэлементного заполнения массивов).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.151-ObfUpd.14";
 }
 
 

@@ -2421,9 +2421,16 @@ static ExprPtr fold_const_array_lookups_in_expr(ExprPtr e, const std::map<std::s
         auto* aa = static_cast<ArrayAccess*>(e.get());
         if (aa->array) aa->array = fold_const_array_lookups_in_expr(aa->array, arrays);
         if (aa->index) aa->index = fold_const_array_lookups_in_expr(aa->index, arrays);
-        if (aa->array && aa->array->kind == ExprKind::Local && aa->index && aa->index->kind == ExprKind::Const) {
-            auto* loc = static_cast<Local*>(aa->array.get());
-            auto it = arrays.find(loc->name);
+        std::string array_ident = "";
+        if (aa->array) {
+            if (aa->array->kind == ExprKind::Local) {
+                array_ident = static_cast<Local*>(aa->array.get())->name;
+            } else if (aa->array->kind == ExprKind::FieldAccess) {
+                array_ident = static_cast<FieldAccess*>(aa->array.get())->name;
+            }
+        }
+        if (!array_ident.empty() && aa->index && aa->index->kind == ExprKind::Const) {
+            auto it = arrays.find(array_ident);
             if (it != arrays.end()) {
                 auto* idx_c = static_cast<Const*>(aa->index.get());
                 try {
@@ -2483,6 +2490,39 @@ std::vector<StmtPtr> propagate_local_constant_arrays(std::vector<StmtPtr> stmts)
                 auto* na = static_cast<NewArray*>(ld->init.get());
                 if (na->initializer.has_value() && !na->initializer->empty()) {
                     candidate_arrays[ld->name] = *na->initializer;
+                }
+            }
+        } else if (s->kind == StmtKind::ExprStmt) {
+            auto* es = static_cast<ExprStmtNode*>(s.get());
+            if (es->expr && es->expr->kind == ExprKind::Assign) {
+                auto* as = static_cast<Assign*>(es->expr.get());
+                if (as->target && as->value) {
+                    if (as->target->kind == ExprKind::FieldAccess && as->value->kind == ExprKind::NewArray) {
+                        auto* fa = static_cast<FieldAccess*>(as->target.get());
+                        auto* na = static_cast<NewArray*>(as->value.get());
+                        if (na->initializer.has_value() && !na->initializer->empty()) {
+                            candidate_arrays[fa->name] = *na->initializer;
+                        }
+                    } else if (as->target->kind == ExprKind::ArrayAccess && as->value->kind == ExprKind::Const) {
+                        auto* aa = static_cast<ArrayAccess*>(as->target.get());
+                        std::string target_name = "";
+                        if (aa->array && aa->array->kind == ExprKind::FieldAccess) {
+                            target_name = static_cast<FieldAccess*>(aa->array.get())->name;
+                        } else if (aa->array && aa->array->kind == ExprKind::Local) {
+                            target_name = static_cast<Local*>(aa->array.get())->name;
+                        }
+                        if (!target_name.empty() && aa->index && aa->index->kind == ExprKind::Const) {
+                            try {
+                                long long idx = std::stoll(static_cast<Const*>(aa->index.get())->literal);
+                                if (idx >= 0 && idx < 2048) {
+                                    if (candidate_arrays[target_name].size() <= static_cast<size_t>(idx)) {
+                                        candidate_arrays[target_name].resize(static_cast<size_t>(idx) + 1, std::make_shared<Const>("0", "int"));
+                                    }
+                                    candidate_arrays[target_name][static_cast<size_t>(idx)] = as->value;
+                                }
+                            } catch (...) {}
+                        }
+                    }
                 }
             }
         }
