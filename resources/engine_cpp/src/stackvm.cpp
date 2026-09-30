@@ -1795,6 +1795,58 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
                         }
                     }
                 }
+                // XOR string deobfuscation
+                if (owner == ctx.class_internal) {
+                    const Method* target_m = nullptr;
+                    for (const auto& tm : ctx.cf.methods) {
+                        if (tm.name == name && tm.descriptor == desc) {
+                            target_m = &tm;
+                            break;
+                        }
+                    }
+                    if (target_m && is_likely_xor_decryptor(*target_m)) {
+                        if (args.size() == 2 && args[0]->kind == ExprKind::Const && args[1]->kind == ExprKind::Const) {
+                            auto* c0 = static_cast<Const*>(args[0].get());
+                            auto* c1 = static_cast<Const*>(args[1].get());
+                            if (c0->type == "String" && c0->raw.has_value()) {
+                                if (c1->type == "int" || c1->type == "char" || c1->type == "byte" || c1->type == "short") {
+                                    try {
+                                        int32_t key_val = std::stoi(c1->val);
+                                        auto dec = str_decrypt_xor(*c0->raw, key_val);
+                                        if (dec.has_value()) {
+                                            str_decrypt_increment_decrypted_count();
+                                            push(std::make_shared<Const>(java_string_literal(*dec), "String", *dec));
+                                            i += 1;
+                                            continue;
+                                        }
+                                    } catch (...) {}
+                                } else if (c1->type == "String" && c1->raw.has_value()) {
+                                    auto dec = str_decrypt_xor_multikey(*c0->raw, *c1->raw);
+                                    if (dec.has_value()) {
+                                        str_decrypt_increment_decrypted_count();
+                                        push(std::make_shared<Const>(java_string_literal(*dec), "String", *dec));
+                                        i += 1;
+                                        continue;
+                                    }
+                                }
+                            }
+                        } else if (args.size() == 1 && args[0]->kind == ExprKind::Const) {
+                            auto* c0 = static_cast<Const*>(args[0].get());
+                            if (c0->type == "String" && c0->raw.has_value()) {
+                                auto fixed_k = find_xor_fixed_key(*target_m, ctx.cf);
+                                if (fixed_k.has_value()) {
+                                    auto dec = str_decrypt_xor(*c0->raw, *fixed_k);
+                                    if (dec.has_value()) {
+                                        str_decrypt_increment_decrypted_count();
+                                        push(std::make_shared<Const>(java_string_literal(*dec), "String", *dec));
+                                        i += 1;
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 std::string mname = ctx.method_name(owner, name, desc);
                 // ВАЖНО: порядок вычисления обязателен как в Python (map_type
                 // ПЕРЕД owner_display - оба мутируют ctx.imports, и порядок

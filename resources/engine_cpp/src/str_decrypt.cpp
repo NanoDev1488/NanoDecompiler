@@ -189,4 +189,179 @@ std::optional<ActiveDecryptor> find_active_decryptor_in_jar(
     return std::nullopt;
 }
 
+namespace {
+
+std::vector<uint16_t> utf8_to_utf16(const std::string& s) {
+    std::vector<uint16_t> out;
+    size_t i = 0, n = s.size();
+    while (i < n) {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        uint32_t cp = 0;
+        size_t extra = 0;
+        if (c < 0x80) {
+            cp = c;
+            extra = 0;
+        } else if ((c & 0xE0) == 0xC0) {
+            cp = c & 0x1F;
+            extra = 1;
+        } else if ((c & 0xF0) == 0xE0) {
+            cp = c & 0x0F;
+            extra = 2;
+        } else if ((c & 0xF8) == 0xF0) {
+            cp = c & 0x07;
+            extra = 3;
+        } else {
+            out.push_back(c);
+            i++;
+            continue;
+        }
+        if (i + extra >= n) {
+            out.push_back(c);
+            i++;
+            continue;
+        }
+        bool valid = true;
+        for (size_t k = 1; k <= extra; ++k) {
+            unsigned char cc = static_cast<unsigned char>(s[i + k]);
+            if ((cc & 0xC0) != 0x80) { valid = false; break; }
+            cp = (cp << 6) | (cc & 0x3F);
+        }
+        if (!valid) {
+            out.push_back(c);
+            i++;
+            continue;
+        }
+        i += extra + 1;
+        if (cp <= 0xFFFF) {
+            out.push_back(static_cast<uint16_t>(cp));
+        } else if (cp <= 0x10FFFF) {
+            cp -= 0x10000;
+            out.push_back(static_cast<uint16_t>(0xD800 + (cp >> 10)));
+            out.push_back(static_cast<uint16_t>(0xDC00 + (cp & 0x3FF)));
+        }
+    }
+    return out;
+}
+
+std::string utf16_to_utf8(const std::vector<uint16_t>& chars) {
+    std::string out;
+    size_t i = 0, n = chars.size();
+    while (i < n) {
+        uint32_t cp = chars[i++];
+        if (cp >= 0xD800 && cp <= 0xDBFF && i < n) {
+            uint32_t low = chars[i];
+            if (low >= 0xDC00 && low <= 0xDFFF) {
+                cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+                i++;
+            }
+        }
+        if (cp < 0x80) {
+            out.push_back(static_cast<char>(cp));
+        } else if (cp < 0x800) {
+            out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        } else if (cp < 0x10000) {
+            out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        } else {
+            out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        }
+    }
+    return out;
+}
+
+}  // namespace
+
+std::optional<std::string> str_decrypt_xor(const std::string& input, int32_t key) {
+    auto u16 = utf8_to_utf16(input);
+    if (u16.empty()) return "";
+    for (size_t i = 0; i < u16.size(); ++i) {
+        u16[i] = static_cast<uint16_t>(u16[i] ^ static_cast<uint16_t>(key));
+    }
+    std::string res = utf16_to_utf8(u16);
+    if (!is_valid_utf8(res)) return std::nullopt;
+    size_t printable = 0;
+    for (unsigned char c : res) {
+        if ((c >= 32 && c <= 126) || c == '\t' || c == '\n' || c == '\r' || c >= 128) {
+            printable++;
+        }
+    }
+    if (printable * 10 < res.size() * 7) return std::nullopt;
+    return res;
+}
+
+std::optional<std::string> str_decrypt_xor_multikey(const std::string& input, const std::string& key) {
+    auto u16 = utf8_to_utf16(input);
+    auto k16 = utf8_to_utf16(key);
+    if (k16.empty() || u16.empty()) return std::nullopt;
+    for (size_t i = 0; i < u16.size(); ++i) {
+        u16[i] = static_cast<uint16_t>(u16[i] ^ k16[i % k16.size()]);
+    }
+    std::string res = utf16_to_utf8(u16);
+    if (!is_valid_utf8(res)) return std::nullopt;
+    size_t printable = 0;
+    for (unsigned char c : res) {
+        if ((c >= 32 && c <= 126) || c == '\t' || c == '\n' || c == '\r' || c >= 128) {
+            printable++;
+        }
+    }
+    if (printable * 10 < res.size() * 7) return std::nullopt;
+    return res;
+}
+
+bool is_likely_xor_decryptor(const Method& m) {
+    if (!(m.access & 0x0008)) return false;
+    if (!m.has_code || m.code.empty()) return false;
+    if (m.descriptor != "(Ljava/lang/String;I)Ljava/lang/String;" &&
+        m.descriptor != "(Ljava/lang/String;C)Ljava/lang/String;" &&
+        m.descriptor != "(Ljava/lang/String;)Ljava/lang/String;" &&
+        m.descriptor != "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;") {
+        return false;
+    }
+    bool has_xor = false;
+    for (uint8_t op : m.code) {
+        if (op == 0x82) { // ixor
+            has_xor = true;
+            break;
+        }
+    }
+    return has_xor;
+}
+
+std::optional<int32_t> find_xor_fixed_key(const Method& m, const ClassFile& cf) {
+    const auto& c = m.code;
+    size_t pc = 0, n = c.size();
+    while (pc < n) {
+        uint8_t op = c[pc];
+        if (op >= 0x02 && op <= 0x08) {
+            if (pc + 1 < n && c[pc + 1] == 0x82) return static_cast<int32_t>(op - 0x03);
+            pc += 1;
+        } else if (op == 0x10 && pc + 1 < n) {
+            if (pc + 2 < n && c[pc + 2] == 0x82) return static_cast<int32_t>(static_cast<int8_t>(c[pc + 1]));
+            pc += 2;
+        } else if (op == 0x11 && pc + 2 < n) {
+            if (pc + 3 < n && c[pc + 3] == 0x82) {
+                int16_t v = (static_cast<int16_t>(c[pc + 1]) << 8) | c[pc + 2];
+                return static_cast<int32_t>(v);
+            }
+            pc += 3;
+        } else if (op == 0x12 && pc + 1 < n) {
+            if (pc + 2 < n && c[pc + 2] == 0x82) {
+                auto it = cf.pool.find(c[pc + 1]);
+                if (it != cf.pool.end() && it->second.tag == CpTag::Integer) {
+                    return static_cast<int32_t>(it->second.int_value);
+                }
+            }
+            pc += 2;
+        } else {
+            pc += 1;
+        }
+    }
+    return std::nullopt;
+}
+
 }  // namespace nd

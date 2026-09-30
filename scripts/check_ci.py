@@ -3,10 +3,20 @@ import json
 import sys
 
 def main():
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    try:
+        import subprocess, re
+        remote_url = subprocess.check_output(['git', 'config', '--get', 'remote.origin.url'], text=True).strip()
+        m = re.search(r'https://([^@]+)@github\.com', remote_url)
+        if m:
+            headers['Authorization'] = f'token {m.group(1)}'
+    except Exception:
+        pass
+
     if len(sys.argv) > 1 and sys.argv[1].isdigit():
         run_id = sys.argv[1]
         url_jobs = f'https://api.github.com/repos/NanoDev1488/NanoDecompiler/actions/runs/{run_id}/jobs'
-        req = urllib.request.Request(url_jobs, headers={'User-Agent': 'Mozilla/5.0'})
+        req = urllib.request.Request(url_jobs, headers=headers)
         with urllib.request.urlopen(req) as resp:
             data = json.loads(resp.read().decode('utf-8'))
             for j in data.get('jobs', []):
@@ -17,7 +27,7 @@ def main():
         return
 
     url = 'https://api.github.com/repos/NanoDev1488/NanoDecompiler/actions/runs?per_page=8'
-    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    req = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(req) as resp:
             data = json.loads(resp.read().decode('utf-8'))
