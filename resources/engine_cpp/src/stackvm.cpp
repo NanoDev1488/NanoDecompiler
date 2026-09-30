@@ -1844,7 +1844,12 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
                             if (c0->type == "String" && c0->raw.has_value()) {
                                 if (c1->type == "int" || c1->type == "char" || c1->type == "byte" || c1->type == "short") {
                                     try {
-                                        int32_t key_val = std::stoi(c1->val);
+                                        int32_t key_val = 0;
+                                        if (!c1->value.empty() && c1->value.front() == '\'' && c1->value.back() == '\'') {
+                                            key_val = static_cast<int32_t>(c1->value[1]);
+                                        } else {
+                                            key_val = std::stoi(c1->value, nullptr, 0);
+                                        }
                                         auto dec = str_decrypt_xor(*c0->raw, key_val);
                                         if (dec.has_value()) {
                                             str_decrypt_increment_decrypted_count();
