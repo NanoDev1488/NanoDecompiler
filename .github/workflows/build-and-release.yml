@@ -363,6 +363,7 @@ jobs:
         run: |
           cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
           cmake --build build --parallel
+          strip -s build/NanoDecompilerCLI.exe
           cp build/NanoDecompilerCLI.exe ../../NanoDecompilerClApi.exe
 
       - name: Проверка - exe реально работает (обычный режим и --json-output)
@@ -411,6 +412,7 @@ jobs:
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
           cmake --build build --parallel
+          strip --strip-all build/NanoDecompilerCLI
           cp build/NanoDecompilerCLI ../../NanoDecompilerClApi
 
       - name: Проверка - бинарник реально работает
@@ -449,6 +451,7 @@ jobs:
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
           cmake --build build --parallel
+          strip build/NanoDecompilerCLI
           cp build/NanoDecompilerCLI ../../NanoDecompilerClApi
 
       - name: Проверка - бинарник реально работает

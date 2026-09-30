@@ -23,10 +23,21 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   add_compile_options(-fno-var-tracking -fno-var-tracking-assignments)
 endif()
 
+# Оптимизация размера бинарника (dead code elimination + strip debug symbols)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+  add_compile_options(-ffunction-sections -fdata-sections -fno-ident)
+endif()
+
 file(GLOB ND_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 add_executable(NanoDecompilerCLI ${ND_SOURCES})
 target_include_directories(NanoDecompilerCLI PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+  if(MINGW OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_link_options(NanoDecompilerCLI PRIVATE -s -Wl,--gc-sections)
+  endif()
+endif()
 
 # БАГ-ФИКС v1.7.3.1 (реальный краш у пользователя - STATUS_DLL_NOT_FOUND/
 # 0xC0000135 - тот же код ошибки, что уже однажды чинили для

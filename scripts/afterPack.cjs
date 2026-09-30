@@ -54,4 +54,21 @@ exports.default = async function afterPack(context) {
   console.log(
     `[afterPack] (${context.electronPlatformName}) удалено ${removedCount} неиспользуемых локалей Chromium из ${localesDir}, освобождено ~${Math.round(removedBytes / 1024 / 1024)} МБ`
   );
+
+  // Дополнительная оптимизация для macOS: удаление лишних .lproj папок
+  if (context.electronPlatformName === "darwin") {
+    const productFilename = context.packager.appInfo.productFilename;
+    const resourcesDir = path.join(context.appOutDir, `${productFilename}.app`, "Contents", "Resources");
+    const KEEP_LPROJ = new Set(["en.lproj", "ru.lproj", "Base.lproj"]);
+    if (fs.existsSync(resourcesDir)) {
+      for (const item of fs.readdirSync(resourcesDir)) {
+        if (item.endsWith(".lproj") && !KEEP_LPROJ.has(item)) {
+          const itemPath = path.join(resourcesDir, item);
+          try {
+            fs.rmSync(itemPath, { recursive: true, force: true });
+          } catch (_) {}
+        }
+      }
+    }
+  }
 };

@@ -1,5 +1,20 @@
 # NanoDecompiler Changelog
 
+## [1.9.122] - 2026-09-30
+
+### Клиент & Сборка (Packaging & Engine Binary Optimization)
+- **Уменьшение размера бинарника движка ClApi (с 6.2 МБ до ~1.9-2.1 МБ)**:
+  - `resources/engine_cpp/CMakeLists.txt`: включены флаги компилятора `-ffunction-sections -fdata-sections -fno-ident` для удаления мертвого кода и строковых идентификаторов компилятора.
+  - `resources/engine_cpp/CMakeLists.txt`: добавлены флаги компоновщика `-s -Wl,--gc-sections` (стриппинг отладочных символов, секций раскрутки стека и неиспользуемых функций).
+  - `.github/workflows/build-and-release.yml`: добавлены явные шаги `strip -s` для Windows (`NanoDecompilerCLI.exe`), `strip --strip-all` для Linux и `strip` для macOS.
+- **Экстремальная оптимизация сжатия дистрибутива клиента (Electron)**:
+  - `package.json`: задана максимальная степень сжатия инсталлятора (`"compression": "maximum"` для LZMA2 с максимальным словарем).
+  - `package.json`: удалена неиспользуемая папка `resources/icons` из `extraResources`.
+  - `package.json`: отключена генерация дифференциальных пакетов (`differentialPackage: false`) в NSIS для монолитного максимального сжатия.
+  - `scripts/afterPack.cjs`: расширен хук очистки ресурсов — на macOS автоматически вычищаются неиспользуемые языковые пакеты `.lproj` (кроме `ru.lproj` и `en.lproj`), освобождая дополнительно мегабайты в дистрибутиве.
+
+---
+
 ## [1.9.121] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)
