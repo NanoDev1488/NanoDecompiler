@@ -181,6 +181,19 @@ std::string emit_expr(const ExprPtr& e) {
             return simple(static_cast<const ClassLiteral*>(e.get())->type_name) + ".class";
         case ExprKind::Lambda: {
             const auto* l = static_cast<const Lambda*>(e.get());
+            if (l->is_method_ref && l->body_method_ref) {
+                if (l->body_method_ref->kind == ExprKind::MethodCall) {
+                    const auto* mc = static_cast<const MethodCall*>(l->body_method_ref.get());
+                    if (mc->target) {
+                        return emit_expr(mc->target) + "::" + mc->name;
+                    } else if (mc->owner.has_value()) {
+                        return simple(*mc->owner) + "::" + mc->name;
+                    }
+                } else if (l->body_method_ref->kind == ExprKind::NewObject) {
+                    const auto* no = static_cast<const NewObject*>(l->body_method_ref.get());
+                    return simple(no->type_name) + "::new";
+                }
+            }
             std::vector<std::string> pnames;
             for (auto& p : l->params) {
                 if (p->kind == ExprKind::Local) pnames.push_back(static_cast<const Local*>(p.get())->name);

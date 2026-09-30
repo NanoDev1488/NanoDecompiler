@@ -908,15 +908,18 @@ ExprPtr build_lambda(const ClassFile& cf, const std::vector<uint16_t>& bsm_args,
     };
 
     ExprPtr call;
+    bool is_ref = false;
     if (MH_KIND_NEW.count(kind)) {
         std::vector<ExprPtr> args = captured;
         args.insert(args.end(), lam_params.begin(), lam_params.end());
         call = std::make_shared<NewObject>(impl_owner_disp, coerce_seq(args, impl_params));
+        if (captured.empty()) is_ref = true;
     } else if (MH_KIND_STATIC.count(kind)) {
         std::vector<ExprPtr> args = captured;
         args.insert(args.end(), lam_params.begin(), lam_params.end());
         call = std::make_shared<MethodCall>(nullptr, impl_mname, coerce_seq(args, impl_params), "Object", true,
                                              std::optional<std::string>(impl_owner_disp));
+        if (captured.empty() && impl_name.rfind("lambda$", 0) != 0) is_ref = true;
     } else if (MH_KIND_VIRTUAL.count(kind) || MH_KIND_SPECIAL.count(kind)) {
         ExprPtr recv;
         std::vector<ExprPtr> rest;
@@ -924,13 +927,18 @@ ExprPtr build_lambda(const ClassFile& cf, const std::vector<uint16_t>& bsm_args,
             recv = captured[0];
             rest.assign(captured.begin() + 1, captured.end());
             rest.insert(rest.end(), lam_params.begin(), lam_params.end());
+            if (captured.size() == 1 && impl_name.rfind("lambda$", 0) != 0) is_ref = true;
         } else if (!lam_params.empty()) {
             recv = lam_params[0];
             rest.assign(lam_params.begin() + 1, lam_params.end());
+            if (impl_name.rfind("lambda$", 0) != 0) {
+                is_ref = true;
+                recv = nullptr;
+            }
         } else {
             throw DecompileAbort("не удалось определить получателя для лямбды");
         }
-        if ((recv->type == "Object" || recv->type == "java.lang.Object") && impl_owner_disp != "" &&
+        if (recv && (recv->type == "Object" || recv->type == "java.lang.Object") && impl_owner_disp != "" &&
             impl_owner_disp != "Object" && impl_owner_disp != "java.lang.Object") {
             recv = std::make_shared<Cast>(impl_owner_disp, recv);
         }
@@ -940,7 +948,7 @@ ExprPtr build_lambda(const ClassFile& cf, const std::vector<uint16_t>& bsm_args,
         throw DecompileAbort("неизвестный kind method handle: " + std::to_string(kind));
     }
 
-    return std::make_shared<Lambda>(lam_params, call, functional_type_desc.empty() ? "Object" : functional_type_desc);
+    return std::make_shared<Lambda>(lam_params, call, functional_type_desc.empty() ? "Object" : functional_type_desc, is_ref);
 }
 
 // HANDOFF_49: ObjectMethods.bootstrap - стандартный (JEP 384/395, JDK 16+)

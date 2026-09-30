@@ -198,7 +198,8 @@ namespace nd {
 // НОВОЕ v1.9.125: устойчивая структуризация сложных CFG (динамическая симуляция пропущенных блоков, безопасный выход по guard limit и нефатальная обработка глубоких if/else цепочек в structure.cpp).
 // НОВОЕ v1.9.126: универсальное распознавание и десугаринг switch-map таблиц enum (поддержка Eclipse ECJ $SWITCH_TABLE$, нечувствительное к разделителям сопоставление пакетов и поиск констант enum).
 // НОВОЕ v1.9.127: десугаринг литералов массивов для объявлений и присваиваний (LocalDecl, FieldAccess, static-полей в <clinit>) с поддержкой таблиц до 1024 элементов.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.127";
+// НОВОЕ v1.9.128: десугаринг ссылок на методы Java 8+ (Class::method, expr::method, Type::new для LambdaMetafactory) и чистое форматирование лямбд.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.128";
 }
 
 

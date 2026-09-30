@@ -249,8 +249,9 @@ class Lambda : public Expr {
 public:
     std::vector<ExprPtr> params;         // list[Local]
     ExprPtr body_method_ref;             // MethodCall или NewObject
-    Lambda(std::vector<ExprPtr> params_, ExprPtr body_method_ref_, std::string functional_type)
-        : Expr(ExprKind::Lambda), params(std::move(params_)), body_method_ref(std::move(body_method_ref_)) {
+    bool is_method_ref = false;          // true для ссылок на методы (Class::method, expr::method, Type::new)
+    Lambda(std::vector<ExprPtr> params_, ExprPtr body_method_ref_, std::string functional_type, bool is_ref = false)
+        : Expr(ExprKind::Lambda), params(std::move(params_)), body_method_ref(std::move(body_method_ref_)), is_method_ref(is_ref) {
         type = std::move(functional_type);
     }
     int prec() const override { return 15; }

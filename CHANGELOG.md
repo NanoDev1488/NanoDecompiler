@@ -1,5 +1,19 @@
 # NanoDecompiler Changelog
 
+## [1.9.128] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **Десугаринг ссылок на методы Java 8+ (Method References & Lambda Resugaring)**:
+  - `resources/engine_cpp/include/ast_nodes.hpp`: узел `Lambda` дополнен флагом `is_method_ref` для представления конструкторных, статических и связанных/несвязанных ссылок на методы (`::`).
+  - `resources/engine_cpp/src/emit.cpp`: реализован синтаксический вывод оператора `::` (`Class::method`, `expr::method`, `Type::new`), возвращающий идиоматичный компактный Java-код вместо раздутых однострочных лямбд `(x) -> x.foo()`.
+  - `resources/engine_cpp/src/stackvm.cpp`: в функции `build_lambda` поддержано автоматическое распознавание всех типов `MethodHandle` из `LambdaMetafactory`:
+    - `H_newInvokeSpecial` без захвата контекста преобразуется в ссылку на конструктор `Type::new`;
+    - `H_invokeStatic` без захвата контекста преобразуется в статическую ссылку `Type::method`;
+    - `H_invokeVirtual` / `H_invokeSpecial` без захвата контекста (первый аргумент SAM является получателем) преобразуется в ссылку на метод экземпляра произвольного типа `Type::method`;
+    - `H_invokeVirtual` с захватом одного объекта (`this` или локальной переменной) преобразуется в связанную ссылку `expr::method` (`this::handler`, `builder::append`).
+
+---
+
 ## [1.9.127] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)
