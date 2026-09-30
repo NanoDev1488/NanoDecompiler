@@ -34,8 +34,11 @@ add_executable(NanoDecompilerCLI ${ND_SOURCES})
 target_include_directories(NanoDecompilerCLI PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  if(MINGW OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  if(MINGW OR (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND NOT APPLE) OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND NOT APPLE))
     target_link_options(NanoDecompilerCLI PRIVATE -s -Wl,--gc-sections)
+  endif()
+  if(APPLE)
+    target_link_options(NanoDecompilerCLI PRIVATE -Wl,-dead_strip -Wl,-stack_size,0x1000000)
   endif()
 endif()
 
