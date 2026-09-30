@@ -11,6 +11,7 @@ std::string PlatformInfo::kind_label() const {
         case PlatformKind::Paper: return "Paper";
         case PlatformKind::Velocity: return "Velocity";
         case PlatformKind::Bungee: return "BungeeCord";
+        case PlatformKind::Sponge: return "Sponge";
         case PlatformKind::ModFabric: return "Fabric mod";
         case PlatformKind::ModForge: return "Forge/NeoForge mod";
         default: return "неизвестно";
@@ -143,83 +144,143 @@ PlatformInfo detect_platform(const std::vector<std::string>& all_names,
             if (!info.name.has_value()) info.name = extract_json_field(*text, "id");
             info.version = extract_json_field(*text, "version");
             info.description = extract_json_field(*text, "description");
+            info.main_class = extract_json_field(*text, "main");
         }
-        return info;
-    }
-    std::string bungee_path = has("bungee.yml") ? "bungee.yml" : (has("waterfall.yml") ? "waterfall.yml" : "");
-    if (!bungee_path.empty()) {
-        info.kind = PlatformKind::Bungee;
-        info.manifest_path = bungee_path;
-        if (auto text = read_entry(bungee_path)) {
-            info.name = extract_yaml_field(*text, "name");
-            info.version = extract_yaml_field(*text, "version");
-            info.description = extract_yaml_field(*text, "description");
+    } else {
+        std::string sponge_path = has("sponge_plugins.json") ? "sponge_plugins.json"
+                                                              : (has("META-INF/sponge_plugins.json") ? "META-INF/sponge_plugins.json" : "");
+        if (!sponge_path.empty()) {
+            info.kind = PlatformKind::Sponge;
+            info.manifest_path = sponge_path;
+            if (auto text = read_entry(sponge_path)) {
+                info.name = extract_json_field(*text, "name");
+                if (!info.name.has_value()) info.name = extract_json_field(*text, "id");
+                info.version = extract_json_field(*text, "version");
+                info.description = extract_json_field(*text, "description");
+                info.main_class = extract_json_field(*text, "entrypoint");
+                if (!info.main_class.has_value()) info.main_class = extract_json_field(*text, "main");
+                auto parsed = json_parse(*text);
+                if (parsed && parsed->is_object()) {
+                    if (const JsonValue* plugins = parsed->get("plugins")) {
+                        if (plugins->is_array() && plugins->arr_v && !plugins->arr_v->empty()) {
+                            const JsonValue& p0 = (*plugins->arr_v)[0];
+                            if (p0.is_object()) {
+                                if (!info.name.has_value()) {
+                                    if (const JsonValue* n = p0.get("name")) info.name = n->as_string();
+                                    if (!info.name.has_value()) {
+                                        if (const JsonValue* id = p0.get("id")) info.name = id->as_string();
+                                    }
+                                }
+                                if (!info.version.has_value()) {
+                                    if (const JsonValue* v = p0.get("version")) info.version = v->as_string();
+                                }
+                                if (!info.main_class.has_value()) {
+                                    if (const JsonValue* ep = p0.get("entrypoint")) info.main_class = ep->as_string();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            std::string bungee_path = has("bungee.yml") ? "bungee.yml" : (has("waterfall.yml") ? "waterfall.yml" : "");
+            if (!bungee_path.empty()) {
+                info.kind = PlatformKind::Bungee;
+                info.manifest_path = bungee_path;
+                if (auto text = read_entry(bungee_path)) {
+                    info.name = extract_yaml_field(*text, "name");
+                    info.version = extract_yaml_field(*text, "version");
+                    info.description = extract_yaml_field(*text, "description");
+                    info.main_class = extract_yaml_field(*text, "main");
+                    if (auto a = extract_yaml_field(*text, "author")) info.authors.push_back(*a);
+                    if (auto d = extract_yaml_field(*text, "depends")) info.depends.push_back(*d);
+                }
+            } else {
+                std::string paper_path = has("paper-plugin.yml") ? "paper-plugin.yml" : (has("META-INF/paper-plugin.yml") ? "META-INF/paper-plugin.yml" : "");
+                if (!paper_path.empty()) {
+                    info.kind = PlatformKind::Paper;
+                    info.manifest_path = paper_path;
+                    if (auto text = read_entry(paper_path)) {
+                        info.name = extract_yaml_field(*text, "name");
+                        info.version = extract_yaml_field(*text, "version");
+                        info.description = extract_yaml_field(*text, "description");
+                        info.main_class = extract_yaml_field(*text, "main");
+                        if (auto a = extract_yaml_field(*text, "author")) info.authors.push_back(*a);
+                    }
+                } else if (has("plugin.yml")) {
+                    info.kind = PlatformKind::Bukkit;
+                    info.manifest_path = "plugin.yml";
+                    if (auto text = read_entry("plugin.yml")) {
+                        info.name = extract_yaml_field(*text, "name");
+                        info.version = extract_yaml_field(*text, "version");
+                        info.description = extract_yaml_field(*text, "description");
+                        info.main_class = extract_yaml_field(*text, "main");
+                        if (auto a = extract_yaml_field(*text, "author")) info.authors.push_back(*a);
+                        if (auto d = extract_yaml_field(*text, "depend")) info.depends.push_back(*d);
+                        if (auto sd = extract_yaml_field(*text, "softdepend")) info.soft_depends.push_back(*sd);
+                    }
+                } else {
+                    // Моды
+                    std::string fabric_path = has("fabric.mod.json") ? "fabric.mod.json"
+                                                                     : (has("META-INF/fabric.mod.json") ? "META-INF/fabric.mod.json" : "");
+                    if (!fabric_path.empty()) {
+                        info.kind = PlatformKind::ModFabric;
+                        info.manifest_path = fabric_path;
+                        if (auto text = read_entry(fabric_path)) {
+                            info.name = extract_json_field(*text, "name");
+                            info.version = extract_json_field(*text, "version");
+                            info.description = extract_json_field(*text, "description");
+                        }
+                    } else if (has("quilt.mod.json")) {
+                        info.kind = PlatformKind::ModFabric;
+                        info.manifest_path = "quilt.mod.json";
+                        if (auto text = read_entry("quilt.mod.json")) {
+                            info.name = extract_quilt_name(*text);
+                            info.version = extract_json_field(*text, "version");
+                        }
+                    } else if (has("META-INF/mods.toml") || has("META-INF/neoforge.mods.toml")) {
+                        info.kind = PlatformKind::ModForge;
+                        info.manifest_path = has("META-INF/mods.toml") ? "META-INF/mods.toml" : "META-INF/neoforge.mods.toml";
+                        if (auto text = read_entry(info.manifest_path)) {
+                            info.name = extract_toml_field(*text, "displayName");
+                            info.version = extract_toml_field(*text, "version");
+                            info.description = extract_toml_field(*text, "description");
+                        }
+                    } else if (has("mcmod.info")) {
+                        info.kind = PlatformKind::ModForge;
+                        info.manifest_path = "mcmod.info";
+                        if (auto text = read_entry("mcmod.info")) info.name = extract_mcmod_info_name(*text);
+                    } else {
+                        info.kind = PlatformKind::Unknown;
+                    }
+                }
+            }
         }
-        return info;
-    }
-    std::string paper_path = has("paper-plugin.yml") ? "paper-plugin.yml" : (has("META-INF/paper-plugin.yml") ? "META-INF/paper-plugin.yml" : "");
-    if (!paper_path.empty()) {
-        info.kind = PlatformKind::Paper;
-        info.manifest_path = paper_path;
-        if (auto text = read_entry(paper_path)) {
-            info.name = extract_yaml_field(*text, "name");
-            info.version = extract_yaml_field(*text, "version");
-            info.description = extract_yaml_field(*text, "description");
-        }
-        return info;
-    }
-    if (has("plugin.yml")) {
-        info.kind = PlatformKind::Bukkit;
-        info.manifest_path = "plugin.yml";
-        if (auto text = read_entry("plugin.yml")) {
-            info.name = extract_yaml_field(*text, "name");
-            info.version = extract_yaml_field(*text, "version");
-            info.description = extract_yaml_field(*text, "description");
-        }
-        return info;
     }
 
-    // Ни одного серверного манифеста не нашлось - только теперь проверяем
-    // моды.
-    std::string fabric_path = has("fabric.mod.json") ? "fabric.mod.json"
-                                                     : (has("META-INF/fabric.mod.json") ? "META-INF/fabric.mod.json" : "");
-    if (!fabric_path.empty()) {
-        info.kind = PlatformKind::ModFabric;
-        info.manifest_path = fabric_path;
-        if (auto text = read_entry(fabric_path)) {
-            info.name = extract_json_field(*text, "name");
-            info.version = extract_json_field(*text, "version");
-            info.description = extract_json_field(*text, "description");
+    if (info.main_class.has_value() && !info.main_class->empty()) {
+        std::string exp = *info.main_class;
+        for (char& c : exp) {
+            if (c == '.') c = '/';
         }
-        return info;
-    }
-    if (has("quilt.mod.json")) {
-        info.kind = PlatformKind::ModFabric;
-        info.manifest_path = "quilt.mod.json";
-        if (auto text = read_entry("quilt.mod.json")) {
-            info.name = extract_quilt_name(*text);
-            info.version = extract_json_field(*text, "version");
+        if (exp.size() < 6 || exp.substr(exp.size() - 6) != ".class") {
+            exp += ".class";
         }
-        return info;
-    }
-    if (has("META-INF/mods.toml") || has("META-INF/neoforge.mods.toml")) {
-        info.kind = PlatformKind::ModForge;
-        info.manifest_path = has("META-INF/mods.toml") ? "META-INF/mods.toml" : "META-INF/neoforge.mods.toml";
-        if (auto text = read_entry(info.manifest_path)) {
-            info.name = extract_toml_field(*text, "displayName");
-            info.version = extract_toml_field(*text, "version");
-            info.description = extract_toml_field(*text, "description");
+        bool found = false;
+        for (const auto& n : all_names) {
+            if (n == exp || (n.size() > exp.size() && n.substr(n.size() - exp.size()) == exp)) {
+                found = true;
+                break;
+            }
         }
-        return info;
-    }
-    if (has("mcmod.info")) {
-        info.kind = PlatformKind::ModForge;
-        info.manifest_path = "mcmod.info";
-        if (auto text = read_entry("mcmod.info")) info.name = extract_mcmod_info_name(*text);
-        return info;
+        info.main_class_verified = found;
+        if (found) {
+            info.verification_note = "Точка входа (" + *info.main_class + ") верифицирована в JAR-архиве.";
+        } else {
+            info.verification_note = "ВНИМАНИЕ: Класс точки входа (" + *info.main_class + ") отсутствует в JAR!";
+        }
     }
 
-    info.kind = PlatformKind::Unknown;
     return info;
 }
 

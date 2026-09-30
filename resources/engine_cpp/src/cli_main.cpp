@@ -151,6 +151,24 @@ int run_decompile_console(const std::string& jar_path, const std::string& out_di
         std::cout << "[*] Признаков вредоносного кода не обнаружено (эвристика, не гарантия - см. README_RU.txt).\n";
     }
 
+    if (jr.platform.kind != nd::PlatformKind::Unknown) {
+        std::cout << "[*] Платформа: " << jr.platform.kind_label();
+        if (jr.platform.name.has_value()) {
+            std::cout << " (" << *jr.platform.name;
+            if (jr.platform.version.has_value()) std::cout << " v" << *jr.platform.version;
+            std::cout << ")";
+        }
+        std::cout << "\n";
+        if (jr.platform.main_class.has_value()) {
+            std::cout << "    Точка входа: " << *jr.platform.main_class;
+            if (jr.platform.main_class_verified) {
+                std::cout << " [OK]\n";
+            } else {
+                std::cout << " [ПРЕДУПРЕЖДЕНИЕ: класс не найден в jar!]\n";
+            }
+        }
+    }
+
     // НОВОЕ v1.8.0 (HANDOFF_URGENT п.6): честно сообщаем о найденных
     // вложенных jar - см. комментарий у jr.embedded_jars в process_jar.hpp.
     if (!jr.embedded_jars.empty()) {

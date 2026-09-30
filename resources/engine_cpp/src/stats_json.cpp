@@ -210,6 +210,9 @@ std::string jar_process_result_to_json(const JarProcessResult& jr, const std::st
     o << ",\"platform\":" << js(jr.platform.kind_label());
     o << ",\"platform_name\":" << jn(jr.platform.name);
     o << ",\"platform_version\":" << jn(jr.platform.version);
+    o << ",\"platform_main_class\":" << jn(jr.platform.main_class);
+    o << ",\"platform_main_class_verified\":" << (jr.platform.main_class_verified ? "true" : "false");
+    o << ",\"platform_verification_note\":" << jn(jr.platform.verification_note);
     // НОВОЕ v1.8.0 (HANDOFF_URGENT п.6) - см. комментарий у поля в process_jar.hpp.
     o << ",\"embedded_jars\":[";
     {

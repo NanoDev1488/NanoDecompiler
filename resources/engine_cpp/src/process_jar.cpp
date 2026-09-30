@@ -716,7 +716,7 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
         total_methods += static_cast<int>(cf.methods.size());
         total_fields += static_cast<int>(cf.fields.size());
     }
-    write_readme(out_dir, jar_path, static_cast<int>(class_files.size()), total_methods, total_fields, renamer, stats);
+    write_readme(out_dir, jar_path, static_cast<int>(class_files.size()), total_methods, total_fields, renamer, stats, jr.platform);
 
     return jr;
 }
@@ -801,7 +801,8 @@ void write_mapping_report(const std::string& out_dir, const Renamer& renamer) {
 
 void write_readme(const std::string& out_dir, const std::string& jar_path, int n_classes,
                    int total_methods_in_kept_classes,
-                   int total_fields_in_kept_classes, const Renamer& renamer, const ProjectStats& stats) {
+                   int total_fields_in_kept_classes, const Renamer& renamer, const ProjectStats& stats,
+                   const PlatformInfo& platform) {
     // БАГ-ФИКС (по прямой просьбе пользователя - "переделай readme_ru.txt,
     // сейчас там разнообразие"): раньше "Классов успешно разобрано"/
     // "Ошибок парсинга" + список непарсящихся классов печатались ЗДЕСЬ,
@@ -816,6 +817,36 @@ void write_readme(const std::string& out_dir, const std::string& jar_path, int n
     f << std::string(70, '=') << "\n";
     f << "NanoDecompiler - результат декомпиляции: " << base << "\n";
     f << std::string(70, '=') << "\n";
+
+    if (platform.kind != PlatformKind::Unknown) {
+        f << "\n" << std::string(60, '=') << "\n";
+        f << "ИНФОРМАЦИЯ О ПЛАТФОРМЕ И ДЕСКРИПТОРЕ\n\n";
+        f << "  Платформа: " << platform.kind_label() << "\n";
+        if (!platform.manifest_path.empty()) f << "  Файл дескриптора: " << platform.manifest_path << "\n";
+        if (platform.name.has_value()) f << "  Название: " << *platform.name << "\n";
+        if (platform.version.has_value()) f << "  Версия: " << *platform.version << "\n";
+        if (platform.main_class.has_value()) {
+            f << "  Главный класс (entrypoint): " << *platform.main_class << "\n";
+            f << "  Статус верификации: "
+              << (platform.main_class_verified ? "ПОДТВЕРЖДЁН (класс присутствует в архиве)" : "ОШИБКА (класс не найден в JAR!)") << "\n";
+        }
+        if (!platform.authors.empty()) {
+            f << "  Авторы: ";
+            for (size_t i = 0; i < platform.authors.size(); ++i) {
+                if (i) f << ", ";
+                f << platform.authors[i];
+            }
+            f << "\n";
+        }
+        if (!platform.depends.empty()) {
+            f << "  Зависимости: ";
+            for (size_t i = 0; i < platform.depends.size(); ++i) {
+                if (i) f << ", ";
+                f << platform.depends[i];
+            }
+            f << "\n";
+        }
+    }
 
     int renamed_classes = 0, renamed_methods = 0, renamed_fields = 0;
     for (auto& [old, nw] : renamer.class_map())

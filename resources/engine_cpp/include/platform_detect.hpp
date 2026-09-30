@@ -24,6 +24,7 @@ enum class PlatformKind {
     Paper,     // paper-plugin.yml (современный Paper-only формат)
     Velocity,  // velocity-plugin.json
     Bungee,    // bungee.yml (BungeeCord)
+    Sponge,    // sponge_plugins.json (Sponge server)
     ModFabric, // fabric.mod.json
     ModForge,  // META-INF/mods.toml (Forge/NeoForge) или mcmod.info (легаси Forge 1.7-1.12)
     Unknown,   // манифест не найден - generic jar, декомпилируется как есть
@@ -41,11 +42,22 @@ struct PlatformInfo {
     std::optional<std::string> version;
     // Описание плагина/мода, извлечённое из манифеста.
     std::optional<std::string> description;
+    // Главный класс плагина (точка входа)
+    std::optional<std::string> main_class;
+    // Авторы плагина
+    std::vector<std::string> authors;
+    // Зависимости
+    std::vector<std::string> depends;
+    // Мягкие зависимости
+    std::vector<std::string> soft_depends;
+    // Результат верификации точки входа
+    bool main_class_verified = true;
+    std::optional<std::string> verification_note;
 
     bool is_mod() const { return kind == PlatformKind::ModFabric || kind == PlatformKind::ModForge; }
     bool is_server_plugin() const {
         return kind == PlatformKind::Bukkit || kind == PlatformKind::Paper || kind == PlatformKind::Velocity ||
-               kind == PlatformKind::Bungee;
+               kind == PlatformKind::Bungee || kind == PlatformKind::Sponge;
     }
     std::string kind_label() const;
 };

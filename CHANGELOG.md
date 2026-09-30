@@ -1,5 +1,17 @@
 # NanoDecompiler Changelog
 
+## [1.9.136] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **Верификация дескрипторов платформы и точек входа (Plugin Manifest & Entrypoint Verification)**:
+  - `resources/engine_cpp/include/platform_detect.hpp`: добавлен тип платформы `PlatformKind::Sponge` (`sponge_plugins.json`), расширена структура `PlatformInfo` полями `main_class`, `authors`, `depends`, `soft_depends`, `main_class_verified` и `verification_note`.
+  - `resources/engine_cpp/src/platform_detect.cpp`: реализовано извлечение точек входа (`main` / `entrypoint`) для Bukkit, Paper, Velocity, BungeeCord и Sponge; реализована верификация наличия файла скомпилированного класса точки входа в JAR-архиве с формированием диагностических предупреждений.
+  - `resources/engine_cpp/src/cli_main.cpp`: вывод информации о платформе плагина, версии и статусе верификации главной точки входа при декомпиляции через CLI.
+  - `resources/engine_cpp/src/process_jar.cpp`: включение подробного блока верификации дескриптора и платформы в итоговый отчет `README_RU.txt`.
+  - `resources/engine_cpp/src/stats_json.cpp`: сериализация полей верификации точки входа в JSON-статистику для GUI и телеметрии.
+
+---
+
 ## [1.9.135] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)
