@@ -551,9 +551,46 @@ std::vector<std::string> get_utf8_argv() {
     LocalFree(wargv);
     return out;
 }
+#else
+#include <signal.h>
+#include <unistd.h>
+#include <execinfo.h>
+#include <sys/resource.h>
+
+extern std::string g_current_decompile_class;
+
+static void sigsegv_handler(int sig) {
+    const char msg[] = "\n[CRASH] Caught fatal signal (SIGSEGV/SIGBUS)!\n";
+    write(STDERR_FILENO, msg, sizeof(msg) - 1);
+    if (!g_current_decompile_class.empty()) {
+        const char cmsg[] = "[CRASH] Processing class: ";
+        write(STDERR_FILENO, cmsg, sizeof(cmsg) - 1);
+        write(STDERR_FILENO, g_current_decompile_class.data(), g_current_decompile_class.size());
+        write(STDERR_FILENO, "\n", 1);
+    }
+    void* callstack[64];
+    int frames = backtrace(callstack, 64);
+    backtrace_symbols_fd(callstack, frames, STDERR_FILENO);
+    _exit(139);
+}
+
+static void bump_stack_limit() {
+    struct rlimit rl;
+    if (getrlimit(RLIMIT_STACK, &rl) == 0) {
+        if (rl.rlim_max > rl.rlim_cur) {
+            rl.rlim_cur = std::min<rlim_t>(64 * 1024 * 1024, rl.rlim_max);
+            setrlimit(RLIMIT_STACK, &rl);
+        }
+    }
+}
 #endif
 
 int main(int argc, char** argv) {
+#ifndef _WIN32
+    signal(SIGSEGV, sigsegv_handler);
+    signal(SIGBUS, sigsegv_handler);
+    bump_stack_limit();
+#endif
     try {
 #ifdef _WIN32
         // Игнорируем ANSI-испорченный argv целиком - берём собственный,
