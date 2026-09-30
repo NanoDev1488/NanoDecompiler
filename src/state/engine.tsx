@@ -28,6 +28,8 @@ import {
   type ToastKind,
 } from "../lib/model";
 import { buildFreeformBugReport, buildTelemetryReport } from "../lib/telemetry";
+import { GUI_VERSION } from "../version";
+
 import { DEFAULT_ICON_THUMBNAILS } from "../lib/iconThumbs";
 
 const MAX_LOG_LINES = 800;
@@ -262,7 +264,8 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   // StatusBar) - один запрос здесь на старте приложения, все читают из
   // контекста вместо своего собственного дублирующего IPC-вызова.
   const [engineVersion, setEngineVersion] = useState<string | null>(null);
-  const [guiVersion, setGuiVersion] = useState<string | null>(null);
+  const [guiVersion, setGuiVersion] = useState<string | null>(GUI_VERSION);
+
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo>({ checking: false, applying: false, kind: null });
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
   // БАГ-ФИКС: раньше envIssue переключался вручную (toggleEnvIssue), без

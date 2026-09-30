@@ -17,6 +17,7 @@ import * as os from "os";
 import * as https from "https";
 import { registerUpdateHandlers } from "./updater";
 import { readJarSummaryNative } from "./jarSummary";
+import { GUI_VERSION } from "./version";
 
 // БАГ-ФИКС (реальный, воспроизведён пользователем на AntiX Linux -
 // "Read-only file system"): DEFAULT_SETTINGS.outputDir = "~/NanoDecompiler/out"
@@ -928,7 +929,7 @@ ipcMain.handle("tools:addToSystemPath", async (_e, tool: "java" | "maven") => {
   return { ok: false, error: "Автоматическое добавление в постоянный системный PATH поддерживается на Windows" };
 });
 
-ipcMain.handle("gui:version", async () => app.getVersion());
+ipcMain.handle("gui:version", async () => GUI_VERSION);
 
 // НОВОЕ v1.8.4 (телеметрия по запросу пользователя): report собирается
 // целиком в рендерере (там уже есть job.details со stats/fallback_contexts

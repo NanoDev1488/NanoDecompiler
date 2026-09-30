@@ -186,7 +186,9 @@ interface Region {
   end: number;
   kind: "color" | "log";
   logLevel?: string;
+  openParenIndex?: number;
 }
+
 
 /** Ищет логгер-вызовы `logger.warning(...)`, `logger.log(Level.XXX, ...)`,
  * и Minecraft-сообщения `sender.sendMessage(...)` на строке и возвращает
@@ -223,6 +225,15 @@ function findLogRegions(line: string): Region[] {
       if (ch === '"') {
         i++;
         while (i < line.length && line[i] !== '"') {
+          if (line[i] === "\\") i++;
+          i++;
+        }
+        i++;
+        continue;
+      }
+      if (ch === "'") {
+        i++;
+        while (i < line.length && line[i] !== "'") {
           if (line[i] === "\\") i++;
           i++;
         }
@@ -266,9 +277,10 @@ function findLogRegions(line: string): Region[] {
       }
     }
 
-    regions.push({ start, end: closeIndex + 1, kind: "log", logLevel });
+    regions.push({ start, end: closeIndex + 1, kind: "log", logLevel, openParenIndex });
   }
   return regions;
+
 }
 
 /** Ищет цепочки конкатенации цветного текста (2+ цветовых элементов подряд,
@@ -338,11 +350,74 @@ function tokensInRange(tokens: Token[], start: number, end: number): Token[] {
 
 /** Убирает окружающие кавычки строкового литерала для показа "как будет
  * выглядеть в игре" внутри свёрнутого чипа - сырые кавычки там не нужны,
- * а переносы строк заменяются на символ ↵ чтобы свёрнутый чип оставался в одну аккуратную строку. */
+ * а переносы строк заменяются на символ ↵ если чип однострочный. */
 function stripQuotes(text: string): string {
   let s = text;
   if (s.length >= 2 && s[0] === '"' && s[s.length - 1] === '"') s = s.slice(1, -1);
   return s.replace(/\r?\n|\\n/g, " ↵ ");
+}
+
+/** Рендерит строковое содержимое с полноценной поддержкой многострочных \n / \\n
+ * переносов строк (например, ASCII-баннеры и стартовые сообщения плагинов):
+ * визуализирует каждую строку аккуратно друг под другом с сохранением цвета Minecraft. */
+function renderStringContent(
+  rawText: string,
+  activeColorHex: string | null,
+  titleNote?: string,
+  transform?: (s: string) => string,
+): ReactNode {
+  let s = rawText;
+  if (s.length >= 2 && s[0] === '"' && s[s.length - 1] === '"') s = s.slice(1, -1);
+  const unescaped = s.replace(/\\n/g, "\n").replace(/\\t/g, "    ").replace(/\\r/g, "");
+  const lines = unescaped.split("\n");
+
+  if (lines.length === 1) {
+    const val = transform ? transform(lines[0]) : lines[0];
+    return (
+      <span style={activeColorHex ? { color: activeColorHex } : undefined} title={titleNote}>
+        {val}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className="inline-flex flex-col items-start align-top font-mono"
+      style={activeColorHex ? { color: activeColorHex } : undefined}
+      title={titleNote}
+    >
+      {lines.map((ln, idx) => {
+        const val = transform ? transform(ln) : ln;
+        return (
+          <span key={idx} className="whitespace-pre min-h-[1.25em]">
+            {val || " "}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+/** В сыром режиме отображения (без сворачивания в чипы) многострочные строки
+ * с литеральным \n отображаются с визуальным переносом строки на следующую строку. */
+function renderRawStringWithBreaks(text: string): ReactNode {
+  if (!text.includes("\\n")) return text;
+  const parts = text.split(/\\n/g);
+  return (
+    <>
+      {parts.map((p, idx) => (
+        <span key={idx}>
+          {p}
+          {idx < parts.length - 1 && (
+            <>
+              <span className="text-acid/80 font-bold select-none" title="Перенос строки (\n)">\n</span>
+              <br />
+            </>
+          )}
+        </span>
+      ))}
+    </>
+  );
 }
 
 /** Рендер ОДНОГО токена - тот же выбор функции раскраски, что и раньше,
@@ -388,12 +463,13 @@ function renderToken(t: Token, i: number | string, textOverride?: string): React
   if (t.cls) {
     return (
       <span key={i} className={t.cls}>
-        {text}
+        {t.isStr ? renderRawStringWithBreaks(text) : text}
       </span>
     );
   }
   return <span key={i}>{text}</span>;
 }
+
 
 const LOG_LEVEL_SEVERITY = new Set(["severe", "warning", "error"]);
 
@@ -410,37 +486,64 @@ function renderChipPreview(tokens: Token[], region: Region): ReactNode {
     let i = 0;
 
     // 1. Пропускаем имя метода/вызов и открывающую скобку '('
-    while (i < inRange.length) {
-      const t = inRange[i];
-      if (t.text.includes("(")) {
-        const parenIdx = t.text.indexOf("(");
-        const remainder = t.text.slice(parenIdx + 1);
+    // БАГ-ФИКС v1.9.153: если у ресивера есть свои скобки (например, Bukkit.getConsoleSender().sendMessage(...)),
+    // то простой поиск '(' натыкался на getConsoleSender() и ломал разбор. Используем точный openParenIndex.
+    if (region.openParenIndex !== undefined) {
+      while (i < inRange.length && inRange[i].end <= region.openParenIndex) {
+        i++;
+      }
+      if (i < inRange.length && inRange[i].start <= region.openParenIndex) {
+        const sliceOffset = region.openParenIndex + 1 - inRange[i].start;
+        const remainder = inRange[i].text.slice(sliceOffset);
         if (remainder.trim()) {
-          inRange[i] = { ...t, text: remainder };
+          inRange[i] = { ...inRange[i], text: remainder, start: region.openParenIndex + 1 };
         } else {
           i++;
         }
-        break;
       }
-      i++;
+    } else {
+      while (i < inRange.length) {
+        const t = inRange[i];
+        if (t.text.includes("(")) {
+          const parenIdx = t.text.indexOf("(");
+          const remainder = t.text.slice(parenIdx + 1);
+          if (remainder.trim()) {
+            inRange[i] = { ...t, text: remainder };
+          } else {
+            i++;
+          }
+          break;
+        }
+        i++;
+      }
     }
 
-    // 2. Отсекаем закрывающую скобку внешнего вызова с правого края
+    // 2. Отсекаем ровно ОДНУ закрывающую скобку самого внешнего вызова логгера/сообщения.
+    // БАГ-ФИКС v1.9.153: нельзя использовать replace(/\)+$/, "") - это удаляло закрывающие скобки
+    // аргументов вроде getDescription().getVersion() и оставляло висящие '());' снаружи.
     let limit = inRange.length;
-    if (limit > i) {
+    let trimmedOuterParen = false;
+    while (limit > i && !trimmedOuterParen) {
       const lastTok = inRange[limit - 1];
       const trimText = lastTok.text.trim();
-      if (trimText === ")") {
+      if (trimText === "" || trimText === ";") {
         limit--;
-      } else if (trimText.endsWith(")")) {
-        inRange[limit - 1] = {
-          ...lastTok,
-          text: lastTok.text.slice(0, lastTok.text.lastIndexOf(")")),
-        };
-        if (inRange[limit - 1].text.trim() === "") {
-          limit--;
-        }
+        continue;
       }
+      const lastParenIdx = lastTok.text.lastIndexOf(")");
+      if (lastParenIdx !== -1) {
+        const beforeParen = lastTok.text.slice(0, lastParenIdx);
+        const afterParen = lastTok.text.slice(lastParenIdx + 1);
+        const newText = beforeParen + afterParen;
+        if (newText.trim() === "") {
+          limit--;
+        } else {
+          inRange[limit - 1] = { ...lastTok, text: newText };
+        }
+        trimmedOuterParen = true;
+        break;
+      }
+      limit--;
     }
 
     // 3. Если был вызов logger.log(Level.XXX, ...), пропускаем аргумент Level.XXX,
@@ -508,22 +611,19 @@ function renderChipPreview(tokens: Token[], region: Region): ReactNode {
             while (closeParenIdx < limit && inRange[closeParenIdx].text.trim() === "") closeParenIdx++;
             if (closeParenIdx < limit && inRange[closeParenIdx].text.trim().startsWith(")")) {
               const strToken = inRange[strIdx];
-              const rawUnquoted = stripQuotes(strToken.text);
               const isFancy = isFancyFontMethod(textTrim);
-              const unquoted = isFancy ? applyFancyFont(rawUnquoted) : rawUnquoted;
               const titleNote = isFancy
-                ? `Кастомный шрифт (${textTrim}): исходный текст "${rawUnquoted}"`
+                ? `Кастомный шрифт (${textTrim})`
                 : undefined;
               parts.push(
-                activeColorHex ? (
-                  <span key={i} style={{ color: activeColorHex }} title={titleNote}>
-                    {unquoted}
-                  </span>
-                ) : (
-                  <span key={i} title={titleNote}>
-                    {renderToken(strToken, i, unquoted)}
-                  </span>
-                )
+                <span key={i}>
+                  {renderStringContent(
+                    strToken.text,
+                    activeColorHex,
+                    titleNote,
+                    isFancy ? applyFancyFont : undefined,
+                  )}
+                </span>
               );
               const closeTok = inRange[closeParenIdx];
               const parenPos = closeTok.text.indexOf(")");
@@ -542,19 +642,15 @@ function renderChipPreview(tokens: Token[], region: Region): ReactNode {
 
       // Строковый литерал
       if (t.isStr) {
-        const unquoted = stripQuotes(t.text);
         parts.push(
-          activeColorHex ? (
-            <span key={i} style={{ color: activeColorHex }}>
-              {unquoted}
-            </span>
-          ) : (
-            renderToken(t, i, unquoted)
-          )
+          <span key={i}>
+            {renderStringContent(t.text, activeColorHex)}
+          </span>
         );
         i++;
         continue;
       }
+
 
       // Конкатенация '+'
       if (textTrim === "+") {
@@ -593,8 +689,9 @@ function renderChipPreview(tokens: Token[], region: Region): ReactNode {
       }
 
       if (exprTokens.length > 0) {
-        const exprStr = exprTokens.map(et => et.text).join("").trim();
-        if (exprStr && exprStr !== ")") {
+        let exprStr = exprTokens.map(et => et.text).join("").trim();
+        exprStr = exprStr.replace(/\)+$/, "").trim();
+        if (exprStr && exprStr !== ")" && exprStr !== "(" && exprStr !== "))" && exprStr !== ")))") {
           parts.push(
             <span
               key={`rt-${exprStart}`}
@@ -633,7 +730,20 @@ function renderChipPreview(tokens: Token[], region: Region): ReactNode {
     );
   }
   const inRange = tokensInRange(tokens, region.start, region.end).filter(t => t.isStr);
-  return <>{inRange.map((t, i) => renderToken(t, i, stripQuotes(t.text)))}</>;
+  return (
+    <>
+      {inRange.map((t, i) => (
+        <span key={i}>
+          {renderStringContent(
+            t.text,
+            t.inheritedColor ?? null,
+            undefined,
+            t.isFancyFontCall ? applyFancyFont : undefined,
+          )}
+        </span>
+      ))}
+    </>
+  );
 }
 
 // БАГ-ФИКС v1.9.13 (tsc TS2322 "'key' does not exist in type" - та же
@@ -663,7 +773,7 @@ function ChainChip({
   }
   return (
     <span
-      className="chain-chip"
+      className="chain-chip align-top"
       title={
         region.kind === "log"
           ? "Свёрнутый вызов логгера - клик, чтобы посмотреть исходный код"
@@ -675,6 +785,7 @@ function ChainChip({
     </span>
   );
 }
+
 
 /** Строит итоговый JSX для одной строки кода из уже готовых токенов -
  * НЕ токенизирует заново (это делает tokenizeCode() один раз через
@@ -791,10 +902,19 @@ export const JavaCode = memo(function JavaCode({ code, wrap, disableVsCodeLogs }
         <div key={li} id={`codeline-${li + 1}`} className="flex">
           <span
             aria-hidden
-            className="mono w-12 flex-none pr-4 text-right text-[0.88em] leading-[1.75] text-faint select-none"
+            className="mono w-12 flex-none pr-4 text-right text-[0.88em] leading-[1.75] text-faint select-none cursor-pointer hover:text-ink transition-colors"
+            title="Кликните, чтобы подсветить строку"
+            onClick={() => {
+              const el = document.getElementById(`codeline-${li + 1}`);
+              if (el) {
+                el.classList.add("bg-acid/20");
+                setTimeout(() => el.classList.remove("bg-acid/20"), 1500);
+              }
+            }}
           >
             {li + 1}
           </span>
+
           <span
             className={
               "mono text-[1em] leading-[1.75] text-ink/90 " +

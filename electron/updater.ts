@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
 import { spawn } from "child_process";
+import { GUI_VERSION } from "./version";
 
 // БАГ-ФИКС v1.7.3 (найдено сторонним ревью, согласуется с реальным
 // репортом пользователя - краш CLI на Windows с версией/подозрением на
@@ -248,9 +249,8 @@ function writeInstalledApiVersion(engineDir: string, version: string): void {
 // найден и т.п.), откатываемся на маркер-файл как на кэш последнего
 // известного значения.
 function extractVersionNumber(raw: string): string | null {
-  // "NanoDecompiler v1.6.2 BETA" -> "1.6.2" (версия внутри произвольного
-  // текста - число из максимум 4 точечных сегментов, первое совпадение).
-  const m = raw.match(/(\d+(?:\.\d+){1,3})/);
+  // Извлекает версию, сохраняя суффиксы вроде -ObfUpd.16 или -beta.1
+  const m = raw.match(/v?(\d+(?:\.\d+)+(?:-[A-Za-z0-9_.]*)?)/);
   return m ? m[1] : null;
 }
 
@@ -301,9 +301,7 @@ function readMarkerFallback(engineDir: string): string | null {
   }
 }
 
-// "v1.2" / "1.2" / "1.2.0" - в разных местах версия приходит в разном
-// формате (package.json без "v", релизный тег с "v", API_VERSION как
-// договорятся) - сравниваем по числовым компонентам, а не строкой 1:1.
+// "v1.2" / "1.2" / "1.2.0" - сравниваем по числовым компонентам, а не строкой 1:1.
 function versionParts(v: string): number[] {
   return v
     .replace(/^v/i, "")
@@ -311,23 +309,38 @@ function versionParts(v: string): number[] {
     .map((p) => parseInt(p, 10) || 0);
 }
 
-// БАГ-ФИКС (по прямой просьбе пользователя): раньше версия сравнивалась
-// только на РАВЕНСТВО - если локальная версия клиента ВЫШЕ последнего
-// известного релиза (например, пользователь сам собрал более новую
-// бета-версию из исходников, чем то, что уже опубликовано на GitHub),
-// апдейтер всё равно писал "У вас последняя версия" - технически неверно
-// и вводит в заблуждение. compareVersions возвращает -1/0/1, что
-// позволяет отличить "отстаём от релиза" (обновиться) от "мы новее
-// релиза" (это не значит "последняя версия" - значит "закрытая бета").
+// БАГ-ФИКС: корректное сравнение версий с поддержкой суффиксов (-ObfUpd.16).
+// Равенство строк (без префикса 'v') ВСЕГДА даёт 0, предотвращая показ vX -> vX.
 function compareVersions(a: string, b: string): -1 | 0 | 1 {
-  const pa = versionParts(a);
-  const pb = versionParts(b);
+  const normA = a.trim().replace(/^v/i, "");
+  const normB = b.trim().replace(/^v/i, "");
+  if (normA === normB) return 0;
+
+  const [baseA, tagA] = normA.split("-");
+  const [baseB, tagB] = normB.split("-");
+
+  const pa = versionParts(baseA);
+  const pb = versionParts(baseB);
   const len = Math.max(pa.length, pb.length);
   for (let i = 0; i < len; i++) {
     const va = pa[i] ?? 0;
     const vb = pb[i] ?? 0;
     if (va !== vb) return va > vb ? 1 : -1;
   }
+
+  // При одинаковых базовых версиях сравниваем суффиксы
+  if (!tagA && tagB) return 1;
+  if (tagA && !tagB) return -1;
+  if (tagA && tagB) {
+    if (tagA === tagB) return 0;
+    const numA = parseInt(tagA.replace(/^[^\d]*/, ""), 10);
+    const numB = parseInt(tagB.replace(/^[^\d]*/, ""), 10);
+    if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+      return numA > numB ? 1 : -1;
+    }
+    return tagA.localeCompare(tagB) > 0 ? 1 : -1;
+  }
+
   return 0;
 }
 
@@ -443,7 +456,7 @@ export function registerUpdateHandlers(
       const cliAsset = ENGINE_ASSET_NAME ? release.assets.find((a) => a.name === ENGINE_ASSET_NAME) : undefined;
       const setupAsset = release.assets.find((a) => clientAssetPattern().test(a.name));
 
-      const currentClientVersion = app.getVersion();
+      const currentClientVersion = GUI_VERSION;
       const installedApiVersion = await resolveInstalledApiVersion(engineDir(), engineInvocation);
 
       // По просьбе пользователя: сверяем SHA256 движка с checksums.json
@@ -469,10 +482,13 @@ export function registerUpdateHandlers(
         // Старый релиз без versions.json (см. HANDOFF_16) - не можем
         // различить тип обновления, откатываемся на грубое "обычное"
         // поведение по тегу целиком, лишь бы не соврать про "всё ок".
+        const tagNorm = release.tag_name.replace(/^v/i, "");
+        const curNorm = (installedApiVersion ?? currentClientVersion).replace(/^v/i, "");
+        const isSame = tagNorm === curNorm;
         return {
           ok: true,
-          updateKind: release.tag_name === installedApiVersion ? "none" : "engine",
-          currentVersion: installedApiVersion ?? "неизвестна",
+          updateKind: isSame ? "none" : "engine",
+          currentVersion: currentClientVersion,
           latestVersion: release.tag_name,
           latestVersionKind: classifyVersion(release.tag_name),
           downloadUrl: cliAsset ? cliAsset.browser_download_url : null,
@@ -484,27 +500,32 @@ export function registerUpdateHandlers(
 
       const versions = await httpsGetJson<VersionsJson>(versionsAsset.browser_download_url);
       const clientCmp = compareVersions(currentClientVersion, versions.client);
-      const clientNeedsUpdate = clientCmp < 0;  // локальная версия СТАРШЕ релиза - реально нужно обновление
-      const clientIsAhead = clientCmp > 0;  // локальная версия НОВЕЕ релиза - закрытая бета, не "последняя версия"
+      let clientNeedsUpdate = clientCmp < 0;  // локальная версия СТАРШЕ релиза - реально нужно обновление
+      let clientIsAhead = clientCmp > 0;  // локальная версия НОВЕЕ релиза - закрытая бета, не "последняя версия"
       const apiCmp = installedApiVersion !== null ? compareVersions(installedApiVersion, versions.api) : -1;
-      const apiNeedsUpdate = installedApiVersion === null || apiCmp < 0;
-      const apiIsAhead = installedApiVersion !== null && apiCmp > 0;
+      let apiNeedsUpdate = installedApiVersion === null || apiCmp < 0;
+      let apiIsAhead = installedApiVersion !== null && apiCmp > 0;
+
+      // Строгое равенство нормализованных строк — исключает ложные срабатывания vX -> vX
+      const normClient = currentClientVersion.trim().replace(/^v/i, "");
+      const normRemoteClient = String(versions.client || "").trim().replace(/^v/i, "");
+      if (normClient === normRemoteClient) {
+        clientNeedsUpdate = false;
+        clientIsAhead = false;
+      }
+
+      if (installedApiVersion) {
+        const normApi = installedApiVersion.trim().replace(/^v/i, "");
+        const normRemoteApi = String(versions.api || "").trim().replace(/^v/i, "");
+        if (normApi === normRemoteApi) {
+          apiNeedsUpdate = false;
+          apiIsAhead = false;
+        }
+      }
 
       // Клиент важнее движка: если поменялось само GUI-приложение, апдейт
       // движка (даже если он ТОЖЕ поменялся) неважен сам по себе - новый
-      // инсталлятор клиента и так принесёт свежий движок внутри себя (см.
-      // build-client в workflow - он теперь сам собирает и встраивает
-      // движок).
-      //
-      // "engine"-обновление (тихий патч без переустановки) теперь доступно
-      // на всех трёх ОС (см. ENGINE_ASSET_NAME выше - раньше было только
-      // на Windows, пока build-api был Windows-only job'ом).
-      //
-      // БАГ-ФИКС (по прямой просьбе пользователя): если локальная версия
-      // ВЫШЕ последнего опубликованного релиза (собрал более новую бету
-      // сам, до публикации) - это НЕ "последняя версия" (звучит как "всё
-      // official и стабильно"), это "closed_beta" - отдельное состояние с
-      // честной формулировкой в UI ("У вас закрытая Бета Версия").
+      // инсталлятор клиента и так принесёт свежий движок внутри себя.
       let updateKind: "none" | "engine" | "client" | "closed_beta" = "none";
       if (clientNeedsUpdate) updateKind = "client";
       else if (clientIsAhead) updateKind = "closed_beta";

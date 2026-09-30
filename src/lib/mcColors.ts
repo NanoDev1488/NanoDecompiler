@@ -261,6 +261,9 @@ export const FANCY_FONT_MAP: Record<string, string> = {
   "с": "ᴄ",
   "м": "ʍ",
   "т": "ᴛ",
+  "н": "ɴ",
+  "о": "ᴏ",
+  "з": "ᴢ",
   // Латиница (Latin Small Caps)
   "a": "ᴀ",
   "b": "ʙ",
@@ -305,15 +308,17 @@ export function applyFancyFont(text: string): string {
   return res;
 }
 
-/** Проверяет, является ли имя метода стилизацией шрифта (method1, stylize, FancyFont и т.д.) */
+/** Проверяет, является ли имя метода стилизацией шрифта (method1, method2, stylize, FancyFont и т.д.) */
 export function isFancyFontMethod(methodName: string): boolean {
   const lower = methodName.toLowerCase();
   return (
     lower === "method1" ||
+    lower === "method2" ||
     lower === "stylize" ||
     lower.includes("fancy") ||
     lower.includes("smallcap") ||
-    lower.includes("font")
+    lower.includes("font") ||
+    lower.includes("customfont")
   );
 }
 

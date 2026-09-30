@@ -1699,9 +1699,18 @@ ExprPtr simplify_expr(ExprPtr e) {
                 }
             }
             if (b->op == "*") {
-                if (b->right && b->right->kind == ExprKind::Const && static_cast<Const*>(b->right.get())->literal == "1") return b->left;
-                if (b->left && b->left->kind == ExprKind::Const && static_cast<Const*>(b->left.get())->literal == "1") return b->right;
+                if (b->right && b->right->kind == ExprKind::Const) {
+                    auto* c = static_cast<Const*>(b->right.get());
+                    if (c->literal == "1") return b->left;
+                    if (c->literal == "0") return std::make_shared<Const>("0", b->type.empty() ? "int" : b->type);
+                }
+                if (b->left && b->left->kind == ExprKind::Const) {
+                    auto* c = static_cast<Const*>(b->left.get());
+                    if (c->literal == "1") return b->right;
+                    if (c->literal == "0") return std::make_shared<Const>("0", b->type.empty() ? "int" : b->type);
+                }
             }
+
             if (b->op == "/") {
                 if (b->right && b->right->kind == ExprKind::Const && static_cast<Const*>(b->right.get())->literal == "1") return b->left;
             }
@@ -2161,8 +2170,21 @@ StmtPtr simplify_stmt(StmtPtr s) {
         if (w->cond) w->cond = simplify_expr(w->cond);
         w->body = simplify_stmts(w->body);
         while (!w->body.empty() && is_plain_continue(w->body.back())) w->body.pop_back();
+        if (w->cond && w->cond->kind == ExprKind::Const && static_cast<Const*>(w->cond.get())->literal == "false" && w->label.empty()) {
+            bool has_break = false;
+            for (auto& bs : w->body) {
+                if (bs && bs->kind == StmtKind::BreakStmt && static_cast<BreakStmt*>(bs.get())->label.empty()) {
+                    has_break = true;
+                    break;
+                }
+            }
+            if (!has_break && w->body.size() == 1) {
+                return w->body[0];
+            }
+        }
         return s;
     }
+
     if (s->kind == StmtKind::ForStmt) {
         auto* f = static_cast<ForStmt*>(s.get());
         if (f->init) f->init = simplify_expr(f->init);

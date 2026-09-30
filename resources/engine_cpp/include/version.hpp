@@ -223,7 +223,8 @@ namespace nd {
 // НОВОЕ v1.9.150-ObfUpd.13: [ObfUpd 13/15] нормализация строковых конкатенаций (StringBuilder/StringBuffer dechaining: свертка цепочек .append(...).toString() в чистые операторы +).
 // НОВОЕ v1.9.151-ObfUpd.14: [ObfUpd 14/15] распаковка статических таблиц и массивов в <clinit> (Static Constant Table & Array Unpacker: свертка статических таблиц FieldAccess[const_idx] в литералы, трассировка поэлементного заполнения массивов).
 // НОВОЕ v1.9.152-ObfUpd.15: [ObfUpd 15/15] полный сводный аудит и метрики конвейера деобфускации (15-Stage Deobfuscation Pipeline Summary: отчет по всем 15 этапам деобфускации в README_RU.txt и stats JSON, финализация серии 15 обновлений).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.152-ObfUpd.15";
+// НОВОЕ v1.9.153-ObfUpd.16: расширенный парсер Markdown в Центре Обновлений, единый GUI-файл версионирования, устранение паразитных скобок/хвостов в Minecraft-чипах, углубленный десугаринг String/switch и очистка тождественных условий.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.153-ObfUpd.16";
 }
 
 
