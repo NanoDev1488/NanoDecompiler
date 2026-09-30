@@ -1,5 +1,17 @@
 # NanoDecompiler Changelog
 
+## [1.9.144-ObfUpd.7] - 2026-09-30
+
+### C++ Декомпилятор (Engine)
+- **[ObfUpd 7/15] Инлайнинг синтетических аксессоров и мостов (Synthetic Accessors & Bridge Inlining)**:
+  - `resources/engine_cpp/src/stackvm.cpp`: автоматическое распознавание методов доступа компилятора и обфускаторов (`access$000`, `access$100`, мосты `ACC_SYNTHETIC`).
+  - `resources/engine_cpp/src/stackvm.cpp`: инлайнинг геттеров (`aload_0 + getfield`) в прямое обращение к полям `target.field`.
+  - `resources/engine_cpp/src/stackvm.cpp`: инлайнинг статических геттеров (`getstatic`) в прямое обращение к статическим полям `Owner.field`.
+  - `resources/engine_cpp/src/stackvm.cpp`: инлайнинг сеттеров (`aload_0 + putfield`) в прямое присваивание `target.field = val`.
+  - `resources/engine_cpp/src/stackvm.cpp`: инлайнинг прокси-методов вызовов (`invokevirtual`/`invokespecial`) в прямой вызов целевого метода `target.method(args...)`.
+
+---
+
 ## [1.9.143-ObfUpd.6] - 2026-09-30
 
 ### C++ Декомпилятор (Engine)

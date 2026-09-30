@@ -214,7 +214,8 @@ namespace nd {
 // НОВОЕ v1.9.141-ObfUpd.4: [ObfUpd 4/15] нейтрализация фиктивных батутов исключений (exception trampolines: try { throw new E(); } catch (E e) { body; }), распаковка в чистый поток с сохранением ссылок.
 // НОВОЕ v1.9.142-ObfUpd.5: [ObfUpd 5/15] деобфускация числовых констант и побитовых выражений (свертка констант +, -, *, /, %, &, |, ^, <<, >>, >>>, поглощение XOR (x^y)^y, двойное отрицание !/~/-, свертка строк).
 // НОВОЕ v1.9.143-ObfUpd.6: [ObfUpd 6/15] деобфускация методов расшифровки строк (поддержка трехпараметрического Allatori str_decrypt_allatori, инлайнинг константных строковых вызовов intern/length/isEmpty/charAt/substring).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.143-ObfUpd.6";
+// НОВОЕ v1.9.144-ObfUpd.7: [ObfUpd 7/15] инлайнинг синтетических аксессоров и мостов (Synthetic Accessors: access$000 getter/setter/call инлайнинг в прямые обращения к полям и методам).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.144-ObfUpd.7";
 }
 
 

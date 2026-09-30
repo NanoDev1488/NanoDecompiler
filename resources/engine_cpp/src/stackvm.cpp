@@ -1902,6 +1902,86 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
                             }
                         }
                     }
+
+                    // Synthetic accessor and bridge inlining: access$000, access$100, etc.
+                    if (target_m && ((target_m->access & 0x1000) || name.rfind("access$", 0) == 0) &&
+                        target_m->has_code && !target_m->code.empty()) {
+                        const auto& mc_code = target_m->code;
+                        // Pattern 1: Getter: aload_0 (0x2a), getfield (0xb4), *return (0xac..0xb0)
+                        if (mc_code.size() >= 4 && mc_code[0] == 0x2a && mc_code[1] == 0xb4 && args.size() == 1) {
+                            uint16_t f_cpi = (static_cast<uint16_t>(mc_code[2]) << 8) | mc_code[3];
+                            auto fr = ctx.cf.ref_string(f_cpi);
+                            if (fr) {
+                                std::string f_owner = std::get<0>(*fr);
+                                std::string f_name = std::get<1>(*fr);
+                                std::string f_desc = std::get<2>(*fr);
+                                std::string f_type = ctx.map_type(field_descriptor_to_java(f_desc));
+                                std::string f_disp = ctx.field_name(f_owner, f_name, f_desc);
+                                push(std::make_shared<FieldAccess>(args[0], f_disp, f_type));
+                                i += 1;
+                                continue;
+                            }
+                        }
+                        // Pattern 2: Static getter: getstatic (0xb2), *return (0xac..0xb0)
+                        if (mc_code.size() >= 3 && mc_code[0] == 0xb2 && args.empty()) {
+                            uint16_t f_cpi = (static_cast<uint16_t>(mc_code[1]) << 8) | mc_code[2];
+                            auto fr = ctx.cf.ref_string(f_cpi);
+                            if (fr) {
+                                std::string f_owner = std::get<0>(*fr);
+                                std::string f_name = std::get<1>(*fr);
+                                std::string f_desc = std::get<2>(*fr);
+                                std::string f_type = ctx.map_type(field_descriptor_to_java(f_desc));
+                                std::string f_disp = ctx.field_name(f_owner, f_name, f_desc);
+                                std::string o_disp = ctx.owner_display(f_owner);
+                                push(std::make_shared<FieldAccess>(nullptr, f_disp, f_type, true, o_disp));
+                                i += 1;
+                                continue;
+                            }
+                        }
+                        // Pattern 3: Setter: aload_0 (0x2a), *load_1 (0x1b..0x2b), putfield (0xb5)
+                        if (mc_code.size() >= 5 && mc_code[0] == 0x2a && mc_code[2] == 0xb5 && args.size() == 2) {
+                            uint16_t f_cpi = (static_cast<uint16_t>(mc_code[3]) << 8) | mc_code[4];
+                            auto fr = ctx.cf.ref_string(f_cpi);
+                            if (fr) {
+                                std::string f_owner = std::get<0>(*fr);
+                                std::string f_name = std::get<1>(*fr);
+                                std::string f_desc = std::get<2>(*fr);
+                                std::string f_type = ctx.map_type(field_descriptor_to_java(f_desc));
+                                std::string f_disp = ctx.field_name(f_owner, f_name, f_desc);
+                                auto fa = std::make_shared<FieldAccess>(args[0], f_disp, f_type);
+                                push(std::make_shared<Assign>(fa, args[1]));
+                                i += 1;
+                                continue;
+                            }
+                        }
+                        // Pattern 4: Method invocation forwarder: aload_0, load args..., invokevirtual/special
+                        if (mc_code.size() >= 4 && mc_code[0] == 0x2a && !args.empty()) {
+                            bool handled = false;
+                            for (size_t k = 1; k + 2 < mc_code.size(); ++k) {
+                                uint8_t op = mc_code[k];
+                                if (op == 0xb6 || op == 0xb7) {
+                                    uint16_t m_cpi = (static_cast<uint16_t>(mc_code[k + 1]) << 8) | mc_code[k + 2];
+                                    auto mr = ctx.cf.ref_string(m_cpi);
+                                    if (mr) {
+                                        std::string m_owner = std::get<0>(*mr);
+                                        std::string m_name = std::get<1>(*mr);
+                                        std::string m_desc = std::get<2>(*mr);
+                                        std::string m_disp = ctx.method_name(m_owner, m_name, m_desc);
+                                        auto [m_ret, m_params] = method_descriptor_to_java(m_desc);
+                                        std::string mapped_m_ret = ctx.map_type(m_ret);
+                                        std::vector<ExprPtr> fwd_args(args.begin() + 1, args.end());
+                                        push(std::make_shared<MethodCall>(args[0], m_disp, fwd_args, mapped_m_ret, false));
+                                        handled = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (handled) {
+                                i += 1;
+                                continue;
+                            }
+                        }
+                    }
                 }
                 std::string mname = ctx.method_name(owner, name, desc);
                 // ВАЖНО: порядок вычисления обязателен как в Python (map_type
