@@ -2272,10 +2272,12 @@ std::vector<StmtPtr> collapse_nested_if_conditions(std::vector<StmtPtr> stmts) {
             if (s && s->kind == StmtKind::IfStmt) {
                 auto* i = static_cast<IfStmt*>(s.get());
                 if (!i->else_body.has_value() && i->then_body.size() == 1 && i->then_body[0] && i->then_body[0]->kind == StmtKind::IfStmt) {
-                    auto* inner = static_cast<IfStmt*>(i->then_body[0].get());
-                    if (!inner->else_body.has_value()) {
+                    auto inner_holder = i->then_body[0];
+                    auto* inner = static_cast<IfStmt*>(inner_holder.get());
+                    if (!inner->else_body.has_value() && inner->cond) {
+                        auto new_then = inner->then_body;
                         i->cond = std::make_shared<BinOp>("&&", i->cond, inner->cond, "boolean");
-                        i->then_body = inner->then_body;
+                        i->then_body = std::move(new_then);
                         changed = true;
                         break;
                     }
@@ -2648,12 +2650,14 @@ std::vector<StmtPtr> fold_try_catches(std::vector<StmtPtr> stmts) {
 
             // 1. Flatten single nested try without finally/resources into outer try
             if (t->body.size() == 1 && t->body[0] && t->body[0]->kind == StmtKind::TryStmt) {
-                auto* inner = static_cast<TryStmt*>(t->body[0].get());
+                auto inner_holder = t->body[0];
+                auto* inner = static_cast<TryStmt*>(inner_holder.get());
                 if (!inner->finally_body.has_value() && inner->resources.empty() && !t->finally_body.has_value()) {
                     std::vector<CatchClause> merged = inner->catches;
                     merged.insert(merged.end(), t->catches.begin(), t->catches.end());
-                    t->body = inner->body;
-                    t->catches = merged;
+                    auto new_body = inner->body;
+                    t->body = std::move(new_body);
+                    t->catches = std::move(merged);
                 }
             }
 
