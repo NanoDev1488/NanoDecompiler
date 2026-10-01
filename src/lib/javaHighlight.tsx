@@ -291,36 +291,47 @@ function findColorChainRegions(tokens: Token[], excludeRanges: Region[]): Region
   const isColorStr = (t: Token) =>
     !!t.isStr && !!(t.colorMethod || t.isGenericColorCall || t.isChainedColorCall || MC_CODE_RE.test(t.text));
   const isColorToken = (t: Token) => isColorStr(t) || !!t.isColorEnum;
-  const isBreaker = (t: Token) => (t.isStr && !isColorStr(t)) || t.text.includes(";") || t.cls === "tok-k";
+  const isBreaker = (t: Token) => t.text.includes(";") || (t.cls === "tok-k" && t.text !== "new");
 
   const regions: Region[] = [];
   let currentStart: number | null = null;
   let prevEnd = 0;
-  let colorCount = 0;
+  let hasColor = false;
+  let totalCount = 0;
   for (const t of tokens) {
     if (isExcluded(t)) continue;
     if (isBreaker(t)) {
-      if (currentStart !== null && colorCount >= 2) regions.push({ start: currentStart, end: prevEnd, kind: "color" });
+      if (currentStart !== null && hasColor && totalCount >= 2) {
+        regions.push({ start: currentStart, end: prevEnd, kind: "color" });
+      }
       currentStart = null;
-      colorCount = 0;
+      hasColor = false;
+      totalCount = 0;
       continue;
     }
     if (currentStart === null) {
       if (t.isColorEnum) {
         currentStart = t.colorEnumStart ?? t.start;
         prevEnd = t.end;
-        colorCount = 1;
+        hasColor = true;
+        totalCount = 1;
       } else if (isColorStr(t)) {
         currentStart = t.start;
         prevEnd = t.end;
-        colorCount = 1;
+        hasColor = true;
+        totalCount = 1;
       }
       continue;
     }
     prevEnd = t.end;
-    if (isColorToken(t)) colorCount++;
+    if (isColorToken(t)) hasColor = true;
+    if (t.isStr || isColorToken(t) || t.cls === "tok-f" || t.cls === "tok-m" || t.text === "+") {
+      if (t.text !== "+") totalCount++;
+    }
   }
-  if (currentStart !== null && colorCount >= 2) regions.push({ start: currentStart, end: prevEnd, kind: "color" });
+  if (currentStart !== null && hasColor && totalCount >= 2) {
+    regions.push({ start: currentStart, end: prevEnd, kind: "color" });
+  }
   return regions;
 }
 

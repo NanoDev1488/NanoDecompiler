@@ -50,6 +50,7 @@ void collapse_string_switches(std::vector<StmtPtr>& stmts);
 void collapse_array_literals(std::vector<StmtPtr>& stmts);
 std::string java_float_literal(double v, const std::string& suffix = "f");
 std::string char_literal(int codepoint);
+bool has_side_effect(const ExprPtr& e);
 
 // ---------------- Renamer: интерфейс + заглушка ----------------
 // Реальный Renamer живёт в renamer.hpp/.cpp (портирован, HANDOFF_41,

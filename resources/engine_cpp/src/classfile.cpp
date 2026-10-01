@@ -284,14 +284,14 @@ uint8_t Reader::u1() {
 }
 
 uint16_t Reader::u2() {
-    if (pos_ + 2 > data_.size()) throw ClassFormatError("u2: unexpected EOF");
+    if (2 > data_.size() - pos_) throw ClassFormatError("u2: unexpected EOF");
     uint16_t v = (uint16_t(data_[pos_]) << 8) | uint16_t(data_[pos_ + 1]);
     pos_ += 2;
     return v;
 }
 
 uint32_t Reader::u4() {
-    if (pos_ + 4 > data_.size()) throw ClassFormatError("u4: unexpected EOF");
+    if (4 > data_.size() - pos_) throw ClassFormatError("u4: unexpected EOF");
     uint32_t v = (uint32_t(data_[pos_]) << 24) | (uint32_t(data_[pos_ + 1]) << 16) |
                  (uint32_t(data_[pos_ + 2]) << 8) | uint32_t(data_[pos_ + 3]);
     pos_ += 4;
@@ -303,14 +303,14 @@ int16_t Reader::s2() { return static_cast<int16_t>(u2()); }
 int32_t Reader::s4() { return static_cast<int32_t>(u4()); }
 
 std::vector<uint8_t> Reader::bytes(size_t n) {
-    if (pos_ + n > data_.size()) throw ClassFormatError("bytes: unexpected EOF");
+    if (n > data_.size() - pos_) throw ClassFormatError("bytes: unexpected EOF");
     std::vector<uint8_t> v(data_.begin() + pos_, data_.begin() + pos_ + n);
     pos_ += n;
     return v;
 }
 
 void Reader::skip(size_t n) {
-    if (pos_ + n > data_.size()) throw ClassFormatError("skip: unexpected EOF");
+    if (n > data_.size() - pos_) throw ClassFormatError("skip: unexpected EOF");
     pos_ += n;
 }
 

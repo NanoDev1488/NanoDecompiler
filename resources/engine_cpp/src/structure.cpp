@@ -1772,15 +1772,16 @@ ExprPtr simplify_expr(ExprPtr e) {
                         std::string lit = c->literal;
                         bool is_long = (!lit.empty() && (lit.back() == 'L' || lit.back() == 'l')) || u->type == "long" || c->type == "long";
                         if (!lit.empty() && (lit.back() == 'L' || lit.back() == 'l')) lit.pop_back();
-                        long long val = (lit.rfind("0x", 0) == 0 || lit.rfind("0X", 0) == 0)
-                                            ? std::stoll(lit, nullptr, 16)
-                                            : std::stoll(lit, nullptr, 10);
-                        if (u->op == "~") val = ~val;
-                        else if (u->op == "-") val = -val;
+                        uint64_t uval = (lit.rfind("0x", 0) == 0 || lit.rfind("0X", 0) == 0)
+                                            ? std::stoull(lit, nullptr, 16)
+                                            : static_cast<uint64_t>(std::stoll(lit, nullptr, 10));
+                        if (u->op == "~") uval = ~uval;
+                        else if (u->op == "-") uval = static_cast<uint64_t>(-static_cast<int64_t>(uval));
+                        int64_t val = static_cast<int64_t>(uval);
                         if (is_long) {
                             return std::make_shared<Const>(std::to_string(val) + "L", "long");
                         } else {
-                            return std::make_shared<Const>(std::to_string((int32_t)val), "int");
+                            return std::make_shared<Const>(std::to_string(static_cast<int32_t>(val)), "int");
                         }
                     } catch (...) {}
                 }
@@ -1895,6 +1896,8 @@ std::vector<StmtPtr> collapse_temp_chains(std::vector<StmtPtr> stmts) {
             if (!b.has_value()) continue;
             ExprPtr tgt2 = b->first, val2 = b->second;
             if (!val2 || !(val2->kind == ExprKind::Local && static_cast<Local*>(val2.get())->name == tgt_name)) continue;
+            // Если между i и j есть другие операторы, нельзя переносить выражение с побочными эффектами
+            if (j != i + 1 && has_side_effect(val)) continue;
             std::vector<StmtPtr> new_stmts;
             new_stmts.insert(new_stmts.end(), stmts.begin(), stmts.begin() + i);
             new_stmts.insert(new_stmts.end(), stmts.begin() + i + 1, stmts.begin() + j);
@@ -2087,6 +2090,14 @@ std::vector<StmtPtr> inline_single_use_temps_anywhere(std::vector<StmtPtr> stmts
             if (uses.size() != 1) continue;
             size_t j = uses[0];
             StmtPtr target_stmt = stmts[j];
+            if (!target_stmt) continue;
+            // НЕЛЬЗЯ инлайнить переменную, вычисленную ДО цикла, В ТЕЛО цикла:
+            // иначе выражение будет перевычисляться на каждой итерации вместо одного раза до старта цикла!
+            if (target_stmt->kind == StmtKind::WhileStmt || target_stmt->kind == StmtKind::ForStmt || target_stmt->kind == StmtKind::DoWhileStmt) {
+                continue;
+            }
+            // Если между определением и использованием есть другие операторы, запрещаем перенос выражений с побочными эффектами
+            if (j != i + 1 && has_side_effect(val)) continue;
             if (substitute_temp_in_stmt(target_stmt, tgt_name, val)) {
                 std::vector<StmtPtr> new_stmts;
                 new_stmts.insert(new_stmts.end(), stmts.begin(), stmts.begin() + i);

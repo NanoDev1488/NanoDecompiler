@@ -7,11 +7,14 @@
 
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
 
 #include <zlib.h>
+
+namespace fs = std::filesystem;
 
 namespace nd {
 
@@ -55,7 +58,7 @@ std::vector<uint8_t> inflate_raw(const std::vector<uint8_t>& compressed, uint64_
 }  // namespace
 
 ZipReader::ZipReader(const std::string& path) : path_(path) {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(fs::u8path(path), std::ios::binary);
     if (!f) throw std::runtime_error("cannot open " + path);
     f.seekg(0, std::ios::end);
     std::streamoff file_size = f.tellg();
@@ -103,7 +106,10 @@ ZipReader::ZipReader(const std::string& path) : path_(path) {
         // Защита от Zip Slip (патологические/вредоносные имена с ../ или абсолютными путями)
         std::string clean_name = name;
         for (char& c : clean_name) if (c == '\\') c = '/';
-        while (!clean_name.empty() && clean_name.front() == '/') clean_name.erase(clean_name.begin());
+        // Убираем ведущие слэши и пробелы (например " /Telegram" -> "Telegram")
+        while (!clean_name.empty() && (clean_name.front() == '/' || clean_name.front() == ' ' || clean_name.front() == '\t')) {
+            clean_name.erase(clean_name.begin());
+        }
         bool dangerous = false;
         std::stringstream ss(clean_name);
         std::string segment;
@@ -113,7 +119,7 @@ ZipReader::ZipReader(const std::string& path) : path_(path) {
                 break;
             }
         }
-        if (dangerous) {
+        if (dangerous || clean_name.empty()) {
             pos += 46 + name_len + extra_len + comment_len;
             continue;
         }
@@ -127,6 +133,10 @@ ZipReader::ZipReader(const std::string& path) : path_(path) {
         entries_[clean_name] = info;
         order_.push_back(clean_name);
         local_header_offset_[clean_name] = local_header_offset;
+        if (name != clean_name) {
+            entries_[name] = info;
+            local_header_offset_[name] = local_header_offset;
+        }
 
         pos += 46 + name_len + extra_len + comment_len;
     }
@@ -143,7 +153,7 @@ std::vector<uint8_t> ZipReader::read(const std::string& name) const {
     auto off_it = local_header_offset_.find(name);
     uint64_t local_offset = off_it->second;
 
-    std::ifstream f(path_, std::ios::binary);
+    std::ifstream f(fs::u8path(path_), std::ios::binary);
     if (!f) throw std::runtime_error("cannot open " + path_);
     f.seekg(local_offset);
     uint8_t lh[30];

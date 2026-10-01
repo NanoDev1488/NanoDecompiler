@@ -48,18 +48,100 @@ namespace {
 // ТОЧНО ТАК ЖЕ конвертирует через системную кодовую страницу и может
 // БРОСИТЬ то же самое исключение при конвертации ОБРАТНО в узкую строку
 // (например если путь пользователя/tools_dir содержит кириллицу).
-// fs::path::u8string() - зеркальный правильный метод, гарантированно
-// перекодирует путь именно в UTF-8, а не в текущую локаль. Заменено ВЕЗДЕ.
-void write_text_file(const std::string& path, const std::string& text) {
-    fs::create_directories(fs::u8path(path).parent_path());
-    std::ofstream f(path, std::ios::binary);
-    f << text;
+// Очищает относительный путь для безопасной записи на диск:
+// 1. Предотвращает Zip Slip (выход за пределы каталога через .. или ведущие слэши).
+// 2. Убирает ведущие/завершающие пробелы и замыкающие точки у КАЖДОГО сегмента
+//    (на Windows "dir " или "dir." приводят к ошибкам CreateDirectoryW / filesystem_error: File exists).
+// 3. Заменяет запрещённые в файловых системах Windows символы (< > : " | ? * и ASCII < 32) на '_'.
+// 4. Экранирует зарезервированные имена устройств Windows (CON, PRN, AUX, NUL, COM1..9, LPT1..9).
+// 5. Пропускает пустые/пробельные сегменты (например " /Telegram" -> "Telegram").
+std::optional<std::string> sanitize_relative_path(const std::string& raw) {
+    if (raw.empty()) return std::nullopt;
+
+    std::string s = raw;
+    for (char& c : s) {
+        if (c == '\\') c = '/';
+    }
+
+    std::vector<std::string> clean_segments;
+    std::string seg;
+    std::istringstream iss(s);
+
+    while (std::getline(iss, seg, '/')) {
+        size_t start = seg.find_first_not_of(" \t\r\n");
+        if (start == std::string::npos) continue;
+        size_t end = seg.find_last_not_of(" \t\r\n");
+        seg = seg.substr(start, end - start + 1);
+
+        while (!seg.empty() && (seg.back() == '.' || seg.back() == ' ' || seg.back() == '\t')) {
+            seg.pop_back();
+        }
+        if (seg.empty()) continue;
+        if (seg == "." || seg == "..") continue;
+
+        for (char& c : seg) {
+            unsigned char uc = static_cast<unsigned char>(c);
+            if (uc < 32 || c == '<' || c == '>' || c == ':' || c == '"' || c == '|' || c == '?' || c == '*') {
+                c = '_';
+            }
+        }
+
+        std::string base_name = seg;
+        size_t dot_pos = base_name.find('.');
+        if (dot_pos != std::string::npos) base_name = base_name.substr(0, dot_pos);
+        std::string upper_base = base_name;
+        for (char& c : upper_base) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+
+        static const std::set<std::string> reserved_names = {
+            "CON", "PRN", "AUX", "NUL",
+            "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+            "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+        };
+        if (reserved_names.count(upper_base)) {
+            seg = "_" + seg;
+        }
+
+        clean_segments.push_back(seg);
+    }
+
+    if (clean_segments.empty()) return std::nullopt;
+
+    std::string result;
+    for (size_t i = 0; i < clean_segments.size(); ++i) {
+        if (i > 0) result += '/';
+        result += clean_segments[i];
+    }
+    return result;
 }
 
-void write_binary_file(const std::string& path, const std::vector<uint8_t>& data) {
-    fs::create_directories(fs::u8path(path).parent_path());
-    std::ofstream f(path, std::ios::binary);
-    if (!data.empty()) f.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
+bool write_text_file(const std::string& path, const std::string& text) {
+    try {
+        std::error_code ec;
+        fs::path p = fs::u8path(path);
+        fs::create_directories(p.parent_path(), ec);
+        if (ec) return false;
+        std::ofstream f(p, std::ios::binary);
+        if (!f.is_open()) return false;
+        f << text;
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+bool write_binary_file(const std::string& path, const std::vector<uint8_t>& data) {
+    try {
+        std::error_code ec;
+        fs::path p = fs::u8path(path);
+        fs::create_directories(p.parent_path(), ec);
+        if (ec) return false;
+        std::ofstream f(p, std::ios::binary);
+        if (!f.is_open()) return false;
+        if (!data.empty()) f.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool starts_with(const std::string& s, const std::string& p) {
@@ -507,14 +589,20 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
             std::string ga = m[1].str() + ":" + m[2].str();
             if (library_hit_labels.count(ga)) continue;
         }
+        auto clean_name = sanitize_relative_path(n);
+        if (!clean_name.has_value()) continue;
         std::vector<uint8_t> data;
         try {
             data = zr.read(n);
         } catch (...) {
-            continue;
+            try {
+                data = zr.read(*clean_name);
+            } catch (...) {
+                continue;
+            }
         }
-        write_binary_file((fs::u8path(res_dir) / n).u8string(), data);
-        if (n == "plugin.yml") {
+        write_binary_file((fs::u8path(res_dir) / *clean_name).u8string(), data);
+        if (n == "plugin.yml" || *clean_name == "plugin.yml") {
             plugin_yml_text = std::string(data.begin(), data.end());
         }
     }
@@ -652,7 +740,10 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
         }
         for (auto& [d, s] : cls_imports.items()) all_imports.set(d, s);
         std::string new_internal = renamer.friendly_class(internal);
-        std::string dest = (fs::u8path(src_dir) / (new_internal + ".java")).u8string();
+        auto clean_class_rel = sanitize_relative_path(new_internal + ".java");
+        std::string dest = clean_class_rel.has_value()
+                               ? (fs::u8path(src_dir) / *clean_class_rel).u8string()
+                               : (fs::u8path(src_dir) / (new_internal + ".java")).u8string();
         write_text_file(dest, text);
         // БАГ-ФИКС v1.8.4 (реальная жалоба - "не везде где неполная
         // декомпиляция ставит значок"): раньше проверялась ТОЛЬКО подстрока
