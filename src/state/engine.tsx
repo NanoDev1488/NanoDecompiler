@@ -26,6 +26,8 @@ import {
   type SourceFile,
   type Toast,
   type ToastKind,
+  type ArchiveProgressInfo,
+  type DiscoveredPlugin,
 } from "../lib/model";
 import { buildFreeformBugReport, buildTelemetryReport } from "../lib/telemetry";
 import { GUI_VERSION } from "../version";
@@ -145,6 +147,9 @@ interface EngineApi {
   // абсолютный путь новым job'ом через тот же самый проверенный пайплайн
   // (дедупликация/outDir-коллизии/jarSummary - всё как для обычного jar).
   addJarPaths(paths: string[]): void;
+  addArchive(archivePath: string, fileName?: string): void;
+  decompileArchivePlugins(job: Job): void;
+  removeArchive(job: Job): void;
   openFileDialog(): void;
   startQueue(): void;
   stopRunning(): void;
@@ -1138,33 +1143,166 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     [patchJob, settings.outputDir, toast],
   );
 
+  useEffect(() => {
+    if (!window.nano?.onArchiveProgress) return;
+    const unsub = window.nano.onArchiveProgress(ev => {
+      setJobs(prev =>
+        prev.map(j => {
+          if (j.jarPath === ev.archivePath && j.isArchive) {
+            return {
+              ...j,
+              progress: ev.percent / 100,
+              archiveProgress: ev,
+              phase: ev.percent < 100 ? `Распаковка (${ev.percent}%)` : "Поиск плагинов...",
+            };
+          }
+          return j;
+        })
+      );
+    });
+    return unsub;
+  }, []);
+
+  const addArchive = useCallback(
+    (archivePath: string, fileName?: string) => {
+      const name = fileName || archivePath.split(/[/\\]/).pop() || archivePath;
+      const current = jobsRef.current;
+      if (current.some(j => j.jarPath === archivePath && j.status !== "failed")) {
+        toast(`Архив уже добавлен: ${name}`, "warn");
+        return;
+      }
+      const archId = rid("arch");
+      const archJob: Job = {
+        id: archId,
+        fileName: name,
+        jarPath: archivePath,
+        outDir: "",
+        sizeBytes: 0,
+        classCount: null,
+        addedAt: Date.now(),
+        status: "running",
+        progress: 0.05,
+        elapsedMs: 0,
+        phase: "Распаковка во временную папку...",
+        isArchive: true,
+        archiveProgress: {
+          percent: 5,
+          currentFile: "Инициализация распаковки...",
+          extractedFiles: 0,
+          totalFiles: 100,
+          etaSeconds: 3,
+          speedBytesPerSec: 0,
+          tempDir: "",
+        },
+        extractedPlugins: [],
+        skippedServerCores: [],
+      };
+
+      setJobs(prev => [archJob, ...prev]);
+      toast(`Распаковка архива: ${name}`, "info");
+
+      window.nano
+        .extractArchive(archivePath)
+        .then(res => {
+          if (!res.ok) {
+            patchJob(archId, {
+              status: "failed",
+              error: res.error || "Ошибка распаковки",
+              phase: "Ошибка распаковки",
+            });
+            toast(`Ошибка распаковки ${name}: ${res.error}`, "err");
+            return;
+          }
+          patchJob(archId, {
+            status: "done",
+            progress: 1,
+            phase: `Распакован · ${res.plugins.length} плагин(ов)`,
+            tempDir: res.tempDir,
+            extractedPlugins: res.plugins,
+            skippedServerCores: res.serverCores,
+          });
+          const coresText = res.serverCores.length ? ` (${res.serverCores.length} ядро пропущено)` : "";
+          toast(`Архив ${name} распакован! Найдено плагинов: ${res.plugins.length}${coresText}`, "ok");
+        })
+        .catch(err => {
+          patchJob(archId, {
+            status: "failed",
+            error: String(err),
+            phase: "Ошибка распаковки",
+          });
+          toast(`Сбой распаковки архива: ${err}`, "err");
+        });
+    },
+    [patchJob, toast]
+  );
+
+  const decompileArchivePlugins = useCallback(
+    (job: Job) => {
+      if (!job.extractedPlugins || job.extractedPlugins.length === 0) {
+        toast("В архиве нет доступных плагинов для декомпиляции", "warn");
+        return;
+      }
+      const paths = job.extractedPlugins.map(p => p.jarPath);
+      addJarPaths(paths);
+      toast(`Добавлено в очередь декомпиляции: ${paths.length} плагин(ов)`, "ok");
+    },
+    [addJarPaths, toast]
+  );
+
+  const removeArchive = useCallback(
+    (job: Job) => {
+      if (job.tempDir) {
+        window.nano.cleanupTempArchive(job.tempDir).catch(() => {});
+      }
+      setJobs(prev => prev.filter(j => j.id !== job.id));
+      toast(`Архив удален из списка: ${job.fileName}`, "ok");
+    },
+    [toast]
+  );
+
   const addFiles = useCallback(
     (list: FileList | File[]) => {
-      const paths: string[] = [];
+      const jarPaths: string[] = [];
       for (const f of Array.from(list)) {
-        if (!/\.jar$/i.test(f.name)) {
-          toast(`Пропущено: ${f.name} — нужен .jar`, "err");
+        const withPath = f as File & { path?: string };
+        const filePath = withPath.path;
+        if (!filePath) {
+          toast(`${f.name}: нет доступа к пути файла — используйте "Открыть файл"`, "err");
           continue;
         }
-        // legacy Electron File.path (доступно на Electron 31 при
-        // перетаскивании файла из ОС в окно приложения)
-        const withPath = f as File & { path?: string };
-        if (withPath.path) paths.push(withPath.path);
-        else toast(`${f.name}: нет доступа к пути файла — используйте "Открыть файл"`, "err");
+
+        if (/\.jar$/i.test(f.name)) {
+          jarPaths.push(filePath);
+        } else if (/\.(zip|tar\.gz|tgz|tar|7z|7zip|rar)$/i.test(f.name)) {
+          addArchive(filePath, f.name);
+        } else {
+          toast(`Пропущено: ${f.name} — поддерживаются .jar и архивы (.zip, .tar.gz, .7z, .rar)`, "err");
+        }
       }
-      if (paths.length) addJarPaths(paths);
+      if (jarPaths.length) addJarPaths(jarPaths);
     },
-    [addJarPaths, toast],
+    [addArchive, addJarPaths, toast],
   );
 
   const openFileDialog = useCallback(() => {
     window.nano
       .selectJar()
       .then(paths => {
-        if (paths.length) addJarPaths(paths);
+        const jarPaths: string[] = [];
+        for (const p of paths) {
+          const fileName = p.split(/[/\\]/).pop() ?? p;
+          if (/\.jar$/i.test(p)) {
+            jarPaths.push(p);
+          } else if (/\.(zip|tar\.gz|tgz|tar|7z|7zip|rar)$/i.test(p)) {
+            addArchive(p, fileName);
+          } else {
+            jarPaths.push(p);
+          }
+        }
+        if (jarPaths.length) addJarPaths(jarPaths);
       })
       .catch(() => toast("Диалог выбора файла недоступен", "err"));
-  }, [addJarPaths, toast]);
+  }, [addArchive, addJarPaths, toast]);
 
   const cancelJob = useCallback(
     (id: string) => {
@@ -1437,7 +1575,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const api: EngineApi = {
     jobs, log, runningJob, runningElapsed, selectedJobId, selectedJob, openFileByJob,
     terminalOpen, logFilter, settings, settingsLoaded, settingsOpen, updateModalOpen, paletteOpen, projectSearchOpen, bugReportOpen, envIssue, engineVersion, guiVersion, javaEnv, mavenEnv, installingTool, installProgress, iconThumbnails, updateInfo, downloadProgress, toasts, queuedCount, sidebarWidth, fileTreeWidth, terminalHeight,
-    addFiles, addJarPaths, openFileDialog, startQueue, stopRunning, stopAll, cancelJob, removeJob, clearQueue,
+    addFiles, addJarPaths, addArchive, decompileArchivePlugins, removeArchive, openFileDialog, startQueue, stopRunning, stopAll, cancelJob, removeJob, clearQueue,
     selectJob, selectFile, updateFileCode, setLogFilter, toggleTerminal, clearLog, copyLog, copyText,
     openOutput, setSettingsOpen, setUpdateModalOpen, setSidebarWidth, setFileTreeWidth, setTerminalHeight, saveSettings, completeSetup, setPaletteOpen, setProjectSearchOpen, setBugReportOpen,
     resolveEnvIssue, checkForUpdates, applyEngineUpdate, applyClientUpdate, openClientDownload, checkEnv, installTool, addToSystemPath, toast, dismissToast,
@@ -1450,7 +1588,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".jar,application/java-archive"
+        accept=".jar,.zip,.tar.gz,.tgz,.tar,.7z,.7zip,.rar,application/java-archive,application/zip,application/x-zip-compressed"
         multiple
         className="hidden"
         onChange={e => {

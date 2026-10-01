@@ -1,4 +1,17 @@
-import { FileArchive, FolderOpen, MoreVertical, Trash2, X } from "lucide-react";
+import {
+  Archive,
+  ArrowDown,
+  FileArchive,
+  FolderOpen,
+  Loader2,
+  MoreVertical,
+  PackageCheck,
+  PackageOpen,
+  Play,
+  ShieldAlert,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useState } from "react";
 import { useEngine } from "../state/engine";
 import { useResizeDrag } from "../lib/useResize";
@@ -12,6 +25,14 @@ function StatusDot({ job }: { job: Job }) {
   if (job.status === "done") return <span className="dot bg-acid" />;
   if (job.status === "failed") return <span className="dot bg-err" />;
   return <span className="dot dot-hollow" />;
+}
+
+function fmtEta(seconds: number, lang: Lang): string {
+  if (seconds <= 0) return lang === "ru" ? "завершается..." : "finishing...";
+  if (seconds < 60) return `~${Math.ceil(seconds)} ${lang === "ru" ? "сек" : "s"}`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.ceil(seconds % 60);
+  return `~${m} ${lang === "ru" ? "мин" : "m"} ${s} ${lang === "ru" ? "сек" : "s"}`;
 }
 
 function statusLine(job: Job, lang: Lang): string {
@@ -147,6 +168,217 @@ function JobCard({ job, selected, lang }: JobCardProps) {
   );
 }
 
+function ArchiveCard({ job, selected, lang }: JobCardProps) {
+  const { selectJob, removeArchive, decompileArchivePlugins, addJarPaths } = useEngine();
+  const prog = job.archiveProgress;
+  const isExtracting = job.status === "running";
+  const isDone = job.status === "done";
+  const isFailed = job.status === "failed";
+  const plugins = job.extractedPlugins ?? [];
+  const skipped = job.skippedServerCores ?? [];
+
+  return (
+    <div
+      className={cn(
+        "relative w-full rounded-xl border bg-bg p-3 transition-colors duration-150",
+        selected ? "border-line-strong bg-raised" : "border-line hover:border-line-strong",
+        isExtracting && "border-amber-500/40 bg-amber-500/5",
+      )}
+      onClick={() => selectJob(job.id)}
+    >
+      {/* Шапка архива */}
+      <div className="flex items-center gap-2">
+        <div className="flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-surface border border-line">
+          {isExtracting ? (
+            <PackageOpen size={15} className="animate-bounce text-amber-400" />
+          ) : isDone ? (
+            <PackageCheck size={15} className="text-acid" />
+          ) : (
+            <Archive size={15} className="text-faint" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="mono truncate text-[12px] font-semibold text-ink" title={job.fileName}>
+            {job.fileName}
+          </div>
+          <div className="mono text-[10.5px] text-faint">
+            {fmtBytes(job.sizeBytes)} · {lang === "ru" ? "Архив" : "Archive"}
+          </div>
+        </div>
+        <button
+          className="icon-btn h-6 w-6 rounded-md hover:bg-err/10 hover:text-err"
+          title={lang === "ru" ? "Удалить архив и временные файлы" : "Delete archive & temp files"}
+          onClick={e => {
+            e.stopPropagation();
+            removeArchive(job);
+          }}
+        >
+          <X size={12} />
+        </button>
+      </div>
+
+      {/* Анимация и прогресс распаковки во временную папку */}
+      {isExtracting && (
+        <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2.5">
+          <div className="flex items-center gap-2 text-[11.5px] font-medium text-amber-300">
+            <Loader2 size={13} className="animate-spin text-amber-400" />
+            <span>{t(lang, "sidebar.archive_extracting")}</span>
+          </div>
+
+          {/* Индикатор прогресса */}
+          <div className="bar mt-2 bg-black/40">
+            <i
+              className="bg-amber-400 transition-all duration-200"
+              style={{ width: `${Math.max(5, Math.round(prog?.percent ?? job.progress * 100))}%` }}
+            />
+          </div>
+
+          <div className="mono mt-1.5 flex items-center justify-between text-[10.5px] text-amber-300/80">
+            <span>{Math.round(prog?.percent ?? job.progress * 100)}%</span>
+            {prog?.etaSeconds !== undefined && prog.etaSeconds > 0 && (
+              <span className="font-semibold text-amber-200">
+                {lang === "ru" ? "Осталось" : "ETA"}: {fmtEta(prog.etaSeconds, lang)}
+              </span>
+            )}
+            {prog?.speedBytesPerSec !== undefined && prog.speedBytesPerSec > 0 && (
+              <span>{fmtBytes(prog.speedBytesPerSec)}/s</span>
+            )}
+          </div>
+
+          {prog?.currentFile && (
+            <div className="mono mt-1.5 truncate text-[10px] text-faint" title={prog.currentFile}>
+              {lang === "ru" ? "Извлечение" : "Extracting"}: {prog.currentFile}
+            </div>
+          )}
+
+          {job.tempDir && (
+            <div className="mono mt-1 truncate text-[9.5px] text-faint/70" title={job.tempDir}>
+              📁 {job.tempDir}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Ошибка распаковки */}
+      {isFailed && (
+        <div className="mt-2 rounded-lg border border-err/30 bg-err/10 p-2 text-[11px] text-err">
+          {job.error || (lang === "ru" ? "Ошибка распаковки архива" : "Archive extraction error")}
+        </div>
+      )}
+
+      {/* Завершено: список найденных плагинов со стрелочкой вниз */}
+      {isDone && (
+        <div className="mt-2.5">
+          {/* Верхняя плашка с кнопкой "Декомпилировать все" */}
+          <div className="flex items-center justify-between gap-1 pb-1.5 border-b border-line/60">
+            <span className="text-[11px] font-medium text-dim">
+              {lang === "ru" ? `Найдено плагинов: ${plugins.length}` : `Plugins found: ${plugins.length}`}
+            </span>
+            {plugins.length > 0 && (
+              <button
+                className="btn-primary flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium shadow-sm"
+                onClick={e => {
+                  e.stopPropagation();
+                  decompileArchivePlugins(job);
+                }}
+              >
+                <Play size={10} className="fill-current" />
+                {t(lang, "sidebar.decompile_all")}
+              </button>
+            )}
+          </div>
+
+          {/* Стрелочка от архива вниз к плагинам */}
+          {plugins.length > 0 && (
+            <div className="flex items-center gap-1.5 py-2 text-acid">
+              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-acid/15 border border-acid/30">
+                <ArrowDown size={11} className="animate-bounce" />
+              </div>
+              <span className="mono text-[10.5px] font-semibold uppercase tracking-wider text-acid">
+                {t(lang, "sidebar.archive_plugins_found")} ({plugins.length})
+              </span>
+            </div>
+          )}
+
+          {/* Список плагинов */}
+          <div className="flex flex-col gap-1.5 pl-2 border-l-2 border-acid/30">
+            {plugins.map(p => (
+              <div
+                key={p.jarPath}
+                className="group flex flex-col gap-1 rounded-lg border border-line bg-surface/80 p-2 hover:border-acid/40 hover:bg-raised transition-colors"
+              >
+                <div className="flex items-start justify-between gap-1">
+                  <div className="min-w-0 flex-1">
+                    <div className="mono truncate text-[11.5px] font-medium text-ink" title={p.fileName}>
+                      {p.pluginName ? `${p.pluginName}` : p.fileName}
+                    </div>
+                    {p.pluginName && p.pluginName !== p.fileName && (
+                      <div className="mono truncate text-[10px] text-faint" title={p.fileName}>
+                        {p.fileName}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    className="btn flex flex-none items-center gap-1 rounded bg-acid/15 px-2 py-0.5 text-[10.5px] font-medium text-acid hover:bg-acid/25 border border-acid/30 transition-colors"
+                    title={lang === "ru" ? "Декомпилировать этот плагин" : "Decompile this plugin"}
+                    onClick={e => {
+                      e.stopPropagation();
+                      addJarPaths([p.jarPath]);
+                    }}
+                  >
+                    <Play size={9} className="fill-current" />
+                    {t(lang, "sidebar.decompile")}
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                  <span className="rounded bg-acid/10 px-1 py-0.2 text-[9.5px] font-medium text-acid border border-acid/20">
+                    {p.platform}
+                  </span>
+                  <span className="mono text-faint">{fmtBytes(p.sizeBytes)}</span>
+                  {p.classCount !== null && (
+                    <span className="mono text-faint">· {p.classCount} {lang === "ru" ? "кл." : "cls"}</span>
+                  )}
+                  {p.pluginAuthor && (
+                    <span className="mono text-faint/80 truncate max-w-[100px]" title={p.pluginAuthor}>
+                      · {p.pluginAuthor}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {plugins.length === 0 && (
+              <div className="py-2 text-[11px] text-faint italic">
+                {lang === "ru" ? "В архиве не найдено подходящих .jar плагинов" : "No valid .jar plugins found in archive"}
+              </div>
+            )}
+          </div>
+
+          {/* Пропущенные ядра сервера */}
+          {skipped.length > 0 && (
+            <div className="mt-2.5 rounded-lg border border-amber-500/25 bg-amber-500/5 p-2">
+              <div className="flex items-center gap-1.5 text-[10.5px] font-semibold text-amber-400">
+                <ShieldAlert size={12} />
+                <span>{t(lang, "sidebar.core_skipped")} ({skipped.length})</span>
+              </div>
+              <div className="mt-1 flex flex-col gap-1 text-[10px] text-faint">
+                {skipped.map(c => (
+                  <div key={c.jarPath} className="mono truncate">
+                    <span className="text-ink/80 font-medium">{c.fileName}</span>
+                    <span className="text-faint/70"> ({fmtBytes(c.sizeBytes)})</span>
+                    {c.coreReason && <span className="text-amber-400/80"> — {c.coreReason}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Sidebar() {
   const { jobs, selectedJobId, settings, addFiles, openFileDialog, clearQueue, sidebarWidth, setSidebarWidth } = useEngine();
   const lang = settings.language;
@@ -202,10 +434,10 @@ export function Sidebar() {
           <p className="text-[12.5px] font-medium text-ink/90">
             {dragActive
               ? (lang === "ru" ? "Отпускайте — добавлю в очередь" : "Drop to add to queue")
-              : (lang === "ru" ? "Перетащите .jar сюда" : "Drag .jar here")}
+              : t(lang, "sidebar.drag_drop_archive")}
           </p>
           <p className="mono text-[10.5px] text-faint">
-            {lang === "ru" ? "или нажмите, чтобы выбрать · только .jar" : "or click to select · .jar only"}
+            {t(lang, "sidebar.drag_drop_archive_desc")}
           </p>
         </div>
       </div>
@@ -217,21 +449,26 @@ export function Sidebar() {
               <>
                 // очередь пуста.
                 <br />
-                // добавьте архив — движок разберёт его на .java
+                // добавьте архив (.jar, .zip, .tar.gz, .7z, .rar)
               </>
             ) : (
               <>
                 // queue is empty.
                 <br />
-                // add an archive — engine will decompile to .java
+                // add archive (.jar, .zip, .tar.gz, .7z, .rar)
               </>
             )}
           </p>
         )}
         {jobs.map(j => (
-          <JobCard key={j.id} job={j} selected={selectedJobId === j.id} lang={lang} />
+          j.isArchive ? (
+            <ArchiveCard key={j.id} job={j} selected={selectedJobId === j.id} lang={lang} />
+          ) : (
+            <JobCard key={j.id} job={j} selected={selectedJobId === j.id} lang={lang} />
+          )
         ))}
       </div>
     </aside>
   );
 }
+

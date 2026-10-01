@@ -7,6 +7,42 @@ export type ShellResult = { ok: boolean; error?: string };
 export type ToolsProgressEvent = { type: "progress"; label: string; pct: number | null; downloaded_mb: number; total_mb: number | null };
 export type ToolsInstallResult = { ok: boolean; java?: string | null; maven?: string | null; errors?: string[]; error?: string };
 
+export type ArchiveProgressEvent = {
+  archivePath: string;
+  percent: number;
+  currentFile: string;
+  extractedFiles: number;
+  totalFiles: number;
+  etaSeconds: number;
+  speedBytesPerSec: number;
+  tempDir: string;
+};
+
+export type DiscoveredPlugin = {
+  fileName: string;
+  jarPath: string;
+  relPath: string;
+  sizeBytes: number;
+  classCount: number | null;
+  pluginName: string | null;
+  pluginAuthor: string | null;
+  platform: string;
+  isPlugin: boolean;
+  isServerCore: boolean;
+  coreReason?: string;
+};
+
+export type ArchiveExtractResult = {
+  ok: boolean;
+  archivePath: string;
+  tempDir: string;
+  plugins: DiscoveredPlugin[];
+  serverCores: DiscoveredPlugin[];
+  skippedNonPlugins: number;
+  totalJarsFound: number;
+  error?: string;
+};
+
 export type JarSummary = {
   name: string;
   size: string;
@@ -144,5 +180,16 @@ contextBridge.exposeInMainWorld("nano", {
     const handler = (_e: unknown, payload: { activeMatchOrdinal: number; matches: number }) => cb(payload);
     ipcRenderer.on("page:findResult", handler);
     return () => ipcRenderer.removeListener("page:findResult", handler);
+  },
+  extractArchive: (archivePath: string): Promise<ArchiveExtractResult> =>
+    ipcRenderer.invoke("archive:extract", archivePath),
+  isArchive: (filePath: string): Promise<boolean> =>
+    ipcRenderer.invoke("archive:isArchive", filePath),
+  cleanupTempArchive: (tempDir: string): Promise<boolean> =>
+    ipcRenderer.invoke("archive:cleanupTemp", tempDir),
+  onArchiveProgress: (cb: (progress: ArchiveProgressEvent) => void) => {
+    const handler = (_e: unknown, payload: ArchiveProgressEvent) => cb(payload);
+    ipcRenderer.on("archive:progress", handler);
+    return () => ipcRenderer.removeListener("archive:progress", handler);
   },
 });

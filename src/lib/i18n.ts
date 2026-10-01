@@ -140,6 +140,13 @@ export const DICT = {
     "setup.desc": "Высокоскоростной декомпилятор и деобфускатор Minecraft-плагинов",
     "setup.accept": "Принять и продолжить",
     "setup.decline": "Отклонить",
+    "sidebar.drag_drop_archive": "Перетащите .jar или архив (.zip, .tar.gz, .7z, .rar) сюда",
+    "sidebar.drag_drop_archive_desc": "или нажмите, чтобы выбрать · .jar, .zip, .tar.gz, .7z, .rar",
+    "sidebar.archive_extracting": "Распаковка во временную папку...",
+    "sidebar.archive_plugins_found": "Плагины в архиве",
+    "sidebar.decompile_all": "Декомпилировать все",
+    "sidebar.decompile": "Декомпилировать",
+    "sidebar.core_skipped": "Ядро сервера пропущено",
   },
   en: {
     "settings.tab.general": "General",
@@ -278,6 +285,13 @@ export const DICT = {
     "setup.desc": "High-performance Minecraft plugin decompiler and deobfuscator",
     "setup.accept": "Accept and Continue",
     "setup.decline": "Decline",
+    "sidebar.drag_drop_archive": "Drag .jar or archive (.zip, .tar.gz, .7z, .rar) here",
+    "sidebar.drag_drop_archive_desc": "or click to select · .jar, .zip, .tar.gz, .7z, .rar",
+    "sidebar.archive_extracting": "Extracting to temporary folder...",
+    "sidebar.archive_plugins_found": "Plugins in archive",
+    "sidebar.decompile_all": "Decompile all",
+    "sidebar.decompile": "Decompile",
+    "sidebar.core_skipped": "Server core skipped",
   },
 } satisfies Record<Lang, Record<string, string>>;
 

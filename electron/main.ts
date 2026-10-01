@@ -18,6 +18,7 @@ import * as https from "https";
 import { registerUpdateHandlers } from "./updater";
 import { readJarSummaryNative } from "./jarSummary";
 import { GUI_VERSION } from "./version";
+import { extractArchiveAndScanPlugins, isSupportedArchive, ArchiveProgressEvent } from "./archiveExtractor";
 
 // БАГ-ФИКС (реальный, воспроизведён пользователем на AntiX Linux -
 // "Read-only file system"): DEFAULT_SETTINGS.outputDir = "~/NanoDecompiler/out"
@@ -350,18 +351,42 @@ ipcMain.handle("appIcon:thumbnails", async () => {
 });
 
 ipcMain.handle("dialog:selectJar", async () => {
-  // БАГ-ФИКС: раньше был только openFile (без multiSelections) и
-  // возвращался res.filePaths[0] - первый выбранный файл, остальные
-  // молча терялись. Очередь (state/engine.tsx: jobs: Job[],
-  // addJarPaths(paths: string[])) уже умела принимать несколько jar'ов
-  // разом - drag&drop это уже использовал, диалог выбора файла - нет.
   const res = await dialog.showOpenDialog(mainWindow!, {
-    title: "Выбери .jar плагина (можно несколько)",
+    title: "Выбери .jar плагины или архивы (.zip, .tar.gz, .7z, .rar)",
     properties: ["openFile", "multiSelections"],
-    filters: [{ name: "Java Archive", extensions: ["jar"] }],
+    filters: [
+      { name: "Плагины и архивы (*.jar, *.zip, *.tar.gz, *.7z, *.rar)", extensions: ["jar", "zip", "tar.gz", "tgz", "tar", "7z", "7zip", "rar"] },
+      { name: "Java Плагины (*.jar)", extensions: ["jar"] },
+      { name: "Архивы плагинов (*.zip, *.tar.gz, *.7z, *.rar)", extensions: ["zip", "tgz", "tar", "7z", "7zip", "rar"] },
+      { name: "Все файлы (*.*)", extensions: ["*"] },
+    ],
   });
   if (res.canceled || res.filePaths.length === 0) return [];
   return res.filePaths;
+});
+
+ipcMain.handle("archive:isArchive", async (_e, filePath: string) => {
+  return isSupportedArchive(filePath);
+});
+
+ipcMain.handle("archive:extract", async (_e, archivePath: string) => {
+  return await extractArchiveAndScanPlugins(archivePath, (ev: ArchiveProgressEvent) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("archive:progress", ev);
+    }
+  });
+});
+
+ipcMain.handle("archive:cleanupTemp", async (_e, tempDir: string) => {
+  try {
+    if (tempDir && tempDir.includes("NanoDecompiler") && fs.existsSync(tempDir)) {
+      await fs.promises.rm(tempDir, { recursive: true, force: true });
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
 });
 
 ipcMain.handle("dialog:selectOutDir", async (_e, defaultPath?: string) => {

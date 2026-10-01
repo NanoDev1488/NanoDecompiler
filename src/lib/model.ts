@@ -51,6 +51,36 @@ export interface Job {
   // jarSummary() при добавлении файла (см. engine.tsx).
   pluginName?: string | null;
   pluginAuthor?: string | null;
+  /** НОВОЕ v1.9.154: поддержка архивов .zip, .tar.gz, .7z, .rar */
+  isArchive?: boolean;
+  archiveProgress?: ArchiveProgressInfo;
+  extractedPlugins?: DiscoveredPlugin[];
+  skippedServerCores?: DiscoveredPlugin[];
+  tempDir?: string;
+}
+
+export interface DiscoveredPlugin {
+  fileName: string;
+  jarPath: string;
+  relPath: string;
+  sizeBytes: number;
+  classCount: number | null;
+  pluginName: string | null;
+  pluginAuthor: string | null;
+  platform: string;
+  isPlugin: boolean;
+  isServerCore: boolean;
+  coreReason?: string;
+}
+
+export interface ArchiveProgressInfo {
+  percent: number;
+  currentFile: string;
+  extractedFiles: number;
+  totalFiles: number;
+  etaSeconds: number;
+  speedBytesPerSec: number;
+  tempDir: string;
 }
 
 /** Одна находка малварь-сканера (см. malware_findings_json() в

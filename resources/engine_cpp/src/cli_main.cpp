@@ -32,6 +32,7 @@
 #include "stats_json.hpp"
 #include "toolinstaller.hpp"
 #include "auto_update.hpp"
+#include "archive_extractor.hpp"
 #include "version.hpp"
 
 namespace fs = std::filesystem;
@@ -503,6 +504,71 @@ int run_cli(int argc, char** argv) {
         }
         std::cerr << "[!] ОШИБКА: " << msg << "\n";
         return 1;
+    }
+
+    std::string ext = fs::u8path(jar_path).extension().u8string();
+    for (char& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+    if (ext != ".jar" && nd::is_supported_archive_file(jar_path)) {
+        if (!json_output) {
+            std::cout << "[archive] Распознан архив плагинов: " << jar_path << "\n";
+            std::cout << "[archive] Распаковка во временную директорию...\n";
+        }
+        auto summary = nd::extract_and_scan_archive(jar_path);
+        if (!summary.ok) {
+            std::string msg = "Ошибка распаковки архива: " + summary.error;
+            if (json_output) {
+                std::cout << nd::json_error_response(msg) << "\n";
+                return 1;
+            }
+            std::cerr << "[!] ОШИБКА: " << msg << "\n";
+            return 1;
+        }
+
+        if (!json_output) {
+            std::cout << "[archive] Найдено .jar файлов: " << summary.total_jars << "\n";
+            std::cout << "[archive] Из них Bukkit/Paper/Bungee/Velocity плагинов: " << summary.plugins.size() << "\n";
+            if (!summary.server_cores.empty()) {
+                std::cout << "[archive] Серверных ядер пропущено: " << summary.server_cores.size() << "\n";
+                for (const auto& core : summary.server_cores) {
+                    std::cout << "          - " << core.filename << " (" << core.core_reason << ")\n";
+                }
+            }
+        }
+
+        if (summary.plugins.empty()) {
+            std::string msg = "В архиве не найдено ни одного серверного Java-плагина";
+            if (!summary.server_cores.empty()) {
+                msg += " (обнаружены серверные ядра Minecraft, которые не декомпилируются как плагины)";
+            }
+            if (json_output) {
+                std::cout << nd::json_error_response(msg) << "\n";
+                return 1;
+            }
+            std::cerr << "[!] ОШИБКА: " << msg << "\n";
+            return 1;
+        }
+
+        // Декомпилируем найденные плагины
+        int ret = 0;
+        for (size_t i = 0; i < summary.plugins.size(); ++i) {
+            const auto& p = summary.plugins[i];
+            std::string plugin_out_dir = out_dir;
+            if (summary.plugins.size() > 1) {
+                plugin_out_dir = (fs::u8path(out_dir) / fs::u8path(p.filename).stem()).u8string();
+            }
+            if (!json_output) {
+                std::cout << "\n=======================================================\n";
+                std::cout << "[archive] [" << (i + 1) << "/" << summary.plugins.size() << "] Декомпиляция: " << p.filename << " (" << p.platform.kind_label() << ")\n";
+                std::cout << "=======================================================\n";
+            }
+            if (json_output) {
+                ret |= nd::run_json_output(p.full_path, plugin_out_dir, skip_legitimacy);
+            } else {
+                ret |= run_decompile_console(p.full_path, plugin_out_dir, skip_legitimacy);
+            }
+        }
+        return ret;
     }
 
     if (json_output) return nd::run_json_output(jar_path, out_dir, skip_legitimacy);
