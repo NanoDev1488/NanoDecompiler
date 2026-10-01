@@ -606,6 +606,8 @@ std::vector<ExprPtr> side_effect_children(const ExprPtr& e) {
     return out;
 }
 
+}  // namespace
+
 bool has_side_effect(const ExprPtr& e) {
     if (!e) return false;
     if (e->kind == ExprKind::MethodCall || e->kind == ExprKind::NewObject || e->kind == ExprKind::Assign) return true;
@@ -618,6 +620,8 @@ bool has_side_effect(const ExprPtr& e) {
     }
     return false;
 }
+
+namespace {
 
 ExprPtr materialize_if_shared(const ExprPtr& val, std::vector<ExprPtr>& stack, MethodCtx& ctx, std::vector<StmtPtr>& stmts) {
     if (val->kind == ExprKind::Local || val->kind == ExprKind::This) return val;
