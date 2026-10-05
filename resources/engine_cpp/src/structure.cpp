@@ -780,24 +780,30 @@ std::string Structurer::new_label() {
 
 // ---------------- is_terminating / find_forward_merge ----------------
 
-bool Structurer::is_terminating(int64_t pc, int depth, std::set<int64_t> seen) {
+bool Structurer::is_terminating(int64_t pc) {
+    std::set<int64_t> seen;
+    return is_terminating(pc, 0, seen);
+}
+
+bool Structurer::is_terminating(int64_t pc, int depth, std::set<int64_t>& seen) {
     auto cache_it = terminates_cache_.find(pc);
     if (cache_it != terminates_cache_.end()) return cache_it->second;
-    if (depth > 300 || seen.count(pc) || !cfg_.blocks.count(pc)) {
-        return !cfg_.blocks.count(pc);
+    if (depth > 60 || seen.count(pc) || !cfg_.blocks.count(pc)) {
+        return false;
     }
     seen.insert(pc);
     auto res_it = results_.find(pc);
-    if (res_it == results_.end()) return false;
+    if (res_it == results_.end()) {
+        seen.erase(pc);
+        return false;
+    }
     const BlockResult& res = res_it->second;
-    bool result;
+    bool result = false;
     if (res.term_kind == "return" || res.term_kind == "throw") {
         result = true;
     } else if (res.term_kind == "if") {
         auto& succs = cfg_.blocks.at(pc).succs;
-        if (succs.size() != 2) {
-            result = false;
-        } else {
+        if (succs.size() == 2) {
             result = is_terminating(succs[0], depth + 1, seen) && is_terminating(succs[1], depth + 1, seen);
         }
     } else if (res.term_kind == "switch" || loop_headers_.count(pc) || try_by_start_.count(pc)) {
@@ -813,7 +819,8 @@ bool Structurer::is_terminating(int64_t pc, int depth, std::set<int64_t> seen) {
             result = true;
         }
     }
-    if (depth == 0) terminates_cache_[pc] = result;
+    seen.erase(pc);
+    terminates_cache_[pc] = result;
     return result;
 }
 
@@ -896,8 +903,8 @@ std::pair<StmtPtr, std::optional<int64_t>> Structurer::build_if_inner(int64_t pc
     auto merge_it = ipdom_.find(pc);
     std::optional<int64_t> merge = (merge_it != ipdom_.end()) ? merge_it->second : std::nullopt;
     if (!merge.has_value()) {
-        bool t_term = is_terminating(true_t, 0, {});
-        bool f_term = is_terminating(false_t, 0, {});
+        bool t_term = is_terminating(true_t);
+        bool f_term = is_terminating(false_t);
         if (t_term && !f_term) {
             auto raw_it = ipdom_.find(false_t);
             std::optional<int64_t> raw = (raw_it != ipdom_.end()) ? raw_it->second : std::nullopt;

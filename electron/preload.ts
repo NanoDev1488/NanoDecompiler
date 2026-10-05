@@ -40,6 +40,7 @@ export type ArchiveExtractResult = {
   serverCores: DiscoveredPlugin[];
   skippedNonPlugins: number;
   totalJarsFound: number;
+  archiveSizeBytes?: number;
   error?: string;
 };
 

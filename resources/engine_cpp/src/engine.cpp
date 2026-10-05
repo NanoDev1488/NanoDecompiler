@@ -767,8 +767,9 @@ std::vector<StmtPtr> fold_if_else_ternary(const std::vector<StmtPtr>& stmts) {
 
 bool uses_name_in_expr(const ExprPtr& e, const std::string& name);
 
-bool uses_name_in_stmts(const std::vector<StmtPtr>& stmts, const std::string& name) {
-    for (auto& s : stmts) {
+bool uses_name_in_stmts(const std::vector<StmtPtr>& stmts, const std::string& name, size_t start_idx = 0) {
+    for (size_t idx = start_idx; idx < stmts.size(); ++idx) {
+        auto& s = stmts[idx];
         if (s->kind == StmtKind::ExprStmt) {
             if (uses_name_in_expr(static_cast<ExprStmtNode*>(s.get())->expr, name)) return true;
         } else if (s->kind == StmtKind::LocalDecl) {
@@ -893,8 +894,7 @@ std::vector<StmtPtr> eliminate_dead_locals(const std::vector<StmtPtr>& stmts) {
             bool init_pure = !ld->init || ld->init->kind == ExprKind::Const ||
                              (ld->init->kind == ExprKind::UnOp && static_cast<UnOp*>(ld->init.get())->expr->kind == ExprKind::Const);
             if (init_pure) {
-                std::vector<StmtPtr> rest(stmts.begin() + static_cast<long>(i) + 1, stmts.end());
-                if (!uses_name_in_stmts(rest, ld->name)) {
+                if (!uses_name_in_stmts(stmts, ld->name, i + 1)) {
                     continue;  // мёртвый код - пропускаем
                 }
             }

@@ -1216,6 +1216,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
           patchJob(archId, {
             status: "done",
             progress: 1,
+            sizeBytes: res.archiveSizeBytes ?? 0,
             phase: `Распакован · ${res.plugins.length} плагин(ов)`,
             tempDir: res.tempDir,
             extractedPlugins: res.plugins,

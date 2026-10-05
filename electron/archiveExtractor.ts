@@ -44,6 +44,7 @@ export interface ArchiveExtractResult {
   serverCores: DiscoveredPlugin[];
   skippedNonPlugins: number;
   totalJarsFound: number;
+  archiveSizeBytes?: number;
   error?: string;
 }
 
@@ -220,39 +221,7 @@ export async function inspectJarForPlugin(jarPath: string, rootDir: string): Pro
 
   const has = (name: string) => entryNames.includes(name);
 
-  // 1. Проверка на СЕРВЕРНОЕ ЯДРО (Server Core)
-  const isPaperclip = entryNames.some(e => e.startsWith("io/papermc/paperclip") || e.startsWith("META-INF/versions/"));
-  const isBundler = entryNames.some(e => e.startsWith("net/minecraft/bundler/"));
-  const isMinecraftServer = entryNames.some(e => e.startsWith("net/minecraft/server/MinecraftServer.class") || e.startsWith("net/minecraft/server/Main.class"));
-  const isCraftBukkitCore = entryNames.some(e => e.startsWith("org/bukkit/craftbukkit/Main.class")) && !has("plugin.yml");
-  const isServerProperties = has("server.properties") || has("eula.txt");
-  const lowerName = fileName.toLowerCase();
-  const isServerName = /^(paper|spigot|purpur|folia|pufferfish|craftbukkit|server|minecraft_server|tuinity)-/i.test(lowerName) || lowerName === "server.jar";
-
-  if (isPaperclip || isBundler || isMinecraftServer || isCraftBukkitCore || (isServerName && !has("plugin.yml"))) {
-    let coreReason = "Обнаружены сигнатуры сервера Minecraft";
-    if (isPaperclip) coreReason = "Paperclip загрузчик сервера (Paper/Purpur/Folia)";
-    else if (isBundler) coreReason = "Vanilla / Bundler серверный загрузчик";
-    else if (isMinecraftServer) coreReason = "Серверное ядро net.minecraft.server";
-    else if (isCraftBukkitCore) coreReason = "Серверное ядро CraftBukkit / Spigot";
-    else if (isServerName) coreReason = "Серверный архив ядра (не является плагином)";
-
-    return {
-      fileName,
-      jarPath,
-      relPath,
-      sizeBytes,
-      classCount: summary?.classes ?? null,
-      pluginName: summary?.plugin_name ?? fileName,
-      pluginAuthor: summary?.plugin_author ?? null,
-      platform: "Серверное ядро",
-      isPlugin: false,
-      isServerCore: true,
-      coreReason,
-    };
-  }
-
-  // 2. Проверка на ПЛАГИН (Bukkit / Paper / Bungee / Velocity / Sponge)
+  // 1. Проверка на ПЛАГИН (Bukkit / Paper / Bungee / Velocity / Sponge) — ПРИОРИТЕТ
   const hasPaperPlugin = has("paper-plugin.yml") || has("META-INF/paper-plugin.yml");
   const hasBukkitPlugin = has("plugin.yml");
   const hasBungeePlugin = has("bungee.yml") || has("waterfall.yml");
@@ -277,6 +246,42 @@ export async function inspectJarForPlugin(jarPath: string, rootDir: string): Pro
       platform,
       isPlugin: true,
       isServerCore: false,
+    };
+  }
+
+  // 2. Проверка на СЕРВЕРНОЕ ЯДРО (Server Core) — только если нет манифеста плагина!
+  // Важно: META-INF/versions/ есть во всех Java 9+ Multi-Release JAR (Kotlin, Netty и др. шейдируемые библиотеки) -
+  // поэтому проверяем Paperclip только при явном наличии классов загрузчика io/papermc/paperclip или paperclip в пути.
+  const isPaperclip = entryNames.some(e => e.startsWith("io/papermc/paperclip")) ||
+    (entryNames.some(e => e.startsWith("META-INF/versions/")) && entryNames.some(e => e.toLowerCase().includes("paperclip")));
+  const isBundler = entryNames.some(e => e.startsWith("net/minecraft/bundler/"));
+  const isMinecraftServer = entryNames.some(e => e.startsWith("net/minecraft/server/MinecraftServer.class") || e.startsWith("net/minecraft/server/Main.class"));
+  const isCraftBukkitCore = entryNames.some(e => e.startsWith("org/bukkit/craftbukkit/Main.class"));
+  const isServerProperties = has("server.properties") || has("eula.txt");
+  const lowerName = fileName.toLowerCase();
+  const isServerName = /^(paper|spigot|purpur|folia|pufferfish|craftbukkit|server|minecraft_server|tuinity)-/i.test(lowerName) || lowerName === "server.jar";
+
+  if (isPaperclip || isBundler || isMinecraftServer || isCraftBukkitCore || isServerProperties || isServerName) {
+    let coreReason = "Обнаружены сигнатуры сервера Minecraft";
+    if (isPaperclip) coreReason = "Paperclip загрузчик сервера (Paper/Purpur/Folia)";
+    else if (isBundler) coreReason = "Vanilla / Bundler серверный загрузчик";
+    else if (isMinecraftServer) coreReason = "Серверное ядро net.minecraft.server";
+    else if (isCraftBukkitCore) coreReason = "Серверное ядро CraftBukkit / Spigot";
+    else if (isServerProperties) coreReason = "Конфигурация сервера (server.properties/eula.txt)";
+    else if (isServerName) coreReason = "Серверный архив ядра (не является плагином)";
+
+    return {
+      fileName,
+      jarPath,
+      relPath,
+      sizeBytes,
+      classCount: summary?.classes ?? null,
+      pluginName: summary?.plugin_name ?? fileName,
+      pluginAuthor: summary?.plugin_author ?? null,
+      platform: "Серверное ядро",
+      isPlugin: false,
+      isServerCore: true,
+      coreReason,
     };
   }
 
@@ -545,6 +550,9 @@ export async function extractArchiveAndScanPlugins(
       }
     }
 
+    const fileStat = await fs.promises.stat(archivePath).catch(() => null);
+    const archiveSizeBytes = fileStat ? fileStat.size : 0;
+
     return {
       ok: true,
       archivePath,
@@ -553,8 +561,11 @@ export async function extractArchiveAndScanPlugins(
       serverCores,
       skippedNonPlugins,
       totalJarsFound: jarPaths.length,
+      archiveSizeBytes,
     };
   } catch (err) {
+    const fileStat = await fs.promises.stat(archivePath).catch(() => null);
+    const archiveSizeBytes = fileStat ? fileStat.size : 0;
     return {
       ok: false,
       archivePath,
@@ -563,6 +574,7 @@ export async function extractArchiveAndScanPlugins(
       serverCores: [],
       skippedNonPlugins: 0,
       totalJarsFound: 0,
+      archiveSizeBytes,
       error: (err as Error).message || String(err),
     };
   }

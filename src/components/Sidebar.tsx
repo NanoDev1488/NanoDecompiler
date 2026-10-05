@@ -12,7 +12,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { useEngine } from "../state/engine";
 import { useResizeDrag } from "../lib/useResize";
 import { fmtBytes, fmtNum, fmtSeconds, type Job } from "../lib/model";
@@ -53,7 +53,7 @@ function statusLine(job: Job, lang: Lang): string {
 }
 
 type JobCardProps = { job: Job; selected: boolean; lang: Lang };
-function JobCard({ job, selected, lang }: JobCardProps) {
+const JobCard = memo(function JobCard({ job, selected, lang }: JobCardProps) {
   const { selectJob, cancelJob, removeJob, openOutput } = useEngine();
   const [menuOpen, setMenuOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -166,9 +166,9 @@ function JobCard({ job, selected, lang }: JobCardProps) {
       )}
     </div>
   );
-}
+});
 
-function ArchiveCard({ job, selected, lang }: JobCardProps) {
+const ArchiveCard = memo(function ArchiveCard({ job, selected, lang }: JobCardProps) {
   const { selectJob, removeArchive, decompileArchivePlugins, addJarPaths } = useEngine();
   const prog = job.archiveProgress;
   const isExtracting = job.status === "running";
@@ -276,13 +276,13 @@ function ArchiveCard({ job, selected, lang }: JobCardProps) {
             </span>
             {plugins.length > 0 && (
               <button
-                className="btn-primary flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium shadow-sm"
+                className="btn-primary flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium shadow-none h-6 whitespace-nowrap"
                 onClick={e => {
                   e.stopPropagation();
                   decompileArchivePlugins(job);
                 }}
               >
-                <Play size={10} className="fill-current" />
+                <Play size={9} className="fill-current" />
                 {t(lang, "sidebar.decompile_all")}
               </button>
             )}
@@ -290,11 +290,11 @@ function ArchiveCard({ job, selected, lang }: JobCardProps) {
 
           {/* Стрелочка от архива вниз к плагинам */}
           {plugins.length > 0 && (
-            <div className="flex items-center gap-1.5 py-2 text-acid">
+            <div className="flex items-center gap-1.5 py-1.5 text-acid">
               <div className="flex h-5 w-5 items-center justify-center rounded-full bg-acid/15 border border-acid/30">
-                <ArrowDown size={11} className="animate-bounce" />
+                <ArrowDown size={11} />
               </div>
-              <span className="mono text-[10.5px] font-semibold uppercase tracking-wider text-acid">
+              <span className="mono text-[10px] font-semibold uppercase tracking-wider text-acid">
                 {t(lang, "sidebar.archive_plugins_found")} ({plugins.length})
               </span>
             </div>
@@ -364,7 +364,11 @@ function ArchiveCard({ job, selected, lang }: JobCardProps) {
               </div>
               <div className="mt-1 flex flex-col gap-1 text-[10px] text-faint">
                 {skipped.map(c => (
-                  <div key={c.jarPath} className="mono truncate">
+                  <div
+                    key={c.jarPath}
+                    className="mono truncate"
+                    title={`${c.fileName} (${fmtBytes(c.sizeBytes)})${c.coreReason ? ` — ${c.coreReason}` : ""}`}
+                  >
                     <span className="text-ink/80 font-medium">{c.fileName}</span>
                     <span className="text-faint/70"> ({fmtBytes(c.sizeBytes)})</span>
                     {c.coreReason && <span className="text-amber-400/80"> — {c.coreReason}</span>}
@@ -377,7 +381,7 @@ function ArchiveCard({ job, selected, lang }: JobCardProps) {
       )}
     </div>
   );
-}
+});
 
 export function Sidebar() {
   const { jobs, selectedJobId, settings, addFiles, openFileDialog, clearQueue, sidebarWidth, setSidebarWidth } = useEngine();

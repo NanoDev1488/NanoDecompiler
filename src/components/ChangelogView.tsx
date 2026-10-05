@@ -16,7 +16,7 @@ function formatInlineMarkdown(text: string): ReactNode[] {
   // 7. Links: [label](url)
   // 8. URLs: https?://...
   const regex =
-    /(\*\*\*[^*]+\*\*\*|___[^_]+___|\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|`[^`]+`|\[[^\]]+\]\([^)]+\)|\[[A-Za-z0-9_./ -]+\]|https?:\/\/[^\s<)]+|\*[^*\s][^*]*\*|_[^_\s][^_]*_)/g;
+    /(\*\*\*[^*]+\*\*\*|___[^_]+___|\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|`[^`]+`|''[^']+''|\[[^\]]+\]\([^)]+\)|\[[A-Za-z0-9_./ -]+\]|https?:\/\/[^\s<)]+|\*[^*\s][^*]*\*|_[^_\s][^_]*_)/g;
 
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -30,26 +30,27 @@ function formatInlineMarkdown(text: string): ReactNode[] {
 
     if ((token.startsWith("***") && token.endsWith("***")) || (token.startsWith("___") && token.endsWith("___"))) {
       tokens.push(
-        <strong key={key} className="font-bold italic text-ink">
-          {token.slice(3, -3)}
+        <strong key={key} className="font-bold italic text-ink break-words">
+          {formatInlineMarkdown(token.slice(3, -3))}
         </strong>
       );
     } else if ((token.startsWith("**") && token.endsWith("**")) || (token.startsWith("__") && token.endsWith("__"))) {
       tokens.push(
-        <strong key={key} className="font-semibold text-ink">
-          {token.slice(2, -2)}
+        <strong key={key} className="font-semibold text-ink break-words">
+          {formatInlineMarkdown(token.slice(2, -2))}
         </strong>
       );
     } else if (token.startsWith("~~") && token.endsWith("~~")) {
       tokens.push(
-        <del key={key} className="line-through text-faint opacity-80">
-          {token.slice(2, -2)}
+        <del key={key} className="line-through text-faint opacity-80 break-words">
+          {formatInlineMarkdown(token.slice(2, -2))}
         </del>
       );
-    } else if (token.startsWith("`") && token.endsWith("`")) {
+    } else if ((token.startsWith("`") && token.endsWith("`")) || (token.startsWith("''") && token.endsWith("''"))) {
+      const codeText = token.startsWith("`") ? token.slice(1, -1) : token.slice(2, -2);
       tokens.push(
-        <code key={key} className="mono rounded bg-raised px-1 py-0.5 text-[11px] text-acid font-medium">
-          {token.slice(1, -1)}
+        <code key={key} className="mono rounded bg-raised px-1 py-0.5 text-[11px] text-acid font-medium break-all whitespace-pre-wrap">
+          {codeText}
         </code>
       );
     } else if (token.startsWith("[") && token.includes("](") && token.endsWith(")")) {
@@ -64,7 +65,7 @@ function formatInlineMarkdown(text: string): ReactNode[] {
               e.preventDefault();
               window.nano.openExternal(url).catch(() => {});
             }}
-            className="text-acid underline hover:text-acid/80 font-medium transition-colors"
+            className="text-acid underline hover:text-acid/80 font-medium transition-colors break-all"
           >
             {label}
           </a>
@@ -78,7 +79,7 @@ function formatInlineMarkdown(text: string): ReactNode[] {
       tokens.push(
         <span
           key={key}
-          className="mono rounded bg-acid/15 border border-acid/30 px-1.5 py-0.5 text-[10.5px] text-acid font-semibold mx-0.5 select-all"
+          className="mono rounded bg-acid/15 border border-acid/30 px-1.5 py-0.5 text-[10.5px] text-acid font-semibold mx-0.5 select-all inline-block"
         >
           {badgeContent}
         </span>
@@ -99,8 +100,8 @@ function formatInlineMarkdown(text: string): ReactNode[] {
       );
     } else if ((token.startsWith("*") && token.endsWith("*")) || (token.startsWith("_") && token.endsWith("_"))) {
       tokens.push(
-        <em key={key} className="italic text-dim">
-          {token.slice(1, -1)}
+        <em key={key} className="italic text-dim break-words">
+          {formatInlineMarkdown(token.slice(1, -1))}
         </em>
       );
     } else {
@@ -284,11 +285,11 @@ export const ChangelogView = memo(function ChangelogView({
       const isChecked = taskMatch[1].toLowerCase() === "x";
       const itemText = taskMatch[2];
       elements.push(
-        <div key={`task-${i}`} className={`${paddingLeftClass} my-0.5 flex items-start gap-1.5 text-[12px] leading-relaxed text-dim`}>
+        <div key={`task-${i}`} className={`${paddingLeftClass} my-0.5 flex items-start gap-1.5 text-[12px] leading-relaxed text-dim break-words`}>
           <span className="mt-0.5 shrink-0 text-acid">
             {isChecked ? <CheckSquare size={13} className="text-acid" /> : <Square size={13} className="text-faint" />}
           </span>
-          <span className={isChecked ? "text-ink/80" : "text-dim"}>
+          <span className={`${isChecked ? "text-ink/80" : "text-dim"} break-words`}>
             {formatInlineMarkdown(itemText)}
           </span>
         </div>
@@ -301,7 +302,7 @@ export const ChangelogView = memo(function ChangelogView({
     if (trimmed.startsWith("- ") || trimmed.startsWith("* ") || trimmed.startsWith("+ ")) {
       const itemText = trimmed.slice(2);
       elements.push(
-        <li key={`li-${i}`} className={`${paddingLeftClass} list-disc text-[12px] leading-relaxed text-dim pl-1`}>
+        <li key={`li-${i}`} className={`${paddingLeftClass} list-disc text-[12px] leading-relaxed text-dim pl-1 break-words`}>
           {formatInlineMarkdown(itemText)}
         </li>
       );
@@ -313,7 +314,7 @@ export const ChangelogView = memo(function ChangelogView({
     const numMatch = /^(\d+\.)\s+(.*)/.exec(trimmed);
     if (numMatch) {
       elements.push(
-        <li key={`oli-${i}`} className={`${paddingLeftClass} list-decimal text-[12px] leading-relaxed text-dim pl-1`}>
+        <li key={`oli-${i}`} className={`${paddingLeftClass} list-decimal text-[12px] leading-relaxed text-dim pl-1 break-words`}>
           {formatInlineMarkdown(numMatch[2])}
         </li>
       );
@@ -324,7 +325,7 @@ export const ChangelogView = memo(function ChangelogView({
     // Цитаты (> quote)
     if (trimmed.startsWith("> ")) {
       elements.push(
-        <blockquote key={`quote-${i}`} className="my-1.5 border-l-2 border-acid/60 bg-acid/5 pl-3 py-1 text-[11.5px] italic text-dim rounded-r">
+        <blockquote key={`quote-${i}`} className="my-1.5 border-l-2 border-acid/60 bg-acid/5 pl-3 py-1 text-[11.5px] italic text-dim rounded-r break-words">
           {formatInlineMarkdown(trimmed.slice(2))}
         </blockquote>
       );
@@ -334,7 +335,7 @@ export const ChangelogView = memo(function ChangelogView({
 
     // Обычный параграф
     elements.push(
-      <p key={`p-${i}`} className="text-[12px] leading-relaxed text-dim">
+      <p key={`p-${i}`} className="text-[12px] leading-relaxed text-dim break-words">
         {formatInlineMarkdown(trimmed)}
       </p>
     );
@@ -342,7 +343,7 @@ export const ChangelogView = memo(function ChangelogView({
   }
 
   return (
-    <div className="changelog-markdown space-y-0.5 text-left font-sans select-text">
+    <div className="changelog-markdown space-y-0.5 text-left font-sans select-text break-words">
       {hasUpdate && latestVersion && (
         <div className="mb-2.5 flex items-center justify-between rounded-lg bg-acid/10 px-2.5 py-1.5 border border-acid/30 text-[11.5px] text-acid font-medium">
           <span className="flex items-center gap-1.5">

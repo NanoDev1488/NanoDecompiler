@@ -19,6 +19,7 @@ export function UpdateModal() {
 
   const isUpToDate = !updateInfo.checking && updateInfo.kind === "none" && !updateInfo.error;
   const hasUpdate = updateInfo.kind === "engine" || updateInfo.kind === "client";
+  const formatV = (v?: string | null) => (v ? `v${v.trim().replace(/^v+/i, "")}` : "?");
 
   return (
     <div
@@ -81,7 +82,7 @@ export function UpdateModal() {
               <div>
                 <p className="text-[14px] font-semibold text-ink">Доступно обновление движка</p>
                 <p className="mono mt-1 text-[12px] text-faint">
-                  {engineVersion?.replace(/^NanoDecompiler /, "") ?? "?"} → {updateInfo.latestVersion}
+                  {engineVersion?.replace(/^NanoDecompiler /, "") ?? "?"} → {formatV(updateInfo.latestVersion)}
                 </p>
               </div>
 
@@ -136,7 +137,7 @@ export function UpdateModal() {
               <div>
                 <p className="text-[14px] font-semibold text-ink">Доступна новая версия приложения</p>
                 <p className="mono mt-1 text-[12px] text-faint">
-                  v{guiVersion ?? "?"} → v{updateInfo.latestVersion}
+                  {formatV(guiVersion)} → {formatV(updateInfo.latestVersion)}
                 </p>
               </div>
 
@@ -197,7 +198,7 @@ export function UpdateModal() {
                   <button
                     className={cn(
                       "btn btn-tonal h-9 w-full text-[12.5px] border border-line hover:border-acid/40",
-                      updateInfo.applying && "pointer-events-none opacity-70",
+                      updateInfo.applying && "pointer-events-none opacity-50 cursor-not-allowed",
                     )}
                     onClick={applyEngineUpdate}
                     disabled={updateInfo.applying}
@@ -207,9 +208,11 @@ export function UpdateModal() {
                     ) : (
                       <Terminal size={13} />
                     )}
-                    {updateInfo.applying && updateInfo.applyingKind === "engine"
-                      ? "Скачивание движка…"
-                      : "Обновить только движок (CLI)"}
+                    {updateInfo.applying && updateInfo.applyingKind === "client"
+                      ? "Загрузка установщика клиента…"
+                      : updateInfo.applying && updateInfo.applyingKind === "engine"
+                        ? "Скачивание движка…"
+                        : "Обновить только движок (CLI)"}
                   </button>
                 )}
               </div>
@@ -219,8 +222,8 @@ export function UpdateModal() {
               <div>
                 <p className="text-[14px] font-semibold text-ink">У вас закрытая Бета Версия</p>
                 <p className="mono mt-1 text-[11.5px] text-faint">
-                  {engineVersion?.replace(/^NanoDecompiler /, "") ?? guiVersion ?? "?"} — новее последнего
-                  опубликованного релиза ({updateInfo.latestVersion})
+                  {engineVersion?.replace(/^NanoDecompiler /, "") ?? formatV(guiVersion)} — новее последнего
+                  опубликованного релиза ({formatV(updateInfo.latestVersion)})
                 </p>
               </div>
 

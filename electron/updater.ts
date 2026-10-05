@@ -329,8 +329,8 @@ function compareVersions(a: string, b: string): -1 | 0 | 1 {
   }
 
   // При одинаковых базовых версиях сравниваем суффиксы
-  if (!tagA && tagB) return 1;
-  if (tagA && !tagB) return -1;
+  if (!tagA && tagB) return -1; // У релиза есть патч/суффикс, а у локальной нет -> релиз новее
+  if (tagA && !tagB) return 0;  // Локальная версия имеет патч той же базы (ReadUpd/ObfUpd) -> актуальна
   if (tagA && tagB) {
     if (tagA === tagB) return 0;
     const numA = parseInt(tagA.replace(/^[^\d]*/, ""), 10);

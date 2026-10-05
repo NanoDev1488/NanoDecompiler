@@ -140,6 +140,20 @@ declare global {
       findInPage: (text: string, forward: boolean) => Promise<void>;
       stopFindInPage: () => Promise<void>;
       onFindResult: (cb: (r: { activeMatchOrdinal: number; matches: number }) => void) => () => void;
+      extractArchive: (archivePath: string) => Promise<{
+        ok: boolean;
+        archivePath: string;
+        tempDir: string;
+        plugins: import("./lib/model").DiscoveredPlugin[];
+        serverCores: import("./lib/model").DiscoveredPlugin[];
+        skippedNonPlugins: number;
+        totalJarsFound: number;
+        archiveSizeBytes?: number;
+        error?: string;
+      }>;
+      isArchive: (filePath: string) => Promise<boolean>;
+      cleanupTempArchive: (tempDir: string) => Promise<boolean>;
+      onArchiveProgress: (cb: (progress: import("./lib/model").ArchiveProgressInfo & { archivePath: string }) => void) => () => void;
     };
   }
 }

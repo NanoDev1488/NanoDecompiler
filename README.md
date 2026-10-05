@@ -4,7 +4,7 @@
 
 **Декомпилятор Minecraft-плагинов и модов с честной эвристикой вместо красивого вранья.**
 
-[![Version](https://img.shields.io/badge/version-1.9.155--ReadUpd.20-b6ff3c?style=for-the-badge&logo=codeforces&logoColor=000)](https://github.com)
+[![Version](https://img.shields.io/badge/version-1.9.156-b6ff3c?style=for-the-badge&logo=codeforces&logoColor=000)](https://github.com)
 [![Engine](https://img.shields.io/badge/Engine-C%2B%2B17%20Native-38bdf8?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://github.com)
 [![Telemetry](https://img.shields.io/badge/Telemetry-0%25%20Offline-4ade80?style=for-the-badge&logo=shield&logoColor=white)](https://github.com)
 [![Docs](https://img.shields.io/badge/Docs-GitHub%20Pages-a855f7?style=for-the-badge&logo=githubpages&logoColor=white)](https://nanodev.github.io/NanoDecompiler/)
@@ -23,7 +23,7 @@ Bukkit · Spigot · Paper · Purpur · Velocity · BungeeCord · Fabric · Forge
   <tr>
     <td width="33%" valign="top">
       <h3>⚡ C++17 Core Engine</h3>
-      <p>Собственное нативное ядро декомпилятора без Java/Python рантайма. Потоковая обработка классов, низкое потребление RAM (&lt;512MB) и сборка с <code>-j 1</code>.</p>
+      <p>Собственное нативное ядро декомпилятора без Java/Python рантайма. Потоковая обработка классов, сквозная мемоизация CFG (мгновенная обработка XMaterial / 1000+ enum-констант), низкое потребление RAM (&lt;512MB) и сборка с <code>-j 1</code>.</p>
     </td>
     <td width="33%" valign="top">
       <h3>✨ 20 Проходов Читаемости</h3>

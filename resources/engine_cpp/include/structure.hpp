@@ -80,7 +80,8 @@ private:
     StmtPtr try_resolve_special_target(int64_t target);
     std::string new_label();
 
-    bool is_terminating(int64_t pc, int depth, std::set<int64_t> seen);
+    bool is_terminating(int64_t pc);
+    bool is_terminating(int64_t pc, int depth, std::set<int64_t>& seen);
     std::optional<int64_t> find_forward_merge(int64_t true_t, int64_t false_t, const std::set<int64_t>& stop_addrs,
                                                bool exclude_starts = false);
 

@@ -445,7 +445,7 @@
     <a href="#" class="brand">
         <div class="brand-logo">N</div>
         <div class="brand-name">NanoDecompiler</div>
-        <span class="brand-badge">v1.9.155-ReadUpd.20</span>
+        <span class="brand-badge">v1.9.156</span>
     </a>
     <div class="header-links">
         <a href="#quick-start">Быстрый старт</a>
@@ -485,7 +485,7 @@
             <p>NanoDecompiler восстанавливает скомпилированные JAR-файлы в чистый Maven-проект с Java-исходниками, сохраняя структуру пакетов, ресурсы и pom.xml без выдуманного кода.</p>
             
             <div class="badges-grid">
-                <div class="pill-badge acid">⚡ Версия: v1.9.155-ReadUpd.20</div>
+                <div class="pill-badge acid">⚡ Версия: v1.9.156</div>
                 <div class="pill-badge">🚀 100% C++17 Движок (Zero-Python)</div>
                 <div class="pill-badge">🛡️ Полный Офлайн / Без телеметрии</div>
                 <div class="pill-badge">📦 .jar / .zip / .tar.gz / .7z / .rar</div>
@@ -794,11 +794,16 @@
         <!-- Changelog -->
         <section id="changelog">
             <h2>📜 История версий</h2>
-            <p class="desc">Документация обновляется каждые 2 ключевых релиза. Актуальная версия: <strong>1.9.155-ReadUpd.20</strong>.</p>
+            <p class="desc">Документация обновляется каждые 2 ключевых релиза. Актуальная версия: <strong>1.9.156</strong>.</p>
+
+            <div class="card" style="margin-bottom: 1rem; border-color: rgba(182, 255, 60, 0.4);">
+                <h3 style="color: var(--acid);">v1.9.156 (2026-10-05)</h3>
+                <p><strong>Оптимизация производительности ядра C++ & Исправления GUI:</strong> Ликвидация узкого места декомпиляции (500+с ускорено до &lt;3с на XMaterial.class) за счет сквозной мемоизации CFG-терминации в <code>is_terminating</code>, передачи <code>seen</code> по ссылке и устранения копирований в <code>eliminate_dead_locals</code>. Исправление GUI: устранение двойного префикса <code>vv</code> в апдейтере, ложного предложения обновиться при наличии патчей, ложного распознавания Multi-Release JAR как ядер сервера, отображение размера архива, компактные кнопки и устранение лагов интерфейса.</p>
+            </div>
 
             <div class="card" style="margin-bottom: 1rem;">
-                <h3 style="color: var(--acid);">v1.9.155-ReadUpd.20 (2026-10-05)</h3>
-                <p>20 проходов читаемости AST (составные присваивания, foreach, guard-clauses, multi-catch, умные имена Bukkit переменных, константы). Исправление системных ошибок (PowerShell PATH EncodedCommand, 7za ASAR распаковка, синхронизация обновлений).</p>
+                <h3 style="color: var(--cyan);">v1.9.155-ReadUpd.20 (2026-10-05)</h3>
+                <p>20 проходов читаемости AST (составные присваивания, foreach, guard-clauses, multi-catch, умные имена Bukkit переменных, константы). Исправление системных ошибок (PowerShell PATH EncodedCommand, 7za ASAR распаковка, сброс кэша версии движка при обновлении).</p>
             </div>
 
             <div class="card">
