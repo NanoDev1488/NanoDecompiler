@@ -1,5 +1,41 @@
 # NanoDecompiler Changelog
 
+## [1.9.155-ReadUpd.20] - 2026-10-05
+
+### Пакет из 20 масштабных улучшений читаемости (ReadUpd 1..20) и Исправление системных ошибок
+- **20 проходов повышения читаемости декомпилированного кода Java (Readability Engine 1..20)**:
+  - **ReadUpd 1**: Десугаринг составных присваиваний — преобразование `x = x + 1` в `x++`, `x = x - 1` в `x--`, `x = x + y` в `x += y`, а также `-=`, `*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, `>>=`, `>>>=`.
+  - **ReadUpd 2**: Очистка избыточных квалификаторов `this.` на обращениях к полям и методам при отсутствии затенения параметров.
+  - **ReadUpd 3**: Нормализация булевых сравнений — свертка `cond == true` в `cond`, `cond == false` в `!cond`, `!(a == b)` в `a != b`, `!(a < b)` в `a >= b`.
+  - **ReadUpd 4**: Удаление пустых блоков — автоматическое отсечение пустых веток `else {}`, пустых `finally {}`, пустых блоков и бесполезных выражений-стейтментов (`42;`, `x;`).
+  - **ReadUpd 5**: Нормализация `while (true)` — трансформация циклов `while (true) { if (cond) break; ... }` в чистые и понятные `while (!cond) { ... }` с сохранением кода из веток else.
+  - **ReadUpd 6**: Уплощение guard-clause — распознавание безусловных выходов (`return`, `throw`, `break`, `continue`) и разворачивание глубоко вложенных веток `else` на верхний уровень метода.
+  - **ReadUpd 7**: Рекурсивное устранение избыточных `else` после терминальных операторов во всех вложенных структурах кода.
+  - **ReadUpd 8**: Шестнадцатеричное форматирование битовых масок и цветов — вывод `0xFF`, `0xFFFF`, `0xFFFFFF`, `0xFF00`, `0x7FFFFFFF`, `0xFFFFFFFFL` вместо громоздких десятичных чисел в побитовых операциях.
+  - **ReadUpd 9**: Инлайнинг стандартных именованных констант Java — подстановка `Integer.MAX_VALUE`, `Integer.MIN_VALUE`, `Long.MAX_VALUE`, `Long.MIN_VALUE`, `Math.PI`, `Math.E`.
+  - **ReadUpd 10**: Интеллектуальная минимизация скобок — устранение избыточных пар круглых скобок на основе иерархии приоритетов операторов Java.
+  - **ReadUpd 11**: Дедупликация `instanceof` и приведений типов — удаление дублирующихся кастов `(T)(T)x` и устранение избыточных null-проверок `x != null && x instanceof T` -> `x instanceof T`.
+  - **ReadUpd 12**: Инлайнинг `String.valueOf(x)` — автоматическое упрощение конкатенаций `"str" + String.valueOf(x)` в `"str" + x` и очистка вызовов `.append(String.valueOf(x))`.
+  - **ReadUpd 13**: Свертка тернарных операторов — упрощение выражений вида `cond ? true : false` в `cond`, `cond ? false : true` в `!cond`, `!cond ? a : b` в `cond ? b : a`.
+  - **ReadUpd 14**: Десугаринг return-тернарников — объединение `if (cond) return a; else return b;` в компактное и выразительное `return cond ? a : b;`.
+  - **ReadUpd 15**: Пропагация одноразовых булевых флагов — инлайнинг синтетических временных переменных `boolean flag = cond; if (flag)` напрямую в условия переходов.
+  - **ReadUpd 16**: Группировка multi-catch блоков Java 7+ — объединение идентичных обработчиков исключений в один блок `catch (IOException | SQLException e) { ... }`.
+  - **ReadUpd 17**: Умное переименование Bukkit / Minecraft / Java переменных — замена обфусцированных и синтетических имен `var1`, `loc2` на идиоматичные типизированные имена: `Player player`, `Location location`, `World world`, `ItemStack itemStack`, `Block block`, `CommandSender sender`, `UUID uuid`, `Plugin plugin`, `Inventory inventory`, `File file`, `Path path`, `StringBuilder sb`, `Exception e`.
+  - **ReadUpd 18**: Десугаринг циклов foreach (enhanced for-loop) — распознавание итераций по массивам `for (int i = 0; i < arr.length; i++) { T item = arr[i]; ... }` и трансформация в `for (T item : arr) { ... }`.
+  - **ReadUpd 19**: Устранение невозможных null-проверок — упрощение условий вида `new Object() != null` в `true` и `new Object() == null` в `false`.
+  - **ReadUpd 20**: Финальная санитарная очистка форматирования — удаление паразитных точек с запятой, нормализация отступов и ликвидация мертвых узлов AST.
+- **Исправление системных ошибок из файла пофиксить.txt на Рабочем столе**:
+  - **PowerShell PATH (`main.ts`)**: переход на `-EncodedCommand` в кодировке UTF-16LE Base64 с явными разделителями команд, полностью устраняющий ошибки кавычек и `UnexpectedToken`.
+  - **Распаковка архивов 7za из ASAR (`archiveExtractor.ts` & `package.json`)**:
+    - Настроена директива `asarUnpack` для `7zip-bin`.
+    - Добавлено автоматическое самоизвлечение `7za.exe` во временный каталог `%TEMP%\NanoDecompiler\bin\7za.exe` при попытке запуска из виртуального архива `app.asar`.
+    - Реализован отказоустойчивый fallback `extractZipFallback` через встроенный в Windows PowerShell `Expand-Archive`.
+  - **Синхронизация обновления движка (`updater.ts` & `main.ts`)**:
+    - Добавлен автоматический сброс кэша версии движка `resetEngineVersionCache()` при установке обновления.
+    - Реализована синхронизация обновленного `NanoDecompilerCLI.exe` в директорию установленной программы `AppData\Local\Programs\nano-decompiler-gui\resources\engine`.
+
+---
+
 ## [1.9.154] - 2026-10-01
 
 ### Поддержка архивов (.zip, .tar.gz, .7z, .rar) и Интеллектуальный детектор плагинов

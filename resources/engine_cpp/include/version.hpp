@@ -225,7 +225,8 @@ namespace nd {
 // НОВОЕ v1.9.152-ObfUpd.15: [ObfUpd 15/15] полный сводный аудит и метрики конвейера деобфускации (15-Stage Deobfuscation Pipeline Summary: отчет по всем 15 этапам деобфускации в README_RU.txt и stats JSON, финализация серии 15 обновлений).
 // НОВОЕ v1.9.153-ObfUpd.16: расширенный парсер Markdown в Центре Обновлений, единый GUI-файл версионирования, устранение паразитных скобок/хвостов в Minecraft-чипах, углубленный десугаринг String/switch и очистка тождественных условий.
 // НОВОЕ v1.9.154: поддержка архивов .zip, .tar.gz, .7z, .rar, встроенные минимальные распаковщики в движке и GUI, точная фильтрация плагинов от ядер серверов (Paperclip/MinecraftServer), анимированная распаковка во временную папку с живым таймером ETA и древовидная связка со стрелочкой вниз.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.154";
+// НОВОЕ v1.9.155-ReadUpd.20: масштабный пакет из 20 обновлений читаемости C++ движка (ReadUpd 1..20: десугаринг составных присваиваний x++, x+=y; очистка redundant this; нормализация булевых условий; удаление пустых блоков; схлопывание while(true) в while(!cond); уплощение guard-clause return/throw/break/continue; устранение избыточных else; шестнадцатеричные битовые маски 0xFF; инлайнинг именованных констант Integer.MAX_VALUE/Math.PI; минимизация скобок; instanceof cast de-duplication; String.valueOf inlining; тернарные упрощения; десугаринг return тернарников; propagation одноразовых булевых флагов; группировка Java 7 multi-catch; умное переименование Bukkit/Java переменных Player player, World world, ItemStack itemStack; десугаринг foreach циклов for (T item : arr); устранение невозможных null-проверок new Object() != null; финальная очистка форматирования). Исправление ошибок из пофиксить.txt (PowerShell PATH -EncodedCommand, 7za ASAR распаковка и fallback, сброс кэша версии движка при обновлении).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.155-ReadUpd.20";
 }
 
 

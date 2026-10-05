@@ -930,19 +930,20 @@ ipcMain.handle("tools:addToSystemPath", async (_e, tool: "java" | "maven") => {
 
       const psCommands: string[] = [];
       if (javaHomeDir) {
-        psCommands.push(`[Environment]::SetEnvironmentVariable('JAVA_HOME', '${javaHomeDir.replace(/'/g, "''")}', 'User')`);
+        psCommands.push(`[Environment]::SetEnvironmentVariable('JAVA_HOME', '${javaHomeDir.replace(/'/g, "''")}', 'User');`);
         process.env.JAVA_HOME = javaHomeDir;
       }
       psCommands.push(`
-        $current = [Environment]::GetEnvironmentVariable('Path', 'User')
-        $dir = '${binDir.replace(/'/g, "''")}'
+        $current = [Environment]::GetEnvironmentVariable('Path', 'User');
+        $dir = '${binDir.replace(/'/g, "''")}';
         if ($current -notlike "*$dir*") {
-          $newPath = if ($current) { "$current;$dir" } else { $dir }
-          [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+          $newPath = if ($current) { "$current;$dir" } else { $dir };
+          [Environment]::SetEnvironmentVariable('Path', $newPath, 'User');
         }
       `);
-      const script = psCommands.join("; ");
-      execSync(`powershell -NoProfile -NonInteractive -Command "${script.replace(/\r?\n/g, " ")}"`, { windowsHide: true, timeout: 10000 });
+      const script = psCommands.join("\n");
+      const encoded = Buffer.from(script, "utf16le").toString("base64");
+      execSync(`powershell -NoProfile -NonInteractive -EncodedCommand ${encoded}`, { windowsHide: true, timeout: 10000 });
       if (!process.env.PATH?.toLowerCase().includes(binDir.toLowerCase())) {
         process.env.PATH = `${binDir};${process.env.PATH}`;
       }
@@ -953,6 +954,10 @@ ipcMain.handle("tools:addToSystemPath", async (_e, tool: "java" | "maven") => {
   }
   return { ok: false, error: "Автоматическое добавление в постоянный системный PATH поддерживается на Windows" };
 });
+
+export function resetEngineVersionCache(): void {
+  cachedEngineVersion = null;
+}
 
 ipcMain.handle("gui:version", async () => GUI_VERSION);
 

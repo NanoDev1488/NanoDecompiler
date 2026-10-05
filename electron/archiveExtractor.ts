@@ -61,27 +61,98 @@ export function isSupportedArchive(filePath: string): boolean {
   );
 }
 
-/** Получает путь к бинарнику 7za */
+/** Получает путь к бинарнику 7za, с поддержкой asar.unpacked и авто-извлечения */
 function get7zaPath(): string | null {
+  const binName = process.platform === "win32" ? "7za.exe" : "7za";
+
   try {
-    if (sevenBin && sevenBin.path7za && fs.existsSync(sevenBin.path7za)) {
-      return sevenBin.path7za;
+    if (sevenBin && sevenBin.path7za) {
+      let p: string = sevenBin.path7za;
+      if (p.includes("app.asar")) {
+        const unpacked = p.replace("app.asar", "app.asar.unpacked");
+        if (fs.existsSync(unpacked)) return unpacked;
+
+        // Авто-извлечение бинарника из виртуального app.asar во временный кэш
+        try {
+          const cachedBin = path.join(os.tmpdir(), "NanoDecompiler", "bin", binName);
+          if (fs.existsSync(cachedBin) && fs.statSync(cachedBin).size > 10000) {
+            return cachedBin;
+          }
+          if (fs.existsSync(p)) {
+            const buf = fs.readFileSync(p);
+            fs.mkdirSync(path.dirname(cachedBin), { recursive: true });
+            fs.writeFileSync(cachedBin, buf, { mode: 0o755 });
+            return cachedBin;
+          }
+        } catch {
+          // fallback
+        }
+      } else if (fs.existsSync(p)) {
+        return p;
+      }
     }
   } catch {
     // fallback
   }
 
-  // Проверяем bundled в extraResources
+  // Проверяем bundled в extraResources и кэш
   const candidates = [
-    path.join(process.resourcesPath || "", "engine", "bin", process.platform === "win32" ? "7za.exe" : "7za"),
-    path.join(process.resourcesPath || "", "engine", process.platform === "win32" ? "7za.exe" : "7za"),
-    path.join(__dirname, "..", "node_modules", "7zip-bin", process.platform, process.arch, process.platform === "win32" ? "7za.exe" : "7za"),
+    path.join(process.resourcesPath || "", "app.asar.unpacked", "node_modules", "7zip-bin", process.platform, process.arch, binName),
+    path.join(os.tmpdir(), "NanoDecompiler", "bin", binName),
+    path.join(process.resourcesPath || "", "engine", "bin", binName),
+    path.join(process.resourcesPath || "", "engine", binName),
+    path.join(__dirname, "..", "node_modules", "7zip-bin", process.platform, process.arch, binName),
   ];
 
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;
   }
   return null;
+}
+
+/** Автономная распаковка .zip архивов без внешних зависимостей (PowerShell Expand-Archive / system tar) */
+async function extractZipFallback(
+  archivePath: string,
+  targetDir: string,
+  onProgress: (ev: ArchiveProgressEvent) => void,
+): Promise<void> {
+  const stat = await fs.promises.stat(archivePath);
+  const totalBytes = stat.size;
+
+  onProgress({
+    archivePath,
+    percent: 30,
+    currentFile: "Распаковка через системный распаковщик ZIP...",
+    extractedFiles: 1,
+    totalFiles: 10,
+    etaSeconds: 2,
+    speedBytesPerSec: 1024 * 1024 * 2,
+    tempDir: targetDir,
+  });
+
+  const { execSync } = await import("child_process");
+  if (process.platform === "win32") {
+    const ps = `Expand-Archive -LiteralPath '${archivePath.replace(/'/g, "''")}' -DestinationPath '${targetDir.replace(/'/g, "''")}' -Force`;
+    const encoded = Buffer.from(ps, "utf16le").toString("base64");
+    execSync(`powershell -NoProfile -NonInteractive -EncodedCommand ${encoded}`, { windowsHide: true, timeout: 60000 });
+  } else {
+    try {
+      execSync(`unzip -o "${archivePath}" -d "${targetDir}"`, { timeout: 60000 });
+    } catch {
+      execSync(`tar -xf "${archivePath}" -C "${targetDir}"`, { timeout: 60000 });
+    }
+  }
+
+  onProgress({
+    archivePath,
+    percent: 90,
+    currentFile: "Распаковка ZIP завершена",
+    extractedFiles: 10,
+    totalFiles: 10,
+    etaSeconds: 0,
+    speedBytesPerSec: totalBytes,
+    tempDir: targetDir,
+  });
 }
 
 /**
@@ -430,10 +501,17 @@ export async function extractArchiveAndScanPlugins(
       // .zip, .7z, .7zip
       const sevenPath = get7zaPath();
       if (sevenPath) {
-        await extractWith7za(sevenPath, archivePath, tempDir, onProgress);
+        try {
+          await extractWith7za(sevenPath, archivePath, tempDir, onProgress);
+        } catch (sevenErr) {
+          if (lower.endsWith(".zip")) {
+            await extractZipFallback(archivePath, tempDir, onProgress);
+          } else {
+            throw sevenErr;
+          }
+        }
       } else if (lower.endsWith(".zip")) {
-        // Fallback на tar.x или распаковку
-        await extractTar(archivePath, tempDir, onProgress);
+        await extractZipFallback(archivePath, tempDir, onProgress);
       } else {
         throw new Error("Не найден модуль 7za для распаковки формата .7z");
       }

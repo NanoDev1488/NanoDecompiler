@@ -364,6 +364,13 @@ std::vector<std::string> emit_stmt(const StmtPtr& s, int indent) {
             const auto* f = static_cast<const ForStmt*>(s.get());
             std::string label = (f->label.has_value() && is_label_used_in_stmt(s, *f->label)) ? (*f->label + ": ") : "";
             std::string init_txt = f->init ? emit_expr(f->init) : "";
+            if (init_txt.find(" : ") != std::string::npos && !f->cond && !f->update) {
+                std::vector<std::string> out = {pad + label + "for (" + init_txt + ") {"};
+                auto body_lines = emit_stmts(f->body, indent + 1);
+                out.insert(out.end(), body_lines.begin(), body_lines.end());
+                out.push_back(pad + "}");
+                return out;
+            }
             bool cond_is_true_const = f->cond && f->cond->kind == ExprKind::Const &&
                                        static_cast<const Const*>(f->cond.get())->literal == "true";
             std::string cond_txt = (!f->cond || cond_is_true_const) ? "" : emit_expr(f->cond);

@@ -4,11 +4,51 @@
 
 **Декомпилятор Minecraft-плагинов и модов с честной эвристикой вместо красивого вранья.**
 
-Bukkit · Spigot · Paper · Velocity · BungeeCord · Fabric · Forge · NeoForge
+[![Version](https://img.shields.io/badge/version-1.9.155--ReadUpd.20-b6ff3c?style=for-the-badge&logo=codeforces&logoColor=000)](https://github.com)
+[![Engine](https://img.shields.io/badge/Engine-C%2B%2B17%20Native-38bdf8?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://github.com)
+[![Telemetry](https://img.shields.io/badge/Telemetry-0%25%20Offline-4ade80?style=for-the-badge&logo=shield&logoColor=white)](https://github.com)
+[![Docs](https://img.shields.io/badge/Docs-GitHub%20Pages-a855f7?style=for-the-badge&logo=githubpages&logoColor=white)](https://nanodev.github.io/NanoDecompiler/)
 
-[Telegram-канал автора и обновлений](https://t.me/NanoDev_mc)
+Bukkit · Spigot · Paper · Purpur · Velocity · BungeeCord · Fabric · Forge · NeoForge
+
+[📢 Telegram-канал автора и обновлений](https://t.me/NanoDev_mc) · [📖 Онлайн-документация](https://nanodev.github.io/NanoDecompiler/)
 
 </div>
+
+---
+
+## 💎 Ключевые особенности в плитках
+
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <h3>⚡ C++17 Core Engine</h3>
+      <p>Собственное нативное ядро декомпилятора без Java/Python рантайма. Потоковая обработка классов, низкое потребление RAM (&lt;512MB) и сборка с <code>-j 1</code>.</p>
+    </td>
+    <td width="33%" valign="top">
+      <h3>✨ 20 Проходов Читаемости</h3>
+      <p>Трансформация байткода в чистый Java код: <code>x++</code>, <code>x += y</code>, <code>for (T x : arr)</code>, guard-clause flattening, авто-имена <code>Player player</code>, константы <code>Integer.MAX_VALUE</code>.</p>
+    </td>
+    <td width="33%" valign="top">
+      <h3>🛡️ 15 Этапов Деобфускации</h3>
+      <p>Снятие коммерческой защиты: XOR-дешифровка Allatori, Control Flow Unflattening для Zelix KlassMaster, десугаринг рефлексии и батутов исключений.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top">
+      <h3>📦 Универсальные Архивы</h3>
+      <p>Поддержка <code>.jar</code>, <code>.zip</code>, <code>.tar.gz</code>, <code>.7z</code>, <code>.rar</code>. Встроенные распаковщики и интеллектуальный отсев серверных ядер (Paperclip / Purpur).</p>
+    </td>
+    <td width="33%" valign="top">
+      <h3>🔍 Малварь-Сканер</h3>
+      <p>Эвристический аудит безопасности на наличие скрытых Discord Webhook'ов, троянов, удаленного исполнения команд и кражи сессий.</p>
+    </td>
+    <td width="33%" valign="top">
+      <h3>🔒 100% Офлайн и Приватность</h3>
+      <p>Абсолютно нулевая телеметрия. Приложение не отправляет ваши JAR-файлы, исходники или логи на сторонние серверы.</p>
+    </td>
+  </tr>
+</table>
 
 ---
 
