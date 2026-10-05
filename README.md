@@ -7,7 +7,7 @@
 [![Version](https://img.shields.io/badge/version-1.9.156-b6ff3c?style=for-the-badge&logo=codeforces&logoColor=000)](https://github.com)
 [![Engine](https://img.shields.io/badge/Engine-C%2B%2B17%20Native-38bdf8?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://github.com)
 [![Telemetry](https://img.shields.io/badge/Telemetry-0%25%20Offline-4ade80?style=for-the-badge&logo=shield&logoColor=white)](https://github.com)
-[![Docs](https://img.shields.io/badge/Docs-GitHub%20Pages-a855f7?style=for-the-badge&logo=githubpages&logoColor=white)](https://nanodev.github.io/NanoDecompiler/)
+[![Docs](https://img.shields.io/badge/Docs-GitHub%20Pages-a855f7?style=for-the-badge&logo=githubpages&logoColor=white)](https://nanodev1488.github.io/NanoDecompiler/)
 
 Bukkit · Spigot · Paper · Purpur · Velocity · BungeeCord · Fabric · Forge · NeoForge
 
