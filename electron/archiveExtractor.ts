@@ -99,6 +99,8 @@ function get7zaPath(): string | null {
   // Проверяем bundled в extraResources и кэш
   const candidates = [
     path.join(process.resourcesPath || "", "app.asar.unpacked", "node_modules", "7zip-bin", process.platform, process.arch, binName),
+    path.join(process.env.LOCALAPPDATA || "", "Programs", "NanoDecompiler", "resources", "app.asar.unpacked", "node_modules", "7zip-bin", process.platform, process.arch, binName),
+    path.join(process.env.LOCALAPPDATA || "", "Programs", "nano-decompiler-gui", "resources", "app.asar.unpacked", "node_modules", "7zip-bin", process.platform, process.arch, binName),
     path.join(os.tmpdir(), "NanoDecompiler", "bin", binName),
     path.join(process.resourcesPath || "", "engine", "bin", binName),
     path.join(process.resourcesPath || "", "engine", binName),

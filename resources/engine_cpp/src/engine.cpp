@@ -2946,7 +2946,7 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
         std::string pad(4 * static_cast<size_t>(indent), ' ');
         std::vector<std::string> pre_lines;
         for (auto& [name, typ] : ctx.crossing_temp_types) {
-            if (!declared_in_body.count(name)) {
+            if (!declared_in_body.count(name) && uses_name_in_stmts(stmts, name)) {
                 pre_lines.push_back(pad + simple_type(typ) + " " + name + ";");
             }
         }

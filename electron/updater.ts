@@ -606,11 +606,14 @@ export function registerUpdateHandlers(
       // Синхронизация с установленной версией в AppData/Local/Programs
       if (process.platform === "win32") {
         try {
-          const installedDir = path.join(process.env.LOCALAPPDATA || "", "Programs", "nano-decompiler-gui", "resources", "engine");
-          if (fs.existsSync(installedDir) && installedDir.toLowerCase() !== dir.toLowerCase()) {
-            const installedDest = path.join(installedDir, localEngineBinaryName());
-            fs.copyFileSync(dest, installedDest);
-            if (latestApiVersion) writeInstalledApiVersion(installedDir, latestApiVersion);
+          const appNames = ["NanoDecompiler", "nano-decompiler-gui"];
+          for (const appName of appNames) {
+            const installedDir = path.join(process.env.LOCALAPPDATA || "", "Programs", appName, "resources", "engine");
+            if (fs.existsSync(installedDir) && installedDir.toLowerCase() !== dir.toLowerCase()) {
+              const installedDest = path.join(installedDir, localEngineBinaryName());
+              fs.copyFileSync(dest, installedDest);
+              if (latestApiVersion) writeInstalledApiVersion(installedDir, latestApiVersion);
+            }
           }
         } catch {
           // игнорируем ошибку если нет прав или программа не установлена
