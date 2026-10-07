@@ -78,12 +78,24 @@ function sha256File(filePath: string): Promise<string | null> {
 // доступен на всех трёх ОС, а не только Windows - раньше это было
 // осознанным ограничением ИЗ-ЗА того, что build-api был Windows-only,
 // но эта причина больше не существует.
-const ENGINE_ASSET_NAME: string =
-  process.platform === "win32"
-    ? "NanoDecompilerClApi-windows.exe"
-    : process.platform === "darwin"
-      ? "NanoDecompilerClApi-macos"
-      : "NanoDecompilerClApi-linux";
+function findEngineAsset(assets: GhAsset[]): GhAsset | undefined {
+  const isWin = process.platform === "win32";
+  const isMac = process.platform === "darwin";
+  
+  if (isWin) {
+    return assets.find(a => /^NanoDecompilerCLI-Windows-x64-v.*\.exe$/i.test(a.name)) ||
+           assets.find(a => a.name === "NanoDecompilerClApi-windows.exe") ||
+           assets.find(a => a.name === "NanoDecompilerCLI.exe");
+  } else if (isMac) {
+    return assets.find(a => /^NanoDecompilerCLI-macOS-(arm64|x64)-v.*$/i.test(a.name)) ||
+           assets.find(a => a.name === "NanoDecompilerClApi-macos") ||
+           assets.find(a => a.name === "NanoDecompilerCLI");
+  } else {
+    return assets.find(a => /^NanoDecompilerCLI-Linux-x64-v.*$/i.test(a.name)) ||
+           assets.find(a => a.name === "NanoDecompilerClApi-linux") ||
+           assets.find(a => a.name === "NanoDecompilerCLI");
+  }
+}
 
 // БАГ-ФИКС (реальный, воспроизведён пользователем - "движок.exe называется
 // по-другому"): ENGINE_ASSET_NAME - это имя файла В РЕЛИЗЕ на GitHub
@@ -453,7 +465,7 @@ export function registerUpdateHandlers(
       );
       const versionsAsset = release.assets.find((a) => a.name === "versions.json");
       const checksumsAsset = release.assets.find((a) => a.name === "checksums.json");
-      const cliAsset = ENGINE_ASSET_NAME ? release.assets.find((a) => a.name === ENGINE_ASSET_NAME) : undefined;
+      const cliAsset = findEngineAsset(release.assets);
       const setupAsset = release.assets.find((a) => clientAssetPattern().test(a.name));
 
       const currentClientVersion = GUI_VERSION;
@@ -575,8 +587,9 @@ export function registerUpdateHandlers(
           `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`
         );
         const checksumsAsset = release.assets.find((a) => a.name === "checksums.json");
-        const assetName = ENGINE_ASSET_NAME;
-        if (checksumsAsset) {
+        const foundAsset = findEngineAsset(release.assets);
+        const assetName = foundAsset ? foundAsset.name : "";
+        if (checksumsAsset && assetName) {
           const checksums = await httpsGetJson<ChecksumsJson>(checksumsAsset.browser_download_url);
           const expected = checksums[assetName];
           const actual = await sha256File(tmpDest);

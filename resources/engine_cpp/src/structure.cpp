@@ -1982,9 +1982,8 @@ std::vector<StmtPtr> fold_boolean_materialization(const std::vector<StmtPtr>& st
 }
 
 std::vector<StmtPtr> collapse_temp_chains(std::vector<StmtPtr> stmts) {
-    bool changed = true;
-    while (changed) {
-        changed = false;
+    for (int iter = 0; iter < 4; ++iter) {
+        bool changed = false;
         size_t n = stmts.size();
         for (size_t i = 0; i < n; ++i) {
             if (!stmts[i]) continue;
@@ -1993,9 +1992,18 @@ std::vector<StmtPtr> collapse_temp_chains(std::vector<StmtPtr> stmts) {
             ExprPtr tgt = a->first, val = a->second;
             if (!tgt || !(tgt->kind == ExprKind::Local && is_synth_temp(static_cast<Local*>(tgt.get())->name))) continue;
             std::string tgt_name = static_cast<Local*>(tgt.get())->name;
+
+            // Специфика synth temps в Java bytecode: временные переменные стека
+            // живут локально (в 99% случаев потребляются в следующем же операторе i + 1).
+            // Ограничиваем окно поиска до 32 операторов, чтобы избежать O(N^2) сканирования
+            // на гигантских методах (<clinit> с тысячами enum-констант).
+            size_t max_j = (n > 64) ? std::min(n, i + 32) : n;
             std::vector<size_t> uses;
-            for (size_t j = i + 1; j < n; ++j) {
-                if (stmts[j] && contains_local_ref_stmt(stmts[j], tgt_name)) uses.push_back(j);
+            for (size_t j = i + 1; j < max_j; ++j) {
+                if (stmts[j] && contains_local_ref_stmt(stmts[j], tgt_name)) {
+                    uses.push_back(j);
+                    if (uses.size() > 1) break;
+                }
             }
             if (uses.size() != 1) continue;
             size_t j = uses[0];
@@ -2006,13 +2014,20 @@ std::vector<StmtPtr> collapse_temp_chains(std::vector<StmtPtr> stmts) {
             if (!val2 || !(val2->kind == ExprKind::Local && static_cast<Local*>(val2.get())->name == tgt_name)) continue;
             // Если между i и j есть другие операторы, нельзя переносить выражение с побочными эффектами
             if (j != i + 1 && has_side_effect(val)) continue;
-            std::vector<StmtPtr> new_stmts;
-            new_stmts.insert(new_stmts.end(), stmts.begin(), stmts.begin() + i);
-            new_stmts.insert(new_stmts.end(), stmts.begin() + i + 1, stmts.begin() + j);
-            new_stmts.push_back(std::make_shared<ExprStmtNode>(std::make_shared<Assign>(tgt2, val)));
-            new_stmts.insert(new_stmts.end(), stmts.begin() + j + 1, stmts.end());
-            stmts = std::move(new_stmts);
+
+            // In-place замена: не копируем весь stmts вектор на каждую замену!
+            stmts[i] = nullptr;
+            stmts[j] = std::make_shared<ExprStmtNode>(std::make_shared<Assign>(tgt2, val));
             changed = true;
+        }
+        if (changed) {
+            std::vector<StmtPtr> compacted;
+            compacted.reserve(stmts.size());
+            for (auto& s : stmts) {
+                if (s) compacted.push_back(std::move(s));
+            }
+            stmts = std::move(compacted);
+        } else {
             break;
         }
     }
@@ -3235,8 +3250,12 @@ std::vector<StmtPtr> propagate_single_use_flags(std::vector<StmtPtr> stmts) {
 
         if (can_propagate) {
             int use_count = 0;
-            for (size_t j = i + 1; j < n; ++j) {
-                if (contains_local_ref_stmt(stmts[j], var_name)) ++use_count;
+            size_t max_scan = (n > 64) ? std::min(n, i + 64) : n;
+            for (size_t j = i + 1; j < max_scan; ++j) {
+                if (contains_local_ref_stmt(stmts[j], var_name)) {
+                    ++use_count;
+                    if (use_count > 1) break;
+                }
             }
             if (use_count == 1) {
                 if (stmts[i + 1]->kind == StmtKind::IfStmt) {

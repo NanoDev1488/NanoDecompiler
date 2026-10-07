@@ -1,0 +1,87 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:AvaloniaEdit="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
+        x:Class="NanoDecompilerLite.MainWindow"
+        Title="NanoDecompiler Lite v1.9.157"
+        Width="1050" Height="680"
+        MinWidth="800" MinHeight="500"
+        Background="#0D1117"
+        Foreground="#C9D1D9">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+        <!-- Header Bar -->
+        <Border Grid.Row="0" Background="#161B22" BorderBrush="#30363D" BorderThickness="0,0,0,1" Padding="14,10">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                <!-- Brand / Logo -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+                    <Border Background="#238636" CornerRadius="4" Padding="6,2">
+                        <TextBlock Text="NANO LITE" FontWeight="Bold" FontSize="11" Foreground="#FFFFFF"/>
+                    </Border>
+                    <TextBlock Text="NanoDecompiler Lite" FontWeight="SemiBold" FontSize="15" Foreground="#58A6FF"/>
+                    <TextBlock Text="v1.9.157" FontSize="12" Foreground="#8B949E" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Actions (Open Jar) -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                    <Button Name="OpenJarButton" Background="#21262D" Foreground="#C9D1D9" BorderBrush="#30363D" BorderThickness="1" CornerRadius="6" Padding="12,6">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="📁" FontSize="12"/>
+                            <TextBlock Text="Выбрать JAR / Архив..."/>
+                        </StackPanel>
+                    </Button>
+                    <Button Name="CheckUpdateButton" Background="#21262D" Foreground="#8B949E" BorderBrush="#30363D" BorderThickness="1" CornerRadius="6" Padding="10,6">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="🔄" FontSize="12"/>
+                            <TextBlock Text="Проверить обновления"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Body: Split Tree & Viewer -->
+        <Grid Grid.Row="1" ColumnDefinitions="280,3,*">
+            <!-- Sidebar: File Tree & Search -->
+            <Border Grid.Column="0" Background="#0D1117" BorderBrush="#30363D" BorderThickness="0,0,1,0">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBox Name="SearchBox" Grid.Row="0" Margin="10,10,10,6" Watermark="Поиск класса (Enter)..." Background="#161B22" Foreground="#C9D1D9" BorderBrush="#30363D" CornerRadius="6"/>
+                    <TreeView Name="FileTreeView" Grid.Row="1" Background="Transparent" Foreground="#C9D1D9" Margin="6,0,6,6"/>
+                </Grid>
+            </Border>
+
+            <!-- Splitter -->
+            <GridSplitter Grid.Column="1" Background="#21262D" ResizeDirection="Columns"/>
+
+            <!-- Main Editor View -->
+            <Grid Grid.Column="2" RowDefinitions="Auto,*">
+                <Border Grid.Row="0" Background="#161B22" BorderBrush="#30363D" BorderThickness="0,0,0,1" Padding="12,6">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Name="CurrentFileLabel" Grid.Column="0" Text="Выберите файл для просмотра" Foreground="#8B949E" FontSize="12" VerticalAlignment="Center"/>
+                        <Button Name="CopyCodeButton" Grid.Column="1" Background="#21262D" Foreground="#C9D1D9" BorderBrush="#30363D" CornerRadius="4" Padding="8,4" FontSize="11">
+                            <TextBlock Text="Копировать код"/>
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <AvaloniaEdit:TextEditor Name="CodeEditor"
+                                         Grid.Row="1"
+                                         Background="#0D1117"
+                                         Foreground="#E6EDF3"
+                                         FontFamily="Cascadia Code, Consolas, Courier New, monospace"
+                                         FontSize="13"
+                                         IsReadOnly="True"
+                                         ShowLineNumbers="True"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         VerticalScrollBarVisibility="Visible"/>
+            </Grid>
+        </Grid>
+
+        <!-- Status Footer -->
+        <Border Grid.Row="2" Background="#161B22" BorderBrush="#30363D" BorderThickness="0,1,0,0" Padding="12,6">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Name="StatusLabel" Grid.Column="0" Text="Готов к работе. Движок C++ v1.9.157 встроен." Foreground="#8B949E" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock Name="UpdateStatusLabel" Grid.Column="1" Text="" Foreground="#58A6FF" FontSize="11" VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

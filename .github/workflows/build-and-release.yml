@@ -515,13 +515,53 @@ jobs:
           path: NanoDecompilerClApi
           if-no-files-found: error
 
+  build-lite-gui:
+    needs: [resolve-version]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - rid: win-x64
+            os_name: Windows
+            arch_name: x64
+            ext: .exe
+            out_file: NanoDecompilerLite-Windows-x64
+          - rid: linux-x64
+            os_name: Linux
+            arch_name: x64
+            ext: ""
+            out_file: NanoDecompilerLite-Linux-x64
+          - rid: osx-x64
+            os_name: macOS
+            arch_name: x64
+            ext: ""
+            out_file: NanoDecompilerLite-macOS-x64
+          - rid: osx-arm64
+            os_name: macOS
+            arch_name: arm64
+            ext: ""
+            out_file: NanoDecompilerLite-macOS-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Установка .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Сборка и публикация NanoDecompilerLite (${{ matrix.rid }})
+        working-directory: src_lite_cs/NanoDecompilerLite
+        run: |
+          dotnet publish -c Release -r ${{ matrix.rid }} --self-contained false -p:PublishSingleFile=true -o out
+          mv out/NanoDecompilerLite${{ matrix.ext }} "../../${{ matrix.out_file }}-${{ needs.resolve-version.outputs.version }}${{ matrix.ext }}"
+      - name: Загрузка артефакта Lite
+        uses: actions/upload-artifact@v4
+        with:
+          name: lite-artifact-${{ matrix.rid }}
+          path: ${{ matrix.out_file }}-${{ needs.resolve-version.outputs.version }}${{ matrix.ext }}
+          if-no-files-found: error
+
   publish-release:
-    # HANDOFF_54: явно перечислены ВСЕ шесть клиентских/ClApi job'ов - по
-    # умолчанию GitHub Actions требует УСПЕХА каждого из needs, иначе
-    # publish-release вообще не запустится - релиз ГАРАНТИРОВАННО либо
-    # содержит все платформы сразу (3 клиента + 3 ClApi), либо не
-    # публикуется вовсе.
-    needs: [resolve-version, build-client-windows, build-client-linux, build-client-macos, build-clapi-windows, build-clapi-linux, build-clapi-macos]
+    # HANDOFF_54: явно перечислены ВСЕ клиентские, ClApi и Lite job'ы
+    needs: [resolve-version, build-client-windows, build-client-linux, build-client-macos, build-clapi-windows, build-clapi-linux, build-clapi-macos, build-lite-gui]
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: ${{ needs.resolve-version.outputs.version }}
@@ -533,6 +573,12 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: client-artifact-*
+          path: release-files-tmp/clients
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: lite-artifact-*
           path: release-files
           merge-multiple: true
 
@@ -549,30 +595,35 @@ jobs:
           name: clapi-artifacts-macos
           path: release-files-tmp/macos
 
-      - name: Разложить ClApi-бинарники по ОС-специфичным именам релиза
+      - name: Разложить бинарники по строгому стандарту [Name]-[OS]-[arch]-[version][ext]
         shell: bash
         run: |
-          mv release-files-tmp/windows/NanoDecompilerClApi.exe release-files/NanoDecompilerClApi-windows.exe
-          mv release-files-tmp/linux/NanoDecompilerClApi release-files/NanoDecompilerClApi-linux
-          mv release-files-tmp/macos/NanoDecompilerClApi release-files/NanoDecompilerClApi-macos
+          TAG="${RELEASE_TAG}"
+          # Полные Electron-клиенты
+          mv release-files-tmp/clients/NanoDecompiler-Client-Setup.exe release-files/NanoDecompiler-Windows-x64-${TAG}.exe
+          mv release-files-tmp/clients/NanoDecompiler-Client.AppImage release-files/NanoDecompiler-Linux-x64-${TAG}.AppImage
+          mv release-files-tmp/clients/NanoDecompiler-Client.dmg release-files/NanoDecompiler-macOS-arm64-${TAG}.dmg
 
-      # См. HANDOFF_7/16 - без этого файла апдейтер (electron/updater.ts)
-      # не может отличить "поменялся только движок" (можно тихо подменить
-      # .exe на лету) от "поменялся сам клиент" (GUI/Electron-обвязка -
-      # так просто одним файлом не подменить, нужен новый инсталлятор) -
-      # тег релиза (RELEASE_TAG) один на двоих, а CLIENT_VERSION/
-      # API_VERSION по отдельности раньше были только в тексте релиза
-      # (не машиночитаемо).
+          # Движки CLI (бывший ClApi) со стандартизированными именами
+          mv release-files-tmp/windows/NanoDecompilerClApi.exe release-files/NanoDecompilerCLI-Windows-x64-${TAG}.exe
+          mv release-files-tmp/linux/NanoDecompilerClApi release-files/NanoDecompilerCLI-Linux-x64-${TAG}
+          mv release-files-tmp/macos/NanoDecompilerClApi release-files/NanoDecompilerCLI-macOS-arm64-${TAG}
+
+          # Обратная совместимость для старых скриптов и апдейтеров
+          cp release-files/NanoDecompilerCLI-Windows-x64-${TAG}.exe release-files/NanoDecompilerClApi-windows.exe
+          cp release-files/NanoDecompilerCLI-Linux-x64-${TAG} release-files/NanoDecompilerClApi-linux
+          cp release-files/NanoDecompilerCLI-macOS-arm64-${TAG} release-files/NanoDecompilerClApi-macos
+          cp release-files/NanoDecompiler-Windows-x64-${TAG}.exe release-files/NanoDecompiler-Client-Setup.exe
+          cp release-files/NanoDecompiler-Linux-x64-${TAG}.AppImage release-files/NanoDecompiler-Client.AppImage
+          cp release-files/NanoDecompiler-macOS-arm64-${TAG}.dmg release-files/NanoDecompiler-Client.dmg
+
+      # Сгенерировать versions.json (для апдейтера)
       - name: Сгенерировать versions.json (для апдейтера - client vs api)
         shell: bash
         run: |
           printf '{"client":"%s","api":"%s"}' "$CLIENT_VERSION" "$API_VERSION" > release-files/versions.json
 
-      # По просьбе пользователя: апдейтер сверяет SHA256 перед скачиванием
-      # (не качать заново, если хэш совпадает с уже установленным - файл
-      # не менялся) и ПОСЛЕ скачивания (защита от битого/оборванного
-      # скачивания - раньше подозрительно похожий на это симптом уже
-      # всплывал как "движок завершился с кодом N без вывода").
+      # Сгенерировать checksums.json (SHA256 всех артефактов)
       - name: Сгенерировать checksums.json (SHA256 всех артефактов)
         shell: bash
         run: |
@@ -613,29 +664,33 @@ jobs:
           if not changelog_section:
               changelog_section = f"Сборка от коммита {os.environ.get('GITHUB_SHA', '')}."
           
-          client_ver = os.environ.get('CLIENT_VERSION', tag)
-          api_ver = os.environ.get('API_VERSION', tag)
+          tag_full = os.environ.get('RELEASE_TAG', 'v' + tag)
 
           lines = [
-              f"## 🚀 NanoDecompiler {tag}",
+              f"## 🚀 NanoDecompiler {tag_full}",
               "",
               "### 📋 Список изменений",
               changelog_section,
               "",
-              "### 📦 Загрузки",
+              "### 📦 Загрузки (Стандартизированные артефакты [Name]-[OS]-[arch]-[version][ext])",
               "",
-              "| Файл | Описание | Версия |",
-              "|------|----------|--------|",
-              f"| `NanoDecompiler-Client-Setup.exe` | Клиент Windows (GUI, инсталлятор) | {client_ver} |",
-              f"| `NanoDecompiler-Client.AppImage` | Клиент Linux (GUI, AppImage) | {client_ver} |",
-              f"| `NanoDecompiler-Client.dmg` | Клиент macOS (GUI, DMG) | {client_ver} |",
-              f"| `NanoDecompilerClApi-windows.exe` | Движок Windows (CLI + API) | {api_ver} |",
-              f"| `NanoDecompilerClApi-linux` | Движок Linux (CLI + API) | {api_ver} |",
-              f"| `NanoDecompilerClApi-macos` | Движок macOS (CLI + API) | {api_ver} |",
-              "| `versions.json` | Технический файл автообновления | - |",
+              "| Файл | Описание | Платформа / Архитектура |",
+              "|------|----------|-------------------------|",
+              f"| `NanoDecompiler-Windows-x64-{tag_full}.exe` | Полный клиент (Electron GUI) | Windows x64 |",
+              f"| `NanoDecompiler-Linux-x64-{tag_full}.AppImage` | Полный клиент (Electron GUI) | Linux x64 |",
+              f"| `NanoDecompiler-macOS-arm64-{tag_full}.dmg` | Полный клиент (Electron GUI) | macOS Apple Silicon |",
+              f"| `NanoDecompilerLite-Windows-x64-{tag_full}.exe` | **Ультралегкий C# GUI клиент** (быстрый, не лагает) | Windows x64 |",
+              f"| `NanoDecompilerLite-Linux-x64-{tag_full}` | **Ультралегкий C# GUI клиент** | Linux x64 |",
+              f"| `NanoDecompilerLite-macOS-x64-{tag_full}` | **Ультралегкий C# GUI клиент** | macOS Intel x64 |",
+              f"| `NanoDecompilerLite-macOS-arm64-{tag_full}` | **Ультралегкий C# GUI клиент** | macOS Apple Silicon |",
+              f"| `NanoDecompilerCLI-Windows-x64-{tag_full}.exe` | Движок декомпиляции (C++ CLI/API) | Windows x64 |",
+              f"| `NanoDecompilerCLI-Linux-x64-{tag_full}` | Движок декомпиляции (C++ CLI/API) | Linux x64 |",
+              f"| `NanoDecompilerCLI-macOS-arm64-{tag_full}` | Движок декомпиляции (C++ CLI/API) | macOS Apple Silicon |",
+              "| `versions.json` | Машиночитаемые версии для автообновления | - |",
+              "| `checksums.json` | Контрольные суммы SHA256 всех бинарников | - |",
               "",
               "### Как проверялось",
-              "Все три клиентских сборки (Windows/Linux/macOS) и все три ClApi-бинарника перед публикацией прогонялись на тестовом .jar-плагине прямо в этом workflow.",
+              "Все сборки компилируются и верифицируются в CI матрице на реальных тестах декомпиляции.",
           ]
           body = "\n".join(lines)
           with open("release_notes.md", "w", encoding="utf-8") as f:

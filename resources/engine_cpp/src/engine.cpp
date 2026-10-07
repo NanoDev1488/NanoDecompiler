@@ -1867,6 +1867,15 @@ int count_local_uses_expr(const ExprPtr& e, const std::string& name) {
 
 int count_local_uses_stmt(const StmtPtr& s, const std::string& name);
 
+int count_local_uses_slice(const std::vector<StmtPtr>& lst, size_t start, size_t end, const std::string& name) {
+    int total = 0;
+    size_t limit = std::min(end, lst.size());
+    for (size_t idx = start; idx < limit; ++idx) {
+        total += count_local_uses_stmt(lst[idx], name);
+    }
+    return total;
+}
+
 int count_local_uses_list(const std::vector<StmtPtr>& lst, const std::string& name) {
     int total = 0;
     for (auto& s : lst) total += count_local_uses_stmt(s, name);
@@ -2390,10 +2399,14 @@ std::string simple_type(const std::string& t) {
 std::vector<StmtPtr> inline_crossing_pass(const std::vector<StmtPtr>& lst, MethodCtx& ctx) {
     std::vector<StmtPtr> work = lst;
     bool changed = true;
-    while (changed) {
+    int pass_count = 0;
+    while (changed && pass_count < 4) {
         changed = false;
+        pass_count++;
         std::vector<StmtPtr> out;
         size_t i = 0, n = work.size();
+        size_t lookahead = (n > 64) ? 32 : n;
+
         while (i < n) {
             StmtPtr cur = work[i];
             if (cur->kind == StmtKind::ExprStmt) {
@@ -2408,8 +2421,9 @@ std::vector<StmtPtr> inline_crossing_pass(const std::vector<StmtPtr>& lst, Metho
                                        (tname.rfind("__cross", 0) == 0) ||
                                        (tname.rfind("temp", 0) == 0 && tname.size() > 4 && std::isdigit(static_cast<unsigned char>(tname[4])));
                         if (is_temp) {
-                            std::vector<StmtPtr> rest(work.begin() + i + 1, work.end());
-                            if (count_local_uses_list(rest, tname) == 1) {
+                            size_t window_end = (n > 64) ? std::min(n, i + 1 + lookahead) : n;
+                            int uses = count_local_uses_slice(work, i + 1, window_end, tname);
+                            if (uses == 1) {
                                 if (i + 1 < n) {
                                     StmtPtr nxt = work[i + 1];
                                     if (nxt->kind == StmtKind::ReturnStmt) {
@@ -2435,9 +2449,8 @@ std::vector<StmtPtr> inline_crossing_pass(const std::vector<StmtPtr>& lst, Metho
                                     std::string src_local = (a->value->kind == ExprKind::Local) ? static_cast<Local*>(a->value.get())->name : "";
                                     size_t target_idx = (size_t)-1;
                                     bool safe = true;
-                                    for (size_t k = i + 1; k < n; ++k) {
-                                        std::vector<StmtPtr> single = {work[k]};
-                                        if (count_local_uses_list(single, tname) > 0) {
+                                    for (size_t k = i + 1; k < window_end; ++k) {
+                                        if (count_local_uses_stmt(work[k], tname) > 0) {
                                             target_idx = k;
                                             break;
                                         }
