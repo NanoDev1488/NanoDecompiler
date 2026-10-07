@@ -4,6 +4,7 @@
 
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <set>
 
 #include "zip_reader.hpp"
