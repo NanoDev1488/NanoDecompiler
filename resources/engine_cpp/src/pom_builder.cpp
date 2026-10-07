@@ -196,6 +196,62 @@ const std::vector<std::string>& ignored_prefixes() {
     return v;
 }
 
+std::string stable_lib_version(const std::string& group, const std::string& artifact) {
+    if (group == "com.google.code.gson" && artifact == "gson") return "2.10.1";
+    if (group == "com.google.guava" && artifact == "guava") return "31.1-jre";
+    if (group == "org.yaml" && artifact == "snakeyaml") return "2.0";
+    if (group == "org.apache.commons" && artifact == "commons-lang3") return "3.12.0";
+    if (group == "commons-io" && artifact == "commons-io") return "2.11.0";
+    if (group == "org.slf4j" && artifact == "slf4j-api") return "1.7.36";
+    if (group == "com.zaxxer" && artifact == "HikariCP") return "4.0.3";
+    if (group == "org.xerial" && artifact == "sqlite-jdbc") return "3.45.1.0";
+    if (group == "com.mysql" && artifact == "mysql-connector-j") return "8.0.33";
+    if (group == "com.h2database" && artifact == "h2") return "2.2.224";
+    if (group == "com.j256.ormlite" && artifact == "ormlite-jdbc") return "6.1";
+    if (group == "io.netty" && artifact == "netty-all") return "4.1.100.Final";
+    if (group == "org.jetbrains" && artifact == "annotations") return "24.1.0";
+    if (group == "org.json" && artifact == "json") return "20231013";
+    if (group == "org.opentest4j" && artifact == "opentest4j") return "1.3.0";
+    if (group == "mc.obliviate" && artifact == "inventory-api") return "1.4.0";
+    if (group == "javax.annotation" && artifact == "jsr305") return "3.0.2";
+    if (group == "com.mojang" && artifact == "brigadier") return "1.0.18";
+    if (group == "com.mojang" && artifact == "authlib") return "1.5.25";
+    if (group == "org.enginehub.piston" && artifact == "piston-core") return "0.5.8";
+    if (group == "com.sk89q.worldedit" && artifact == "worldedit-core") return "7.2.15";
+    if (group == "com.sk89q.worldguard" && artifact == "worldguard-core") return "7.0.9";
+    if (group == "org.bstats" && artifact == "bstats-bukkit") return "3.0.2";
+    if (group == "redis.clients" && artifact == "jedis") return "4.4.6";
+    if (group == "org.bouncycastle" && artifact == "bcprov-jdk18on") return "1.77";
+    if (group == "com.squareup.okhttp3" && artifact == "okhttp") return "4.12.0";
+    if (group == "com.squareup.okio" && artifact == "okio") return "3.7.0";
+    if (group == "com.squareup.retrofit2" && artifact == "retrofit") return "2.9.0";
+    if (group == "commons-codec" && artifact == "commons-codec") return "1.16.0";
+    if (group == "org.apache.commons" && artifact == "commons-collections4") return "4.4";
+    if (group == "org.mongodb" && artifact == "mongodb-driver-sync") return "4.11.1";
+    if (group == "org.mongodb" && artifact == "bson") return "4.11.1";
+    if (group == "ch.qos.logback" && artifact == "logback-classic") return "1.2.13";
+    if (group == "org.apache.httpcomponents" && artifact == "httpclient") return "4.5.14";
+    if (group == "org.jetbrains.kotlin" && artifact == "kotlin-stdlib") return "1.9.22";
+    if (group == "org.jetbrains.kotlinx" && artifact == "kotlinx-coroutines-core") return "1.8.0";
+    if (group == "com.typesafe" && artifact == "config") return "1.4.3";
+    if (group == "it.unimi.dsi" && artifact == "fastutil") return "8.5.13";
+    if (group == "org.mariadb.jdbc" && artifact == "mariadb-java-client") return "3.3.2";
+    if (group == "com.google.protobuf" && artifact == "protobuf-java") return "3.25.2";
+    if (group == "com.google.errorprone" && artifact == "error_prone_annotations") return "2.24.1";
+    if (group == "org.javassist" && artifact == "javassist") return "3.30.2-GA";
+    if (group == "com.github.ben-manes.caffeine" && artifact == "caffeine") return "3.1.8";
+    if (group == "org.apache.commons" && artifact == "commons-math3") return "3.6.1";
+    if (group == "org.reflections" && artifact == "reflections") return "0.10.2";
+    if (group == "com.github.cryptomorin" && artifact == "XSeries") return "9.7.0";
+    if (group == "net.md-5" && artifact == "bungeecord-chat") return "1.16-R0.4";
+    if (group == "net.kyori" && artifact == "adventure-api") return "4.14.0";
+    if (group == "com.fasterxml.jackson.core" && artifact == "jackson-databind") return "2.15.3";
+    if (group == "io.reactivex.rxjava3" && artifact == "rxjava") return "3.1.8";
+    if (group == "com.google.inject" && artifact == "guice") return "5.1.0";
+    if (group == "org.spongepowered" && artifact == "configurate-core") return "4.1.2";
+    return "1.0.0";
+}
+
 }  // namespace
 
 std::vector<std::pair<std::string, std::string>> parse_shade_relocations(const std::string& pom_xml_text) {
@@ -503,63 +559,8 @@ PomBuildResult build_pom(const std::string& jar_path, const std::string& plugin_
              << "            <artifactId>" << a << "</artifactId>\n"
              << "            <version>" << v << "</version>\n"
              << "        </dependency>";
-        dep_xml_parts.push_back(part.str());
+         dep_xml_parts.push_back(part.str());
     }
-std::string stable_lib_version(const std::string& group, const std::string& artifact) {
-    if (group == "com.google.code.gson" && artifact == "gson") return "2.10.1";
-    if (group == "com.google.guava" && artifact == "guava") return "31.1-jre";
-    if (group == "org.yaml" && artifact == "snakeyaml") return "2.0";
-    if (group == "org.apache.commons" && artifact == "commons-lang3") return "3.12.0";
-    if (group == "commons-io" && artifact == "commons-io") return "2.11.0";
-    if (group == "org.slf4j" && artifact == "slf4j-api") return "1.7.36";
-    if (group == "com.zaxxer" && artifact == "HikariCP") return "4.0.3";
-    if (group == "org.xerial" && artifact == "sqlite-jdbc") return "3.45.1.0";
-    if (group == "com.mysql" && artifact == "mysql-connector-j") return "8.0.33";
-    if (group == "com.h2database" && artifact == "h2") return "2.2.224";
-    if (group == "com.j256.ormlite" && artifact == "ormlite-jdbc") return "6.1";
-    if (group == "io.netty" && artifact == "netty-all") return "4.1.100.Final";
-    if (group == "org.jetbrains" && artifact == "annotations") return "24.1.0";
-    if (group == "org.json" && artifact == "json") return "20231013";
-    if (group == "org.opentest4j" && artifact == "opentest4j") return "1.3.0";
-    if (group == "mc.obliviate" && artifact == "inventory-api") return "1.4.0";
-    if (group == "javax.annotation" && artifact == "jsr305") return "3.0.2";
-    if (group == "com.mojang" && artifact == "brigadier") return "1.0.18";
-    if (group == "com.mojang" && artifact == "authlib") return "1.5.25";
-    if (group == "org.enginehub.piston" && artifact == "piston-core") return "0.5.8";
-    if (group == "com.sk89q.worldedit" && artifact == "worldedit-core") return "7.2.15";
-    if (group == "com.sk89q.worldguard" && artifact == "worldguard-core") return "7.0.9";
-    if (group == "org.bstats" && artifact == "bstats-bukkit") return "3.0.2";
-    if (group == "redis.clients" && artifact == "jedis") return "4.4.6";
-    if (group == "org.bouncycastle" && artifact == "bcprov-jdk18on") return "1.77";
-    if (group == "com.squareup.okhttp3" && artifact == "okhttp") return "4.12.0";
-    if (group == "com.squareup.okio" && artifact == "okio") return "3.7.0";
-    if (group == "com.squareup.retrofit2" && artifact == "retrofit") return "2.9.0";
-    if (group == "commons-codec" && artifact == "commons-codec") return "1.16.0";
-    if (group == "org.apache.commons" && artifact == "commons-collections4") return "4.4";
-    if (group == "org.mongodb" && artifact == "mongodb-driver-sync") return "4.11.1";
-    if (group == "org.mongodb" && artifact == "bson") return "4.11.1";
-    if (group == "ch.qos.logback" && artifact == "logback-classic") return "1.2.13";
-    if (group == "org.apache.httpcomponents" && artifact == "httpclient") return "4.5.14";
-    if (group == "org.jetbrains.kotlin" && artifact == "kotlin-stdlib") return "1.9.22";
-    if (group == "org.jetbrains.kotlinx" && artifact == "kotlinx-coroutines-core") return "1.8.0";
-    if (group == "com.typesafe" && artifact == "config") return "1.4.3";
-    if (group == "it.unimi.dsi" && artifact == "fastutil") return "8.5.13";
-    if (group == "org.mariadb.jdbc" && artifact == "mariadb-java-client") return "3.3.2";
-    if (group == "com.google.protobuf" && artifact == "protobuf-java") return "3.25.2";
-    if (group == "com.google.errorprone" && artifact == "error_prone_annotations") return "2.24.1";
-    if (group == "org.javassist" && artifact == "javassist") return "3.30.2-GA";
-    if (group == "com.github.ben-manes.caffeine" && artifact == "caffeine") return "3.1.8";
-    if (group == "org.apache.commons" && artifact == "commons-math3") return "3.6.1";
-    if (group == "org.reflections" && artifact == "reflections") return "0.10.2";
-    if (group == "com.github.cryptomorin" && artifact == "XSeries") return "9.7.0";
-    if (group == "net.md-5" && artifact == "bungeecord-chat") return "1.16-R0.4";
-    if (group == "net.kyori" && artifact == "adventure-api") return "4.14.0";
-    if (group == "com.fasterxml.jackson.core" && artifact == "jackson-databind") return "2.15.3";
-    if (group == "io.reactivex.rxjava3" && artifact == "rxjava") return "3.1.8";
-    if (group == "com.google.inject" && artifact == "guice") return "5.1.0";
-    if (group == "org.spongepowered" && artifact == "configurate-core") return "4.1.2";
-    return "1.0.0";
-}
 
     for (auto& key : guessed_order) {
         if (explicit_keys.count(key)) continue;
