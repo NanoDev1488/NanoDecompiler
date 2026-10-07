@@ -2,7 +2,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:AvaloniaEdit="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
         x:Class="NanoDecompilerLite.MainWindow"
-        Title="NanoDecompiler Lite v1.9.157"
+        Title="NanoDecompiler Lite v1.9.158"
+        Icon="/Assets/icon-lite.ico"
         Width="1050" Height="680"
         MinWidth="800" MinHeight="500"
         Background="#0D1117"
@@ -18,7 +19,7 @@
                         <TextBlock Text="NANO LITE" FontWeight="Bold" FontSize="11" Foreground="#FFFFFF"/>
                     </Border>
                     <TextBlock Text="NanoDecompiler Lite" FontWeight="SemiBold" FontSize="15" Foreground="#58A6FF"/>
-                    <TextBlock Text="v1.9.157" FontSize="12" Foreground="#8B949E" VerticalAlignment="Center"/>
+                    <TextBlock Text="v1.9.158" FontSize="12" Foreground="#8B949E" VerticalAlignment="Center"/>
                 </StackPanel>
 
                 <!-- Actions (Open Jar) -->
@@ -45,7 +46,16 @@
             <Border Grid.Column="0" Background="#0D1117" BorderBrush="#30363D" BorderThickness="0,0,1,0">
                 <Grid RowDefinitions="Auto,*">
                     <TextBox Name="SearchBox" Grid.Row="0" Margin="10,10,10,6" Watermark="Поиск класса (Enter)..." Background="#161B22" Foreground="#C9D1D9" BorderBrush="#30363D" CornerRadius="6"/>
-                    <TreeView Name="FileTreeView" Grid.Row="1" Background="Transparent" Foreground="#C9D1D9" Margin="6,0,6,6"/>
+                    <TreeView Name="FileTreeView" Grid.Row="1" Background="Transparent" Foreground="#C9D1D9" Margin="6,0,6,6">
+                        <TreeView.ItemTemplate>
+                            <TreeDataTemplate ItemsSource="{Binding Children}">
+                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Icon}" FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Name}" FontSize="12" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </TreeDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
                 </Grid>
             </Border>
 
@@ -79,7 +89,7 @@
         <!-- Status Footer -->
         <Border Grid.Row="2" Background="#161B22" BorderBrush="#30363D" BorderThickness="0,1,0,0" Padding="12,6">
             <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Name="StatusLabel" Grid.Column="0" Text="Готов к работе. Движок C++ v1.9.157 встроен." Foreground="#8B949E" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock Name="StatusLabel" Grid.Column="0" Text="Готов к работе. Движок C++ v1.9.158 встроен." Foreground="#8B949E" FontSize="11" VerticalAlignment="Center"/>
                 <TextBlock Name="UpdateStatusLabel" Grid.Column="1" Text="" Foreground="#58A6FF" FontSize="11" VerticalAlignment="Center"/>
             </Grid>
         </Border>

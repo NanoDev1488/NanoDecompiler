@@ -44,9 +44,15 @@ function renderTokens(tokens: Token[], key: number): ReactNode {
 // YAML/properties: "# комментарий", "ключ: значение", "ключ=значение",
 // строки в кавычках, числа/true/false/null как отдельные слова.
 const YAML_LINE_RE = /^(\s*)((?:#|!)[^\n]*)?$/;
-const YAML_KEY_RE = /^(\s*(?:-\s*)?)([A-Za-z0-9_.\-]+)(\s*:)(\s.*|)$/;
+const YAML_KEY_RE = /^(\s*(?:-\s*)?)([A-Za-z0-9_.\-]+)(\s*:)(.*)$/;
 const YAML_TOKEN_RE = new RegExp(
-  [String.raw`("(?:[^"\\\n]|\\.)*")`, String.raw`('(?:[^'\\\n]|\\.)*')`, String.raw`\b(true|false|null|yes|no)\b`, String.raw`\b(-?\d[\d.]*)\b`].join("|"),
+  [
+    String.raw`((?:#|!)[^\n]*)`,
+    String.raw`("(?:[^"\\\n]|\\.)*")`,
+    String.raw`('(?:[^'\\\n]|\\.)*')`,
+    String.raw`\b(true|false|null|yes|no)\b`,
+    String.raw`\b(-?\d[\d.]*)\b`,
+  ].join("|"),
   "gi",
 );
 
@@ -68,8 +74,13 @@ function tokenizeYamlLine(line: string): Token[] {
   let m: RegExpExecArray | null;
   while ((m = YAML_TOKEN_RE.exec(rest)) !== null) {
     if (m.index > last) out.push({ text: rest.slice(last, m.index), cls: null });
-    out.push({ text: m[0], cls: "tok-s" });
-    last = m.index + m[0].length;
+    const text = m[0];
+    let cls: string | null = "tok-s";
+    if (text.startsWith("#") || text.startsWith("!")) {
+      cls = "tok-c";
+    }
+    out.push({ text, cls });
+    last = m.index + text.length;
   }
   if (last < rest.length) out.push({ text: rest.slice(last), cls: null });
   return out;
@@ -171,7 +182,11 @@ function tokenizeXmlLine(line: string): Token[] {
   XML_TOKEN_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = XML_TOKEN_RE.exec(line)) !== null) {
-    if (m.index > last) out.push({ text: line.slice(last, m.index), cls: null });
+    if (m.index > last) {
+      const interstitial = line.slice(last, m.index);
+      const isWhitespace = /^\s*$/.test(interstitial);
+      out.push({ text: interstitial, cls: isWhitespace ? null : "text-ink/80" });
+    }
     const [, comment, tag, close, str, attr] = m;
     let cls: string | null = null;
     if (comment) cls = "tok-c";
@@ -181,7 +196,11 @@ function tokenizeXmlLine(line: string): Token[] {
     out.push({ text: m[0], cls });
     last = m.index + m[0].length;
   }
-  if (last < line.length) out.push({ text: line.slice(last), cls: null });
+  if (last < line.length) {
+    const trailing = line.slice(last);
+    const isWhitespace = /^\s*$/.test(trailing);
+    out.push({ text: trailing, cls: isWhitespace ? null : "text-ink/80" });
+  }
   return out;
 }
 

@@ -15,6 +15,8 @@ export interface SourceFile {
   // поле позволяет FileTree показать им отдельную иконку, не дожидаясь
   // неудачной попытки readTextFile по клику.
   isBinary?: boolean;
+  /** Файл, сгенерированный самим декомпилятором (README_RU.txt, pom.xml, deobf_mapping.txt и т.д.) */
+  isDecompilerArtifact?: boolean;
   /** undefined, пока содержимое не подгружено через window.nano.readTextFile */
   code?: string;
   /** БАГ-ФИКС: раньше при отказе readTextFile file.code просто оставался

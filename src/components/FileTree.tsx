@@ -69,7 +69,14 @@ function buildPkgTree(files: SourceFile[], keyPrefix: string): ResTreeNode[] {
       path += ":" + seg;
       node = siblings.get(path);
       if (!node) {
-        const label = seg === "(корень)" ? (keyPrefix === "java" ? "(корень: default package)" : "(корень: ресурсы)") : seg;
+        let label = seg;
+        if (seg === "(корень)") {
+          label = keyPrefix === "java" ? "(корень: default package)" : (keyPrefix === "artifact" ? "(файлы декомпилятора)" : "(корень)");
+        } else if (seg === "(корень: ресурсы)") {
+          label = "(корень: ресурсы)";
+        } else if (seg === "(от декомпилятора)") {
+          label = "(служебные)";
+        }
         node = { key: path, label, children: [], files: [] };
         siblings.set(path, node);
       }
@@ -242,14 +249,21 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect, totalS
   }, [files, query]);
 
   const javaTree = useMemo(() => {
-    const javaFiles = visible.filter(f => /\.java$/i.test(f.name));
+    const javaFiles = visible.filter(f => /\.java$/i.test(f.name) && !f.isDecompilerArtifact);
     const tree = buildJavaPackageTree(javaFiles);
     sortTreeNodes(tree, sortMode);
     return tree;
   }, [visible, sortMode]);
 
+  const artifactTree = useMemo(() => {
+    const artifactFiles = visible.filter(f => !!f.isDecompilerArtifact);
+    const tree = buildPkgTree(artifactFiles, "artifact");
+    sortTreeNodes(tree, sortMode);
+    return tree;
+  }, [visible, sortMode]);
+
   const resourceTree = useMemo(() => {
-    const resourceFiles = visible.filter(f => !/\.java$/i.test(f.name));
+    const resourceFiles = visible.filter(f => !/\.java$/i.test(f.name) && !f.isDecompilerArtifact);
     const tree = buildResourceTree(resourceFiles);
     sortTreeNodes(tree, sortMode);
     return tree;
@@ -448,6 +462,12 @@ export const FileTree = memo(function FileTree({ files, openId, onSelect, totalS
           </div>
         )}
         {resourceTree.map(n => renderResNode(n, 0))}
+        {artifactTree.length > 0 && (
+          <div className="tree-section-label mono mt-1 border-t border-line px-1.5 pt-2 pb-1 text-[9.5px] tracking-wide text-acid/80 uppercase">
+            От декомпилятора
+          </div>
+        )}
+        {artifactTree.map(n => renderResNode(n, 0))}
       </div>
 
       <div className="mono flex-none border-t border-line px-3 py-2 text-[10.5px] text-faint">

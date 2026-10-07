@@ -114,7 +114,191 @@ std::vector<std::string> check_brackets(const std::string& text, const std::stri
 }
 
 std::vector<std::string> verify_class_text(const std::string& text, const std::string& filename) {
-    return check_brackets(text, filename);
+    // 1-6. Проверка баланса скобок (), {}, [] и незакрытых литералов
+    std::vector<std::string> issues = check_brackets(text, filename);
+
+    // Построчный анализ для остальных 19 проверок (всего 25 проверок целостности и синтаксиса)
+    std::istringstream stream(text);
+    std::string line;
+    int line_num = 0;
+    int brace_depth = 0;
+    int loop_or_switch_depth = 0;
+
+    while (std::getline(stream, line)) {
+        line_num++;
+        std::string s = line;
+
+        size_t first = s.find_first_not_of(" \t\r\n");
+        if (first == std::string::npos) continue;
+        size_t last = s.find_last_not_of(" \t\r\n");
+        std::string trimmed = s.substr(first, last - first + 1);
+
+        if (trimmed.rfind("//", 0) == 0) continue;
+
+        // 7. Проверка \u unicode escape (должно быть 4 hex-символа)
+        size_t u_pos = 0;
+        while ((u_pos = s.find("\\u", u_pos)) != std::string::npos) {
+            if (u_pos + 6 > s.size()) {
+                issues.push_back(filename + ":" + std::to_string(line_num) + ": некорректный unicode escape \\u (слишком короткий)");
+                break;
+            }
+            for (size_t k = u_pos + 2; k < u_pos + 6; ++k) {
+                if (!std::isxdigit(static_cast<unsigned char>(s[k]))) {
+                    issues.push_back(filename + ":" + std::to_string(line_num) + ": недопустимый символ в unicode escape: " + s.substr(u_pos, 6));
+                    break;
+                }
+            }
+            u_pos += 6;
+        }
+
+        // 8. package декларация
+        if (trimmed.rfind("package ", 0) == 0) {
+            if (trimmed == "package ;" || trimmed == "package;") {
+                issues.push_back(filename + ":" + std::to_string(line_num) + ": пустое объявление package");
+            } else if (trimmed.back() != ';') {
+                issues.push_back(filename + ":" + std::to_string(line_num) + ": пропущена точка с запятой в объявлении package");
+            }
+        }
+
+        // 9. import декларация
+        if (trimmed.rfind("import ", 0) == 0) {
+            if (trimmed == "import ;" || trimmed == "import;") {
+                issues.push_back(filename + ":" + std::to_string(line_num) + ": пустое объявление import");
+            } else if (trimmed.back() != ';') {
+                issues.push_back(filename + ":" + std::to_string(line_num) + ": пропущена точка с запятой в объявлении import");
+            }
+        }
+
+        // 10. Дублирующиеся модификаторы доступа
+        static const std::vector<std::string> dup_modifiers = {
+            "public public", "private private", "protected protected",
+            "public private", "private public", "static static", "final final",
+            "abstract abstract", "volatile volatile", "transient transient"
+        };
+        for (const auto& dm : dup_modifiers) {
+            if (s.find(dm) != std::string::npos) {
+                issues.push_back(filename + ":" + std::to_string(line_num) + ": конфликт или дублирование модификаторов доступа: '" + dm + "'");
+            }
+        }
+
+        // 11-12. break / continue вне контекста цикла
+        if (s.find("for (") != std::string::npos || s.find("for(") != std::string::npos ||
+            s.find("while (") != std::string::npos || s.find("while(") != std::string::npos ||
+            s.find("switch (") != std::string::npos || s.find("switch(") != std::string::npos) {
+            loop_or_switch_depth++;
+        }
+        if (trimmed == "continue;" && loop_or_switch_depth == 0) {
+            issues.push_back(filename + ":" + std::to_string(line_num) + ": continue вне тела цикла");
+        }
+        if (trimmed == "break;" && loop_or_switch_depth == 0) {
+            issues.push_back(filename + ":" + std::to_string(line_num) + ": break вне цикла или switch");
+        }
+
+        // 13. Двойная точка с запятой (;; вне for)
+        if (s.find(";;") != std::string::npos && s.find("for") == std::string::npos) {
+            issues.push_back(filename + ":" + std::to_string(line_num) + ": лишняя точка с запятой ;;");
+        }
+
+        // 14. Несбалансированные дженерики < > в сигнатуре
+        if ((trimmed.rfind("class ", 0) == 0 || trimmed.rfind("interface ", 0) == 0 || trimmed.find("public ") != std::string::npos) &&
+            trimmed.find("<<") == std::string::npos && trimmed.find(">>") == std::string::npos) {
+            int open_angles = std::count(trimmed.begin(), trimmed.end(), '<');
+            int close_angles = std::count(trimmed.begin(), trimmed.end(), '>');
+            if (open_angles != close_angles && trimmed.find(";") != std::string::npos) {
+                if (trimmed.back() == ';' || trimmed.back() == '{') {
+                    issues.push_back(filename + ":" + std::to_string(line_num) + ": возможное несовпадение угловых скобок дженериков < >");
+                }
+            }
+        }
+
+        // 15. Утечка сырого байткод-дескриптора в идентификаторах
+        if (s.find("Ljava/lang/") != std::string::npos || s.find("Lorg/") != std::string::npos || s.find("Lcom/") != std::string::npos) {
+            if (s.find("//") == std::string::npos && s.find("/*") == std::string::npos) {
+                issues.push_back(filename + ":" + std::to_string(line_num) + ": утечка сырого JVM-дескриптора в коде");
+            }
+        }
+
+        // 16. Висячие инфиксные операторы перед концом блока
+        if (trimmed.size() > 1 && (trimmed.back() == '+' || trimmed.back() == '-' || trimmed.back() == '*' || trimmed.back() == '/') &&
+            s.find("\"") == std::string::npos) {
+            if (trimmed.size() >= 2 && trimmed[trimmed.size() - 2] == '}') {
+                issues.push_back(filename + ":" + std::to_string(line_num) + ": висячий оператор перед концом блока");
+            }
+        }
+
+        // 17. Некорректный числовой литерал
+        if (s.find("0x;") != std::string::npos || s.find("0b;") != std::string::npos) {
+            issues.push_back(filename + ":" + std::to_string(line_num) + ": неполный шестнадцатеричный или бинарный литерал");
+        }
+
+        // 18. Некорректный throw без выражения
+        if (trimmed == "throw;" || trimmed == "throw ;") {
+            issues.push_back(filename + ":" + std::to_string(line_num) + ": оператор throw без выражения исключения");
+        }
+
+        // 19. Некорректный catch без аргумента
+        if (trimmed.rfind("catch ()", 0) == 0 || trimmed.rfind("catch()", 0) == 0) {
+            issues.push_back(filename + ":" + std::to_string(line_num) + ": пустой блок catch без параметра исключения");
+        }
+
+        // 20. Пустые условия if () / while ()
+        if (trimmed.rfind("if ()", 0) == 0 || trimmed.rfind("if()", 0) == 0 ||
+            trimmed.rfind("while ()", 0) == 0 || trimmed.rfind("while()", 0) == 0) {
+            issues.push_back(filename + ":" + std::to_string(line_num) + ": пустое условие if/while");
+        }
+
+        // 21. Пустое выражение switch ()
+        if (trimmed.rfind("switch ()", 0) == 0 || trimmed.rfind("switch()", 0) == 0) {
+            issues.push_back(filename + ":" + std::to_string(line_num) + ": пустое выражение switch");
+        }
+
+        // 22. Пустой блок synchronized ()
+        if (trimmed.rfind("synchronized ()", 0) == 0 || trimmed.rfind("synchronized()", 0) == 0) {
+            issues.push_back(filename + ":" + std::to_string(line_num) + ": пустой монитор блокировки synchronized");
+        }
+
+        // 23. Утечка служебных маркеров движка (StackVM tokens)
+        static const std::vector<std::string> engine_tokens = {
+            "__stk_unresolved", "__ILLEGAL_OPCODE", "__NULL_REF_AST", "UNDEFINED_LOCAL", "__UNSUPPORTED_BYTECODE"
+        };
+        for (const auto& tok : engine_tokens) {
+            if (s.find(tok) != std::string::npos) {
+                issues.push_back(filename + ":" + std::to_string(line_num) + ": утечка служебного токена движка: " + tok);
+            }
+        }
+
+        // 24. Утечка двойной точки .. в выражениях (не varargs ...)
+        size_t dotdot = 0;
+        while ((dotdot = s.find("..", dotdot)) != std::string::npos) {
+            if (dotdot + 2 < s.size() && s[dotdot + 2] == '.') {
+                dotdot += 3;
+                continue;
+            }
+            if (dotdot > 0 && s[dotdot - 1] == '.') {
+                dotdot += 2;
+                continue;
+            }
+            if (s.find("\"") == std::string::npos && s.find("//") == std::string::npos) {
+                issues.push_back(filename + ":" + std::to_string(line_num) + ": недопустимый оператор '..' (опечатка или артефакт слияния)");
+                break;
+            }
+            dotdot += 2;
+        }
+
+        // 25. return со значением в конструкторе
+        if (s.find("public <init>") != std::string::npos && trimmed.rfind("return ", 0) == 0 && trimmed != "return;") {
+            issues.push_back(filename + ":" + std::to_string(line_num) + ": возврат значения в конструкторе");
+        }
+
+        int closes = std::count(trimmed.begin(), trimmed.end(), '}');
+        int opens = std::count(trimmed.begin(), trimmed.end(), '{');
+        brace_depth += opens - closes;
+        if (closes > 0 && loop_or_switch_depth > 0) {
+            loop_or_switch_depth = std::max(0, loop_or_switch_depth - closes);
+        }
+    }
+
+    return issues;
 }
 
 ImportConflicts check_import_collisions(const OrderedImportMap& imports) {
@@ -275,13 +459,12 @@ std::string ProjectStats::summary_text() const {
         lines.push_back("");
     }
     if (!bracket_issues.empty()) {
-        lines.push_back("ВНИМАНИЕ: найдены проблемы с балансом скобок в " + std::to_string(bracket_issues.size()) +
-                         " местах (это указывало бы на баг в генераторе кода):");
+        lines.push_back("ВНИМАНИЕ: найдены замечания верификации кода в " + std::to_string(bracket_issues.size()) +
+                         " местах (проверка по 25 правилам синтаксиса, структуры и баланса скобок):");
         size_t lim = std::min<size_t>(40, bracket_issues.size());
         for (size_t i = 0; i < lim; ++i) lines.push_back("  " + bracket_issues[i]);
     } else {
-        lines.push_back("Баланс скобок {} () [] проверен по всем сгенерированным .java файлам - "
-                         "проблем не найдено.");
+        lines.push_back("Код проверен по 25 синтаксическим правилам верификации (баланс скобок {} () [], строковые литералы, модификаторы, маркеры декомпилятора) - замечаний не обнаружено.");
     }
     lines.push_back("");
     if (!import_conflicts.empty()) {

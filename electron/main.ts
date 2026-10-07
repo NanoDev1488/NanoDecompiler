@@ -784,7 +784,13 @@ function checkVersionCmd(cmd: string, args: string[]): Promise<{ ok: boolean; te
       let text: string | undefined;
       if (ok) {
         const lines = out.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-        text = lines.find((l) => /apache maven|openjdk|java version|^java\s/i.test(l)) ?? lines[0];
+        const matchLine = lines.find((l) => /apache maven|openjdk|java version|^java\s/i.test(l)) ?? lines[0];
+        if (matchLine) {
+          // Вырезаем длинный хэш коммита в скобках, например:
+          // "Apache Maven 3.9.9 (8e8579a9e76f7d015ee5ec7bfcdc97d260186937)" -> "Apache Maven 3.9.9"
+          // чтобы хэш не переносился на вторую строку и не ломал статусбар
+          text = matchLine.replace(/\s*\([a-f0-9]{30,}\)/i, "").trim();
+        }
       }
       resolve({ ok, text });
     };
@@ -1234,6 +1240,11 @@ ipcMain.handle("fs:readTextFile", async (_e, root: string, relPath: string) => {
   try {
     const stat = fs.statSync(filePath);
     if (!stat.isFile()) return { ok: false, error: "не файл" };
+    // Блокировка форматов, не предназначенных для текстового просмотрщика (базы данных, sql-дампы, бинарные контейнеры)
+    const lowerName = path.basename(filePath).toLowerCase();
+    if (/\.(sql|sqlite|sqlite3|db|db3|bin|dat|class|exe|dll|so|dylib)$/i.test(lowerName)) {
+      return { ok: false, error: "это расширение нечитабельного формата для встроенного просмотрщика (воспользуйтесь кнопкой «Открыть в...»)" };
+    }
     if (stat.size > MAX_TEXT_FILE_BYTES) {
       return { ok: false, error: `файл слишком большой для просмотра в редакторе (${(stat.size / 1024 / 1024).toFixed(1)} МБ)` };
     }

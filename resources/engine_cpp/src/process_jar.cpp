@@ -780,7 +780,7 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
         // с этим числом (иначе два счётчика тихо разъехались бы на пару
         // строк и это выглядело бы как ещё один "врёт" баг).
         stats.total_source_lines += 1 + std::count(text.begin(), text.end(), '\n');
-        auto issues = check_brackets(text, new_internal + ".java");
+        auto issues = verify_class_text(text, new_internal + ".java");
         stats.bracket_issues.insert(stats.bracket_issues.end(), issues.begin(), issues.end());
 
         rendered_so_far++;
@@ -901,7 +901,7 @@ JarProcessResult process_single_class(const std::string& class_path, const std::
     write_text_file(dest, text);
 
     stats.total_source_lines = 1 + std::count(text.begin(), text.end(), '\n');
-    auto issues = check_brackets(text, simple_name + ".java");
+    auto issues = verify_class_text(text, simple_name + ".java");
     stats.bracket_issues.insert(stats.bracket_issues.end(), issues.begin(), issues.end());
 
     if (print_progress) {

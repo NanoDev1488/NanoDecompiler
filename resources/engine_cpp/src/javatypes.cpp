@@ -478,17 +478,35 @@ bool looks_obfuscated(const std::optional<std::string>& name_opt, const std::str
         if (c < 0x20 || c == 0x7F || c >= 0x80) return true;
     }
 
-    // 2. Check for ProGuard 1-2 character obfuscated names
-    if (kind == "class" || kind == "method" || kind == "field") {
+    // 2. Check for ProGuard 1-3 character obfuscated names
+    if (kind == "class" || kind == "method" || kind == "field" || kind == "package") {
         if (base.size() == 1) return true;
         if (base.size() == 2) {
             static const std::unordered_set<std::string> kCommonShortWords = {
-                "id", "io", "in", "to", "of", "by", "on", "as", "at", "if", "do", "go", "is", "it", "me", "my", "no", "ok", "up", "we"
+                "id", "io", "in", "to", "of", "by", "on", "as", "at", "if", "do", "go", "is", "it", "me", "my", "no", "ok", "up", "we", "ui", "os", "db"
             };
             std::string lower2 = base;
             for (char& c : lower2) c = std::tolower(static_cast<unsigned char>(c));
             if (!kCommonShortWords.count(lower2)) {
                 return true;
+            }
+        }
+        if (base.size() == 3) {
+            std::string lower3 = base;
+            for (char& c : lower3) c = std::tolower(static_cast<unsigned char>(c));
+            static const std::unordered_set<std::string> kCommon3LetterWords = {
+                "cfg", "src", "api", "gui", "cmd", "sql", "xml", "yml", "url", "uri",
+                "nms", "tcp", "udp", "log", "dao", "dto", "rpc", "tag", "pos", "loc",
+                "vec", "min", "max", "key", "val", "arg", "env", "msg", "app", "lib",
+                "net", "org", "com", "dev", "run", "set", "get", "add", "del", "put",
+                "map", "box", "raw", "opt", "ctx", "doc", "err", "out", "str", "num"
+            };
+            if (!kCommon3LetterWords.count(lower3)) {
+                bool has_vowel = false;
+                for (char c : lower3) {
+                    if (c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u' || c == 'y') has_vowel = true;
+                }
+                if (!has_vowel) return true;
             }
         }
     }

@@ -98,6 +98,7 @@ const std::regex& bstats_legacy_candidate_pattern() { static const std::regex re
 // "СРОЧНАЯ ЗАДАЧА ОТ ПОЛЬЗОВАТЕЛЯ"), правильный фикс - не подпускать эти
 // классы к Structurer вообще, а не чинить сам алгоритм.
 const std::regex& ormlite_candidate_pattern() { static const std::regex re(R"(^(.*)/field/DatabaseFieldConfig\.class$)"); return re; }
+const std::regex& xseries_candidate_pattern() { static const std::regex re(R"(^(.*)/XMaterial\.class$)"); return re; }
 }  // namespace
 
 std::vector<std::pair<std::string, LibCoords>> signature_relocated_prefixes(const std::vector<std::string>& all_names) {
@@ -160,6 +161,17 @@ std::vector<std::pair<std::string, LibCoords>> signature_relocated_prefixes(cons
         }
     }
 
+    // XSeries - подтверждаем структуру XSound.class и XBlock.class рядом с XMaterial.class
+    // (см. TCCR-crack.jar, где XSeries релоцирован в external/com/cryptomorin/xseries).
+    const LibCoords xseries_coords{"com.github.cryptomorin", "XSeries", "релоцирован без бандла relocations в pom.xml"};
+    if (!seen_coords.count({xseries_coords.group, xseries_coords.artifact})) {
+        auto prefix = detect_prefixed_signature(all_names, xseries_candidate_pattern(), {"/XSound.class", "/XBlock.class"});
+        if (prefix.has_value()) {
+            out.emplace_back(*prefix, xseries_coords);
+            seen_coords.insert({xseries_coords.group, xseries_coords.artifact});
+        }
+    }
+
     return out;
 }
 
@@ -182,16 +194,11 @@ std::optional<std::pair<std::string, LibCoords>> known_library_coords(
 }
 
 bool is_generic_shaded_lib_path(const std::string& internal) {
-    // internal - JVM internal name с "/" в качестве разделителя (напр.
-    // "com/viaversion/viaversion/libs/mcstructs/text/Style"). Разбиваем по
-    // "/" и проверяем каждый СЕГМЕНТ ЦЕЛИКОМ - не подстроку (иначе, скажем,
-    // "library"/"librarian" ложно бы совпали) - на точное равенство "libs"
-    // или "lib".
     size_t start = 0;
     while (start <= internal.size()) {
         size_t slash = internal.find('/', start);
         std::string segment = internal.substr(start, slash == std::string::npos ? std::string::npos : slash - start);
-        if (segment == "libs" || segment == "lib") return true;
+        if (segment == "libs" || segment == "lib" || segment == "external" || segment == "shadow" || segment == "libraries") return true;
         if (slash == std::string::npos) break;
         start = slash + 1;
     }

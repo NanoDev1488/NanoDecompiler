@@ -260,7 +260,8 @@ body {
     color: #e8c487;
   }
   .tok-c {
-    color: #5c665e;
+    color: #7d8b80;
+    font-style: italic;
   }
   .tok-a {
     color: var(--color-warn);

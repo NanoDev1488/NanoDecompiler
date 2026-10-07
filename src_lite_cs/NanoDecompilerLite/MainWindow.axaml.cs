@@ -17,7 +17,7 @@ public partial class MainWindow : Window
 {
     private string? _currentOutDir;
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(6) };
-    private const string CurrentVersion = "1.9.157";
+    private const string CurrentVersion = "1.9.158";
 
     public MainWindow()
     {
@@ -27,6 +27,7 @@ public partial class MainWindow : Window
         CheckUpdateButton.Click += OnCheckUpdateClicked;
         CopyCodeButton.Click += OnCopyCodeClicked;
         FileTreeView.SelectionChanged += OnTreeSelectionChanged;
+        SearchBox.TextChanged += (s, e) => ApplyFilter();
 
         // Настройка синтаксической подсветки C# / Java в AvaloniaEdit
         CodeEditor.SyntaxHighlighting = HighlightingManager.Instance.GetDefinition("C#") ??
@@ -134,11 +135,58 @@ public partial class MainWindow : Window
         return binName;
     }
 
+    private FileNode? _rootNode;
+
     private void PopulateFileTree(string rootDir)
     {
         FileTreeView.ItemsSource = null;
-        var rootNode = CreateDirectoryNode(new DirectoryInfo(rootDir));
-        FileTreeView.ItemsSource = rootNode.Children;
+        _rootNode = CreateDirectoryNode(new DirectoryInfo(rootDir));
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        if (_rootNode == null) return;
+        string q = SearchBox.Text?.Trim().ToLowerInvariant() ?? "";
+        if (string.IsNullOrEmpty(q))
+        {
+            FileTreeView.ItemsSource = _rootNode.Children;
+        }
+        else
+        {
+            var filtered = FilterNode(_rootNode, q);
+            FileTreeView.ItemsSource = filtered?.Children ?? new List<FileNode>();
+        }
+    }
+
+    private FileNode? FilterNode(FileNode node, string q)
+    {
+        if (!node.IsDirectory)
+        {
+            return node.Name.ToLowerInvariant().Contains(q) ? node : null;
+        }
+
+        var matchNode = new FileNode
+        {
+            Name = node.Name,
+            FullPath = node.FullPath,
+            IsDirectory = true
+        };
+
+        foreach (var c in node.Children)
+        {
+            var matchedChild = FilterNode(c, q);
+            if (matchedChild != null)
+            {
+                matchNode.Children.Add(matchedChild);
+            }
+        }
+
+        if (matchNode.Children.Count > 0 || node.Name.ToLowerInvariant().Contains(q))
+        {
+            return matchNode;
+        }
+        return null;
     }
 
     private FileNode CreateDirectoryNode(DirectoryInfo dir)
@@ -244,6 +292,7 @@ public class FileNode
     public string FullPath { get; set; } = "";
     public bool IsDirectory { get; set; }
     public List<FileNode> Children { get; set; } = new();
+    public string Icon => IsDirectory ? "📁" : (Name.EndsWith(".java") ? "☕" : "📄");
 
     public override string ToString() => Name;
 }

@@ -78,26 +78,31 @@ async function collectSourceFiles(outDir: string, relDir = ""): Promise<SourceFi
       // fallback'ится на "(корень)" ниже). Теперь явно вырезаем
       // последний сегмент через lastIndexOf, не полагаясь на то, что
       // слэш обязательно есть в строке.
+      const isDecompilerArtifact = /^(README.*|pom\.xml|deobf_mapping\.txt|stats\.json|brackets_report\.txt|.*_mapping\.txt)$/i.test(item.name) && !rel.startsWith("src/main/");
+      const inSrcResources = rel.startsWith("src/main/resources/");
+      const inSrcJava = rel.startsWith("src/main/java/");
       const stripped = rel.replace(/^src\/main\/(java|resources)\//, "");
       const lastSlash = stripped.lastIndexOf("/");
-      // БАГ-ФИКС v1.9.6 (реальная жалоба - "если в названии папок есть
-      // точки, они тоже делятся на пакеты"): раньше тут ".replace(/\//g,
-      // '.')" превращал ПУТЬ ("lang/v1.2/ru") в "lang.v1.2.ru" - а дальше
-      // FileTree/CodeView СНОВА делили это по точке ("."), так что
-      // ЛИТЕРАЛЬНАЯ точка в имени папки "v1.2" сама превращалась в ещё
-      // один уровень вложенности ("v1" -> "2"), хотя это одна папка.
-      // Оставляем pkg настоящим путём со слэшами - разбивка ниже по стеку
-      // (buildPkgTree в FileTree.tsx, крошки в CodeView.tsx) уже визуально
-      // рисует "/" между сегментами в любом случае, так что для отображения
-      // ничего не меняется - только сама разбивка теперь корректна.
-      const pkg = lastSlash === -1 ? "" : stripped.slice(0, lastSlash);
+      let pkg = lastSlash === -1 ? "" : stripped.slice(0, lastSlash);
+      if (!pkg) {
+        if (isDecompilerArtifact) {
+          pkg = "(от декомпилятора)";
+        } else if (inSrcResources) {
+          pkg = "(корень: ресурсы)";
+        } else if (inSrcJava) {
+          pkg = "(корень: default package)";
+        } else {
+          pkg = "(корень)";
+        }
+      }
       out.push({
         id: rid("f"),
-        pkg: pkg || "(корень)",
+        pkg,
         name: item.name,
         relPath: rel,
         loc: 0,
         isBinary: !VIEWABLE_EXT.test(item.name),
+        isDecompilerArtifact,
       });
     }
   }

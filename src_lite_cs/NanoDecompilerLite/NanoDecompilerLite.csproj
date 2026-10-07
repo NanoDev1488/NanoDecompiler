@@ -6,15 +6,20 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationTitle>NanoDecompiler Lite</ApplicationTitle>
-    <Version>1.9.157</Version>
-    <AssemblyVersion>1.9.157.0</AssemblyVersion>
-    <FileVersion>1.9.157.0</FileVersion>
+    <Version>1.9.158</Version>
+    <AssemblyVersion>1.9.158.0</AssemblyVersion>
+    <FileVersion>1.9.158.0</FileVersion>
+    <ApplicationIcon>Assets\icon-lite.ico</ApplicationIcon>
     
     <!-- Self-contained and single-file optimization -->
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.1.0" />

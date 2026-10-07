@@ -229,7 +229,8 @@ namespace nd {
 // НОВОЕ v1.9.155-ReadUpd.21: ликвидация 500+с узкого места производительности декомпиляции гигантских классов/enum'ов (XMaterial.class): сквозная мемоизация CFG-терминации в is_terminating с устранением O(2^N) ветвления и копирования std::set, O(1) итерация без аллокаций в eliminate_dead_locals.
 // НОВОЕ v1.9.156: комплексное исправление производительности (ускорение декомпиляции XMaterial с 500+с до <1с), устранение 10 багов GUI/архивов (ложное определение ядер серверов в MRJAR, размер 0 Б архива, двойной префикс v, зависание после декомпиляции, форматирование кавычек в ченджлоге, подсказки тултипов и компактные кнопки).
 // НОВОЕ v1.9.157: ликвидация узких мест O(N^3) в collapse_temp_chains и inline_crossing_pass для гигантских классов (100% стабильная декомпиляция XMaterial / TCCR-crack.jar), строгое именование релизных артефактов [Name]-[OS]-[arch]-[version][ext], выпуск ультралегкого C# клиента NanoDecompilerLite с просмотрщиком Java и апдейт-чекером, полный редизайн docs/index.html.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.157";
+// НОВОЕ v1.9.158: 25 строгих синтаксических проверок сгенерированного Java-кода в verify.cpp, детекция и фильтрация релоцированного XSeries (external/com/cryptomorin/xseries) и generic external-зависимостей, автоматическая замена REPLACE_ME стабильными проверенными версиями библиотек в pom.xml, исправление подсветки YAML и XML, фильтрация нечитабельных .sql/.db в GUI, улучшенная навигация и поиск по классам в NanoDecompilerLite с новой иконкой LITE.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.158";
 }
 
 
