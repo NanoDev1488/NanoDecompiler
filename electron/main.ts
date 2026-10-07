@@ -352,11 +352,12 @@ ipcMain.handle("appIcon:thumbnails", async () => {
 
 ipcMain.handle("dialog:selectJar", async () => {
   const res = await dialog.showOpenDialog(mainWindow!, {
-    title: "Выбери .jar плагины или архивы (.zip, .tar.gz, .7z, .rar)",
+    title: "Выбери .jar, отдельные .class или архивы (.zip, .tar.gz, .7z, .rar)",
     properties: ["openFile", "multiSelections"],
     filters: [
-      { name: "Плагины и архивы (*.jar, *.zip, *.tar.gz, *.7z, *.rar)", extensions: ["jar", "zip", "tar.gz", "tgz", "tar", "7z", "7zip", "rar"] },
-      { name: "Java Плагины (*.jar)", extensions: ["jar"] },
+      { name: "Все поддерживаемые форматы (*.jar, *.class, архивы)", extensions: ["jar", "class", "zip", "tar.gz", "tgz", "tar", "7z", "7zip", "rar"] },
+      { name: "Java Плагины и классы (*.jar, *.class)", extensions: ["jar", "class"] },
+      { name: "Отдельные классы (*.class)", extensions: ["class"] },
       { name: "Архивы плагинов (*.zip, *.tar.gz, *.7z, *.rar)", extensions: ["zip", "tgz", "tar", "7z", "7zip", "rar"] },
       { name: "Все файлы (*.*)", extensions: ["*"] },
     ],
@@ -600,7 +601,7 @@ ipcMain.handle("run:decompile", async (event, jarPath: string, outDir: string) =
     return { ok: false, error: "Декомпиляция уже запущена" };
   }
   if (!fs.existsSync(jarPath)) {
-    return { ok: false, error: "Файл .jar не найден: " + jarPath };
+    return { ok: false, error: "Файл не найден: " + jarPath };
   }
   outDir = expandHome(outDir);
 

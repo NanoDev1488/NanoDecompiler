@@ -83,6 +83,9 @@ extern const char* g_crash_pass_name;
 JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::string& out_dir, bool skip_legitimacy = false,
                                          bool print_progress = true);
 
+// Прямая декомпиляция одиночного .class файла без структуры Maven/pom.xml/папок
+JarProcessResult process_single_class(const std::string& class_path, const std::string& out_dir, bool print_progress = true);
+
 // MAPPING_RU.txt - что было переименовано (пакеты/классы/методы/поля).
 void write_mapping_report(const std::string& out_dir, const Renamer& renamer);
 

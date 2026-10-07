@@ -74,7 +74,25 @@ JarSummary jar_summary(const std::string& jar_path) {
     info.name = fs::u8path(jar_path).filename().u8string();
 
     try {
-        info.size = format_size(static_cast<uint64_t>(fs::file_size(jar_path)));
+        uint64_t fsz = static_cast<uint64_t>(fs::file_size(jar_path));
+        info.size = format_size(fsz);
+        std::string lower_path = jar_path;
+        for (char& c : lower_path) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (lower_path.size() >= 6 && lower_path.substr(lower_path.size() - 6) == ".class") {
+            info.classes = 1;
+            info.packages = 1;
+            info.plugin_name = fs::u8path(jar_path).stem().u8string();
+            std::ifstream in(fs::u8path(jar_path), std::ios::binary);
+            if (in) {
+                uint8_t hdr[8];
+                in.read(reinterpret_cast<char*>(hdr), 8);
+                if (in.gcount() >= 8 && hdr[0] == 0xCA && hdr[1] == 0xFE && hdr[2] == 0xBA && hdr[3] == 0xBE) {
+                    int major = (static_cast<int>(hdr[6]) << 8) | static_cast<int>(hdr[7]);
+                    info.java = java_version_from_major(major);
+                }
+            }
+            return info;
+        }
     } catch (...) {
         // остаётся "?" - см. hpp
     }

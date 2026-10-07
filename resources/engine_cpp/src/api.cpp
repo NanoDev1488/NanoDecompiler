@@ -58,7 +58,13 @@ std::string random_hex(int n) {
 std::string decompile_silent_json(const std::string& jar_path, const std::string& out_dir, bool skip_legitimacy) {
     auto t0 = std::chrono::steady_clock::now();
     try {
-        JarProcessResult jr = process_jar_with_stats(jar_path, out_dir, skip_legitimacy, /*print_progress=*/false);
+        std::string lower_path = jar_path;
+        for (char& c : lower_path) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        bool is_single_class = (lower_path.size() >= 6 && lower_path.substr(lower_path.size() - 6) == ".class");
+
+        JarProcessResult jr = is_single_class 
+            ? process_single_class(jar_path, out_dir, /*print_progress=*/false)
+            : process_jar_with_stats(jar_path, out_dir, skip_legitimacy, /*print_progress=*/false);
         double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         return jar_process_result_to_json(jr, out_dir, elapsed);
     } catch (const std::exception& e) {

@@ -136,6 +136,30 @@ async function readEntryData(fh: fs.promises.FileHandle, entry: CentralEntry): P
 
 export async function readJarSummaryNative(jarPath: string): Promise<JarSummary> {
   const fileSize = (await fs.promises.stat(jarPath)).size;
+  if (jarPath.toLowerCase().endsWith(".class")) {
+    const fh = await fs.promises.open(jarPath, "r");
+    try {
+      const header = Buffer.alloc(8);
+      await fh.read(header, 0, 8, 0);
+      let java = "?";
+      if (header.length >= 8 && header.readUInt32BE(0) === 0xcafebabe) {
+        java = javaVersionFromMajor(header.readUInt16BE(6));
+      }
+      return {
+        name: path.basename(jarPath),
+        size: formatSize(fileSize),
+        sizeBytes: fileSize,
+        classes: 1,
+        packages: 1,
+        java,
+        plugin_name: path.basename(jarPath, ".class"),
+        plugin_author: null,
+      };
+    } finally {
+      await fh.close();
+    }
+  }
+
   const fh = await fs.promises.open(jarPath, "r");
   try {
     const { cdOffset, cdSize, total } = await findEndOfCentralDirectory(fh, fileSize);

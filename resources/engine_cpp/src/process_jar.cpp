@@ -818,6 +818,101 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     return jr;
 }
 
+JarProcessResult process_single_class(const std::string& class_path, const std::string& out_dir, bool print_progress) {
+    JarProcessResult jr;
+    jr.out_dir = out_dir;
+    ProjectStats& stats = jr.stats;
+
+    auto print_stage = [&](const char* stage) {
+        if (print_progress) {
+            std::cout << "##ND_STAGE:" << stage << "##\n";
+            std::cout.flush();
+        }
+    };
+    print_stage("validating");
+
+    std::error_code fec;
+    auto fsize = fs::file_size(class_path, fec);
+    if (fec) {
+        jr.rejected = true;
+        jr.rejected_reason = "Не удалось прочитать файл: " + fec.message();
+        return jr;
+    }
+    if (fsize < 4) {
+        jr.rejected = true;
+        jr.rejected_reason = "Файл слишком маленький (" + std::to_string(fsize) + " байт) для .class файла.";
+        return jr;
+    }
+
+    std::vector<uint8_t> data;
+    {
+        std::ifstream in(fs::u8path(class_path), std::ios::binary);
+        if (!in) {
+            jr.rejected = true;
+            jr.rejected_reason = "Не удалось открыть файл: " + class_path;
+            return jr;
+        }
+        data.assign((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    }
+
+    print_stage("parsing");
+    ClassFile cf;
+    try {
+        cf = ClassFile(data);
+    } catch (const std::exception& e) {
+        jr.rejected = true;
+        jr.rejected_reason = "Ошибка разбора .class файла: " + std::string(e.what());
+        return jr;
+    }
+
+    stats.classes_total = 1;
+    stats.classes_parsed = 1;
+
+    print_stage("decompiling");
+    Renamer renamer;
+    renamer.friendly_class(cf.this_class_name);
+    for (auto& f : cf.fields) renamer.friendly_field(cf.this_class_name, f.name, f.descriptor);
+    for (auto& m : cf.methods) renamer.friendly_method(cf.this_class_name, m.name, m.descriptor);
+
+    std::map<std::string, std::string> known_internal_by_dotted;
+    known_internal_by_dotted[dotted_from_internal(cf.this_class_name)] = cf.this_class_name;
+
+    std::map<std::string, std::vector<std::string>> enum_ordinals;
+    std::map<std::pair<std::string, std::string>, std::map<int64_t, std::string>> switchmap_tables;
+
+    g_crash_class_name = cf.this_class_name.c_str();
+    std::string text;
+    try {
+        auto pr = render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, switchmap_tables);
+        text = strip_dollar_outside_literals(pr.first);
+    } catch (const std::exception& e) {
+        text = "// ОШИБКА рендеринга класса " + cf.this_class_name + ": " + e.what() + "\n";
+    }
+
+    std::string class_stem = fs::u8path(class_path).stem().u8string();
+    // Определяем имя выходного файла
+    std::string simple_name = cf.this_class_name;
+    auto last_slash = simple_name.find_last_of('/');
+    if (last_slash != std::string::npos) simple_name = simple_name.substr(last_slash + 1);
+    if (simple_name.empty()) simple_name = class_stem;
+
+    fs::create_directories(fs::u8path(out_dir), fec);
+    std::string dest = (fs::u8path(out_dir) / (simple_name + ".java")).u8string();
+    write_text_file(dest, text);
+
+    stats.total_source_lines = 1 + std::count(text.begin(), text.end(), '\n');
+    auto issues = check_brackets(text, simple_name + ".java");
+    stats.bracket_issues.insert(stats.bracket_issues.end(), issues.begin(), issues.end());
+
+    if (print_progress) {
+        std::cout << "[====================] 100%\n";
+        std::cout << "[+] Декомпилирован класс: " << simple_name << " -> " << dest << "\n";
+        std::cout.flush();
+    }
+
+    return jr;
+}
+
 void write_mapping_report(const std::string& out_dir, const Renamer& renamer) {
     std::ostringstream f;
     f << "Отчёт деобфускации: что было переименовано\n";

@@ -150,9 +150,17 @@ void print_usage() {
 int run_decompile_console(const std::string& jar_path, const std::string& out_dir, bool skip_legitimacy) {
     std::cout << "\n" << banner_text() << "\n\n";
 
+    std::string lower_path = jar_path;
+    for (char& c : lower_path) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    bool is_single_class = (lower_path.size() >= 6 && lower_path.substr(lower_path.size() - 6) == ".class");
+
     nd::JarProcessResult jr;
     try {
-        jr = nd::process_jar_with_stats(jar_path, out_dir, skip_legitimacy);
+        if (is_single_class) {
+            jr = nd::process_single_class(jar_path, out_dir);
+        } else {
+            jr = nd::process_jar_with_stats(jar_path, out_dir, skip_legitimacy);
+        }
     } catch (const std::exception& e) {
         std::cerr << "[!] ОШИБКА: " << e.what() << "\n";
         return 1;
@@ -362,47 +370,6 @@ int run_cli(int argc, char** argv) {
         return 0;
     }
 
-      if (args[0] == "--check-update" || args[0] == "--update") {
-#ifdef _WIN32
-          std::string script =
-              "$url = 'https://api.github.com/repos/NanoDev1488/NanoDecompiler/releases/latest'\n"
-              "$json = Invoke-RestMethod -Uri $url -Headers @{'User-Agent'='NanoDecompiler-CLI'}\n"
-              "Write-Host '��������� ������:' $json.tag_name\n"
-              "if ('" + args[0] + "' -eq '--update') {\n"
-              "  $asset = $json.assets | Where-Object { $_.name -like '*ClApi-windows.exe' }\n"
-              "  if (-not $asset) { Write-Host '���� ���������� �� ������'; exit 1 }\n"
-              "  Write-Host '����������...'\n"
-              "  Invoke-WebRequest -Uri $asset.browser_download_url -OutFile 'NanoDecompilerClApi.new.exe'\n"
-              "  $exe = (Get-Process -Id $PID).Path\n"
-              "  $bat = '@echo off`nping 127.0.0.1 -n 2 > nul`ndel /f /q \"' + $exe + '\"`nmove /y NanoDecompilerClApi.new.exe \"' + $exe + '\"`necho ���������!'\n"
-              "  Set-Content nd_update.bat $bat -Encoding UTF8\n"
-              "  Start-Process -FilePath nd_update.bat -WindowStyle Hidden\n"
-              "}\n";
-          std::string ps1_path = (fs::temp_directory_path() / "nd_update.ps1").string();
-          std::ofstream(ps1_path) << script;
-          int rc = std::system(("powershell -NoProfile -ExecutionPolicy Bypass -File " + ps1_path).c_str());
-          fs::remove(ps1_path);
-          return rc;
-#else
-          std::string script =
-              "LATEST=$(curl -s https://api.github.com/repos/NanoDev1488/NanoDecompiler/releases/latest | grep '\"tag_name\":' | cut -d '\"' -f 4)\n"
-              "echo \"��������� ������: $LATEST\"\n"
-              "if [ '" + args[0] + "' = '--update' ]; then\n"
-              "  echo '����������...'\n"
-              "  TARGET=\"$0\"\n"
-              "  if [ -L \"/proc/self/exe\" ]; then TARGET=$(readlink -f /proc/self/exe); fi\n"
-              "  curl -fsSL -o \"${TARGET}.new\" \"https://github.com/NanoDev1488/NanoDecompiler/releases/latest/download/NanoDecompilerClApi-$(uname | tr 'A-Z' 'a-z')\"\n"
-              "  chmod +x \"${TARGET}.new\"\n"
-              "  mv \"${TARGET}.new\" \"$TARGET\"\n"
-              "  echo '���������!'\n"
-              "fi\n";
-          std::string sh_path = (fs::temp_directory_path() / "nd_update.sh").string();
-          std::ofstream(sh_path) << script;
-          int rc = std::system(("bash " + sh_path).c_str());
-          fs::remove(sh_path);
-          return rc;
-#endif
-      }
 
       if (args[0] == "--jar-summary") {
 

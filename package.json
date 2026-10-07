@@ -5,7 +5,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build:renderer": "vite build",
+    "build:renderer": "vite build --emptyOutDir",
     "build:electron": "node ./node_modules/typescript/bin/tsc -p electron/tsconfig.json",
     "build": "npm run build:renderer && npm run build:electron",
     "start": "npm run build && electron .",
@@ -34,7 +34,15 @@
     "productName": "NanoDecompiler",
     "publish": null,
     "files": [
-      "dist/**",
+      "dist/**/*",
+      "!dist/win-unpacked/**",
+      "!dist/linux-unpacked/**",
+      "!dist/mac/**",
+      "!dist/*.exe",
+      "!dist/*.AppImage",
+      "!dist/*.dmg",
+      "!dist/*.zip",
+      "!dist/*.blockmap",
       "dist-electron/**"
     ],
     "extraResources": [
