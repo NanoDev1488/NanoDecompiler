@@ -856,9 +856,9 @@ JarProcessResult process_single_class(const std::string& class_path, const std::
     }
 
     print_stage("parsing");
-    ClassFile cf;
+    std::unique_ptr<ClassFile> cf;
     try {
-        cf = ClassFile(data);
+        cf = std::make_unique<ClassFile>(data);
     } catch (const std::exception& e) {
         jr.rejected = true;
         jr.rejected_reason = "Ошибка разбора .class файла: " + std::string(e.what());
@@ -870,28 +870,28 @@ JarProcessResult process_single_class(const std::string& class_path, const std::
 
     print_stage("decompiling");
     Renamer renamer;
-    renamer.friendly_class(cf.this_class_name);
-    for (auto& f : cf.fields) renamer.friendly_field(cf.this_class_name, f.name, f.descriptor);
-    for (auto& m : cf.methods) renamer.friendly_method(cf.this_class_name, m.name, m.descriptor);
+    renamer.friendly_class(cf->this_class_name);
+    for (auto& f : cf->fields) renamer.friendly_field(cf->this_class_name, f.name, f.descriptor);
+    for (auto& m : cf->methods) renamer.friendly_method(cf->this_class_name, m.name, m.descriptor);
 
     std::map<std::string, std::string> known_internal_by_dotted;
-    known_internal_by_dotted[dotted_from_internal(cf.this_class_name)] = cf.this_class_name;
+    known_internal_by_dotted[dotted_from_internal(cf->this_class_name)] = cf->this_class_name;
 
     std::map<std::string, std::vector<std::string>> enum_ordinals;
     std::map<std::pair<std::string, std::string>, std::map<int64_t, std::string>> switchmap_tables;
 
-    g_crash_class_name = cf.this_class_name.c_str();
+    g_crash_class_name = cf->this_class_name.c_str();
     std::string text;
     try {
-        auto pr = render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, switchmap_tables);
+        auto pr = render_class(*cf, renamer, known_internal_by_dotted, stats, enum_ordinals, switchmap_tables);
         text = strip_dollar_outside_literals(pr.first);
     } catch (const std::exception& e) {
-        text = "// ОШИБКА рендеринга класса " + cf.this_class_name + ": " + e.what() + "\n";
+        text = "// ОШИБКА рендеринга класса " + cf->this_class_name + ": " + e.what() + "\n";
     }
 
     std::string class_stem = fs::u8path(class_path).stem().u8string();
     // Определяем имя выходного файла
-    std::string simple_name = cf.this_class_name;
+    std::string simple_name = cf->this_class_name;
     auto last_slash = simple_name.find_last_of('/');
     if (last_slash != std::string::npos) simple_name = simple_name.substr(last_slash + 1);
     if (simple_name.empty()) simple_name = class_stem;
