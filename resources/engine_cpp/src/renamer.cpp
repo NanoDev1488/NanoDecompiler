@@ -127,8 +127,13 @@ std::string Renamer::method_name(const std::string& owner_internal, const std::s
 
     std::string new_name;
     if (looks_obfuscated(name, "method")) {
-        method_ctr_ += 1;
-        new_name = "method" + std::to_string(method_ctr_);
+        auto hit = method_name_hints.find(key);
+        if (hit != method_name_hints.end()) {
+            new_name = hit->second;
+        } else {
+            method_ctr_ += 1;
+            new_name = "method" + std::to_string(method_ctr_);
+        }
     } else {
         new_name = name; std::replace(new_name.begin(), new_name.end(), '$', '_');
     }
@@ -143,8 +148,13 @@ std::string Renamer::field_name(const std::string& owner_internal, const std::st
 
     std::string new_name;
     if (looks_obfuscated(name, "field")) {
-        field_ctr_ += 1;
-        new_name = "field" + std::to_string(field_ctr_);
+        auto hit = field_name_hints.find(key);
+        if (hit != field_name_hints.end()) {
+            new_name = hit->second;
+        } else {
+            field_ctr_ += 1;
+            new_name = "field" + std::to_string(field_ctr_);
+        }
     } else {
         new_name = name; std::replace(new_name.begin(), new_name.end(), '$', '_');
     }

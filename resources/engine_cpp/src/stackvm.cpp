@@ -1135,8 +1135,10 @@ ExprPtr handle_invokedynamic(const ClassFile& cf, const Instruction& ins, Method
 // ---------------- MethodCtx ----------------
 
 MethodCtx::MethodCtx(const ClassFile& cf_, const Method& method_, const IRenamer& renamer_,
-                      const std::map<std::string, std::string>& known_internal_by_dotted, const std::string& class_internal_)
-    : cf(cf_), method(method_), renamer(renamer_), known(known_internal_by_dotted), class_internal(class_internal_) {
+                      const std::map<std::string, std::string>& known_internal_by_dotted, const std::string& class_internal_,
+                      const std::map<std::string, ClassFile>* all_classes_)
+    : cf(cf_), method(method_), renamer(renamer_), known(known_internal_by_dotted), class_internal(class_internal_),
+      all_classes(all_classes_) {
     lvt_by_slot_ = build_lvt_names();
     used_local_names_.insert("this");
     init_params();
@@ -1833,55 +1835,38 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
                     }
                 }
                 // XOR string deobfuscation
+                const Method* target_m = nullptr;
+                const ClassFile* target_cf = nullptr;
                 if (owner == ctx.class_internal) {
-                    const Method* target_m = nullptr;
-                    for (const auto& tm : ctx.cf.methods) {
+                    target_cf = &ctx.cf;
+                } else if (ctx.all_classes) {
+                    auto cit = ctx.all_classes->find(owner);
+                    if (cit != ctx.all_classes->end()) {
+                        target_cf = &cit->second;
+                    }
+                }
+                if (target_cf) {
+                    for (const auto& tm : target_cf->methods) {
                         if (tm.name == name && tm.descriptor == desc) {
                             target_m = &tm;
                             break;
                         }
                     }
-                    if (target_m && is_likely_xor_decryptor(*target_m)) {
-                        if (args.size() == 2 && args[0]->kind == ExprKind::Const && args[1]->kind == ExprKind::Const) {
-                            auto* c0 = static_cast<Const*>(args[0].get());
-                            auto* c1 = static_cast<Const*>(args[1].get());
-                            if (c0->type == "String" && c0->raw.has_value()) {
-                                if (c1->type == "int" || c1->type == "char" || c1->type == "byte" || c1->type == "short") {
-                                    try {
-                                        int32_t key_val = 0;
-                                        if (!c1->value.empty() && c1->value.front() == '\'' && c1->value.back() == '\'') {
-                                            key_val = static_cast<int32_t>(c1->value[1]);
-                                        } else {
-                                            key_val = std::stoi(c1->value, nullptr, 0);
-                                        }
-                                        auto dec = str_decrypt_xor(*c0->raw, key_val);
-                                        if (dec.has_value()) {
-                                            str_decrypt_increment_decrypted_count();
-                                            push(std::make_shared<Const>(java_string_literal(*dec), "String", *dec));
-                                            i += 1;
-                                            continue;
-                                        }
-                                    } catch (...) {}
-                                } else if (c1->type == "String" && c1->raw.has_value()) {
-                                    auto dec = str_decrypt_xor_multikey(*c0->raw, *c1->raw);
-                                    if (dec.has_value()) {
-                                        str_decrypt_increment_decrypted_count();
-                                        push(std::make_shared<Const>(java_string_literal(*dec), "String", *dec));
-                                        i += 1;
-                                        continue;
-                                    }
-                                }
-                            }
-                        } else if (args.size() == 3 && args[0]->kind == ExprKind::Const &&
-                                   args[1]->kind == ExprKind::Const && args[2]->kind == ExprKind::Const) {
-                            auto* c0 = static_cast<Const*>(args[0].get());
-                            auto* c1 = static_cast<Const*>(args[1].get());
-                            auto* c2 = static_cast<Const*>(args[2].get());
-                            if (c0->type == "String" && c0->raw.has_value()) {
+                }
+                if (target_m && is_likely_xor_decryptor(*target_m)) {
+                    if (args.size() == 2 && args[0]->kind == ExprKind::Const && args[1]->kind == ExprKind::Const) {
+                        auto* c0 = static_cast<Const*>(args[0].get());
+                        auto* c1 = static_cast<Const*>(args[1].get());
+                        if (c0->type == "String" && c0->raw.has_value()) {
+                            if (c1->type == "int" || c1->type == "char" || c1->type == "byte" || c1->type == "short") {
                                 try {
-                                    int32_t k1 = std::stoi(c1->value, nullptr, 0);
-                                    int32_t k2 = std::stoi(c2->value, nullptr, 0);
-                                    auto dec = str_decrypt_allatori(*c0->raw, k1, k2);
+                                    int32_t key_val = 0;
+                                    if (!c1->value.empty() && c1->value.front() == '\'' && c1->value.back() == '\'') {
+                                        key_val = static_cast<int32_t>(c1->value[1]);
+                                    } else {
+                                        key_val = std::stoi(c1->value, nullptr, 0);
+                                    }
+                                    auto dec = str_decrypt_xor(*c0->raw, key_val);
                                     if (dec.has_value()) {
                                         str_decrypt_increment_decrypted_count();
                                         push(std::make_shared<Const>(java_string_literal(*dec), "String", *dec));
@@ -1889,23 +1874,50 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
                                         continue;
                                     }
                                 } catch (...) {}
+                            } else if (c1->type == "String" && c1->raw.has_value()) {
+                                auto dec = str_decrypt_xor_multikey(*c0->raw, *c1->raw);
+                                if (dec.has_value()) {
+                                    str_decrypt_increment_decrypted_count();
+                                    push(std::make_shared<Const>(java_string_literal(*dec), "String", *dec));
+                                    i += 1;
+                                    continue;
+                                }
                             }
-                        } else if (args.size() == 1 && args[0]->kind == ExprKind::Const) {
-                            auto* c0 = static_cast<Const*>(args[0].get());
-                            if (c0->type == "String" && c0->raw.has_value()) {
-                                auto fixed_k = find_xor_fixed_key(*target_m, ctx.cf);
-                                if (fixed_k.has_value()) {
-                                    auto dec = str_decrypt_xor(*c0->raw, *fixed_k);
-                                    if (dec.has_value()) {
-                                        str_decrypt_increment_decrypted_count();
-                                        push(std::make_shared<Const>(java_string_literal(*dec), "String", *dec));
-                                        i += 1;
-                                        continue;
-                                    }
+                        }
+                    } else if (args.size() == 3 && args[0]->kind == ExprKind::Const &&
+                               args[1]->kind == ExprKind::Const && args[2]->kind == ExprKind::Const) {
+                        auto* c0 = static_cast<Const*>(args[0].get());
+                        auto* c1 = static_cast<Const*>(args[1].get());
+                        auto* c2 = static_cast<Const*>(args[2].get());
+                        if (c0->type == "String" && c0->raw.has_value()) {
+                            try {
+                                int32_t k1 = std::stoi(c1->value, nullptr, 0);
+                                int32_t k2 = std::stoi(c2->value, nullptr, 0);
+                                auto dec = str_decrypt_allatori(*c0->raw, k1, k2);
+                                if (dec.has_value()) {
+                                    str_decrypt_increment_decrypted_count();
+                                    push(std::make_shared<Const>(java_string_literal(*dec), "String", *dec));
+                                    i += 1;
+                                    continue;
+                                }
+                            } catch (...) {}
+                        }
+                    } else if (args.size() == 1 && args[0]->kind == ExprKind::Const) {
+                        auto* c0 = static_cast<Const*>(args[0].get());
+                        if (c0->type == "String" && c0->raw.has_value()) {
+                            auto fixed_k = find_xor_fixed_key(*target_m, *target_cf);
+                            if (fixed_k.has_value()) {
+                                auto dec = str_decrypt_xor(*c0->raw, *fixed_k);
+                                if (dec.has_value()) {
+                                    str_decrypt_increment_decrypted_count();
+                                    push(std::make_shared<Const>(java_string_literal(*dec), "String", *dec));
+                                    i += 1;
+                                    continue;
                                 }
                             }
                         }
                     }
+                }
 
                     // Synthetic accessor and bridge inlining: access$000, access$100, etc.
                     if (target_m && ((target_m->access & 0x1000) || name.rfind("access$", 0) == 0) &&

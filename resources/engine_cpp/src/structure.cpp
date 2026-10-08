@@ -1344,6 +1344,55 @@ ExprPtr simplify_expr(ExprPtr e) {
                 }
             }
 
+            // Math constant folding (min, max, abs)
+            if (mc->target == nullptr && (!mc->owner.has_value() || *mc->owner == "java/lang/Math" || *mc->owner == "Math" || *mc->owner == "java.lang.Math")) {
+                if ((mc->name == "min" || mc->name == "max") && mc->args.size() == 2 &&
+                    mc->args[0] && mc->args[0]->kind == ExprKind::Const &&
+                    mc->args[1] && mc->args[1]->kind == ExprKind::Const) {
+                    auto* c1 = static_cast<Const*>(mc->args[0].get());
+                    auto* c2 = static_cast<Const*>(mc->args[1].get());
+                    try {
+                        std::string s1 = c1->literal;
+                        std::string s2 = c2->literal;
+                        bool is_long = (!s1.empty() && (s1.back() == 'L' || s1.back() == 'l')) ||
+                                       (!s2.empty() && (s2.back() == 'L' || s2.back() == 'l')) ||
+                                       c1->type == "long" || c2->type == "long";
+                        if (!s1.empty() && (s1.back() == 'L' || s1.back() == 'l')) s1.pop_back();
+                        if (!s2.empty() && (s2.back() == 'L' || s2.back() == 'l')) s2.pop_back();
+                        long long v1 = (s1.rfind("0x", 0) == 0 || s1.rfind("0X", 0) == 0) ? std::stoll(s1, nullptr, 16) : std::stoll(s1, nullptr, 10);
+                        long long v2 = (s2.rfind("0x", 0) == 0 || s2.rfind("0X", 0) == 0) ? std::stoll(s2, nullptr, 16) : std::stoll(s2, nullptr, 10);
+                        long long res = (mc->name == "min") ? std::min(v1, v2) : std::max(v1, v2);
+                        return std::make_shared<Const>(std::to_string(res) + (is_long ? "L" : ""), is_long ? "long" : "int");
+                    } catch (...) {}
+                }
+                if (mc->name == "abs" && mc->args.size() == 1 &&
+                    mc->args[0] && mc->args[0]->kind == ExprKind::Const) {
+                    auto* c1 = static_cast<Const*>(mc->args[0].get());
+                    try {
+                        std::string s1 = c1->literal;
+                        bool is_long = (!s1.empty() && (s1.back() == 'L' || s1.back() == 'l')) || c1->type == "long";
+                        if (!s1.empty() && (s1.back() == 'L' || s1.back() == 'l')) s1.pop_back();
+                        long long v1 = (s1.rfind("0x", 0) == 0 || s1.rfind("0X", 0) == 0) ? std::stoll(s1, nullptr, 16) : std::stoll(s1, nullptr, 10);
+                        long long res = std::abs(v1);
+                        return std::make_shared<Const>(std::to_string(res) + (is_long ? "L" : ""), is_long ? "long" : "int");
+                    } catch (...) {}
+                }
+            }
+
+            // String.valueOf constant folding
+            if (mc->target == nullptr && (!mc->owner.has_value() || *mc->owner == "java/lang/String" || *mc->owner == "String" || *mc->owner == "java.lang.String")) {
+                if (mc->name == "valueOf" && mc->args.size() == 1 && mc->args[0] && mc->args[0]->kind == ExprKind::Const) {
+                    auto* c = static_cast<Const*>(mc->args[0].get());
+                    if (c->type == "char" && c->literal.size() >= 3 && c->literal.front() == '\'' && c->literal.back() == '\'') {
+                        std::string ch = c->literal.substr(1, c->literal.size() - 2);
+                        return std::make_shared<Const>("\"" + ch + "\"", "String");
+                    }
+                    if (c->type == "int" || c->type == "boolean") {
+                        return std::make_shared<Const>("\"" + c->literal + "\"", "String");
+                    }
+                }
+            }
+
             // Unboxing / boxing deobfuscation (ObfUpd 11)
             static const std::set<std::string> unbox_method_names = {
                 "booleanValue", "intValue", "longValue", "doubleValue",
@@ -1532,6 +1581,9 @@ ExprPtr simplify_expr(ExprPtr e) {
             if (c->expr && c->expr->kind == ExprKind::Cast) {
                 auto* inner_c = static_cast<Cast*>(c->expr.get());
                 if (inner_c->type == c->type) return c->expr;
+                if (c->type == "int" && (inner_c->type == "char" || inner_c->type == "byte" || inner_c->type == "short")) {
+                    return c->expr;
+                }
             }
             break;
         }

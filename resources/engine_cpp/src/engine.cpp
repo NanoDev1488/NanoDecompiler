@@ -2660,7 +2660,8 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
                                              const std::map<std::string, std::string>& known_internal_by_dotted,
                                              const std::string& class_internal, int indent,
                                              const std::map<std::string, std::vector<std::string>>& enum_ordinals,
-                                             const std::map<std::pair<std::string, std::string>, std::map<int64_t, std::string>>& switchmap_tables) {
+                                             const std::map<std::pair<std::string, std::string>, std::map<int64_t, std::string>>& switchmap_tables,
+                                             const std::map<std::string, ClassFile>* all_classes) {
     MethodDecompileResult result;
     if (!method.has_code) {
         result.ok = true;
@@ -2675,7 +2676,7 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
         CFG cfg(dm.instrs, dm.order, filtered_exceptions);
         result.n_blocks = static_cast<int>(cfg.blocks.size());
         result.junk_catches_removed = junk_removed;
-        MethodCtx ctx(cf, method, renamer, known_internal_by_dotted, class_internal);
+        MethodCtx ctx(cf, method, renamer, known_internal_by_dotted, class_internal, all_classes);
 
         std::map<int64_t, std::vector<ExprPtr>> seeds;
         for (auto& [start, blk] : cfg.blocks) {

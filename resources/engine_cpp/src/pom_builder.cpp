@@ -125,6 +125,9 @@ const std::vector<KnownLibEntry>& known_libs() {
          "Obliviate Inventory - опенсорсная GUI/инвентарь-библиотека для Bukkit-плагинов (github.com/Obliviate-Inventory) "
          "- добавлено HANDOFF_48, найдено на BukkitOfUtils-1_19_0.jar (Gui/GuiIcon/InventoryAPI и т.п., пакеты "
          "mc.obliviate.inventory И mc.obliviate.util - префикс без .inventory ловит оба)"},
+        {"net.objecthunter.exp4j", "net.objecthunter", "exp4j", "парсер математических выражений (exp4j)"},
+        {"com.google.re2j", "com.google.re2j", "re2j", "линейные регулярные выражения RE2/J"},
+        {"com.esotericsoftware.yamlbeans", "com.esotericsoftware.yamlbeans", "yamlbeans", "парсер YAML в Java-объекты"},
         {"javax.annotation", "javax.annotation", "jsr305", ""},
         {"com.mojang.brigadier", "com.mojang", "brigadier", ""},
         {"com.mojang.authlib", "com.mojang", "authlib", ""},

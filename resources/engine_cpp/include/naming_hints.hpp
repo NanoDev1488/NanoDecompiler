@@ -32,4 +32,14 @@ std::map<std::string, std::string> hints_by_annotation_name(const std::map<std::
 std::map<std::string, std::string> hints_by_brigadier_super_call(const std::map<std::string, ClassFile>& class_files,
                                                                    const LooksObfuscatedFn& looks_obfuscated_fn);
 
+struct BukkitNamingHints {
+    std::map<std::string, std::string> class_hints;
+    using MethodKey = std::tuple<std::string, std::string, std::string>;
+    std::map<MethodKey, std::string> method_hints;
+};
+
+BukkitNamingHints hints_by_bukkit_patterns(const std::map<std::string, ClassFile>& class_files,
+                                            const std::optional<std::string>& plugin_yml_text,
+                                            const LooksObfuscatedFn& looks_obfuscated_fn);
+
 }  // namespace nd

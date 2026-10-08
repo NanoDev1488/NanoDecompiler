@@ -309,7 +309,8 @@ std::optional<std::string> format_field_constant(const ClassFile& cf, const std:
 std::pair<std::string, OrderedImports> render_class(
     const ClassFile& cf, const Renamer& renamer, const std::map<std::string, std::string>& known_internal_by_dotted,
     ProjectStats& stats, const std::map<std::string, std::vector<std::string>>& enum_ordinals,
-    const std::map<std::pair<std::string, std::string>, std::map<int64_t, std::string>>& switchmap_tables) {
+    const std::map<std::pair<std::string, std::string>, std::map<int64_t, std::string>>& switchmap_tables,
+    const std::map<std::string, ClassFile>* all_classes) {
     const std::string& internal = cf.this_class_name;
     std::string new_internal = renamer.friendly_class(internal);
     auto [pkg, simple] = rpartition_slash(new_internal);
@@ -580,7 +581,7 @@ std::pair<std::string, OrderedImports> render_class(
         // тот же откат безопасно покрывают оба случая.
         if (clinit_m != nullptr && clinit_m->has_code) {
             MethodDecompileResult cres2 =
-                decompile_method_body(cf, *clinit_m, renamer, known_internal_by_dotted, internal, 2, enum_ordinals, switchmap_tables);
+                decompile_method_body(cf, *clinit_m, renamer, known_internal_by_dotted, internal, 2, enum_ordinals, switchmap_tables, all_classes);
             bool ok = cres2.ok;
             std::string own_dotted_for_match = dotted_from_internal(new_internal);
             if (ok) {
@@ -804,7 +805,7 @@ std::pair<std::string, OrderedImports> render_class(
                 }
             } else {
                 MethodDecompileResult cres2 =
-                    decompile_method_body(cf, *clinit_m, renamer, known_internal_by_dotted, internal, 2, enum_ordinals, switchmap_tables);
+                    decompile_method_body(cf, *clinit_m, renamer, known_internal_by_dotted, internal, 2, enum_ordinals, switchmap_tables, all_classes);
                 std::optional<std::vector<StmtPtr>> static_stmts;
                 if (cres2.ok) static_stmts = cres2.stmts;
                 if (static_stmts.has_value()) {
@@ -929,7 +930,7 @@ std::pair<std::string, OrderedImports> render_class(
         std::optional<MethodDecompileResult> result;
         if (m.has_code) {
             stats.total_methods += 1;
-            result = decompile_method_body(cf, m, renamer, known_internal_by_dotted, internal, 2, enum_ordinals, switchmap_tables);
+            result = decompile_method_body(cf, m, renamer, known_internal_by_dotted, internal, 2, enum_ordinals, switchmap_tables, all_classes);
             stats.junk_catches_removed += result->junk_catches_removed;
         }
 

@@ -150,13 +150,15 @@ private:
 class MethodCtx {
 public:
     MethodCtx(const ClassFile& cf, const Method& method, const IRenamer& renamer,
-              const std::map<std::string, std::string>& known_internal_by_dotted, const std::string& class_internal);
+              const std::map<std::string, std::string>& known_internal_by_dotted, const std::string& class_internal,
+              const std::map<std::string, ClassFile>* all_classes = nullptr);
 
     const ClassFile& cf;
     const Method& method;
     const IRenamer& renamer;
     const std::map<std::string, std::string>& known;  // dotted -> internal ("известные" внешние типы для импортов)
     std::string class_internal;
+    const std::map<std::string, ClassFile>* all_classes = nullptr;
     std::map<int, LocalInfo> locals;
     int temp_ctr = 0;
     std::map<std::pair<int64_t, int64_t>, std::pair<std::string, char>> stack_temp_names;  // (pc,j) -> (name, category)

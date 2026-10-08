@@ -59,10 +59,12 @@ public:
     // т.е. чисто нумерованные ClassA1/ClassA2/... для всех обфусцированных
     // имён - НЕ баг порта, а отсутствующая (пока) фича апстрима.
     std::map<std::string, std::string> class_name_hints;
+    using MethodKey = std::tuple<std::string, std::string, std::string>;  // (owner, name, desc)
+    std::map<MethodKey, std::string> method_name_hints;
+    std::map<MethodKey, std::string> field_name_hints;
 
     const std::map<std::string, std::string>& class_map() const { return class_map_; }
     const std::map<std::string, std::string>& package_map() const { return package_map_; }
-    using MethodKey = std::tuple<std::string, std::string, std::string>;  // (owner, name, desc)
     const std::map<MethodKey, std::string>& method_map() const { return method_map_; }
     const std::map<MethodKey, std::string>& field_map() const { return field_map_; }
 

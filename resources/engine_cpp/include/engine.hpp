@@ -51,7 +51,8 @@ MethodDecompileResult decompile_method_body(
     const ClassFile& cf, const Method& method, const IRenamer& renamer,
     const std::map<std::string, std::string>& known_internal_by_dotted, const std::string& class_internal,
     int indent = 2, const std::map<std::string, std::vector<std::string>>& enum_ordinals = {},
-    const std::map<std::pair<std::string, std::string>, std::map<int64_t, std::string>>& switchmap_tables = {});
+    const std::map<std::pair<std::string, std::string>, std::map<int64_t, std::string>>& switchmap_tables = {},
+    const std::map<std::string, ClassFile>* all_classes = nullptr);
 
 // Честный дизассемблированный листинг - используется, когда декомпиляция
 // метода не удалась (в самом ЭТОМ методе result.ok уже будет false и это

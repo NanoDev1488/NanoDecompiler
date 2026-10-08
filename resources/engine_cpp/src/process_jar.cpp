@@ -673,8 +673,11 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     {
         auto hints1 = hints_by_annotation_name(class_files, looks_obfuscated_wrapper);
         auto hints2 = hints_by_brigadier_super_call(class_files, looks_obfuscated_wrapper);
+        auto hints_bukkit = hints_by_bukkit_patterns(class_files, plugin_yml_text, looks_obfuscated_wrapper);
         for (auto& [k, v] : hints1) renamer.class_name_hints[k] = v;
         for (auto& [k, v] : hints2) renamer.class_name_hints[k] = v;  // .update() - позже перезаписывает раньше при коллизии ключа
+        for (auto& [k, v] : hints_bukkit.class_hints) renamer.class_name_hints[k] = v;
+        for (auto& [k, v] : hints_bukkit.method_hints) renamer.method_name_hints[k] = v;
     }
     for (auto& [internal, cf] : class_files) {
         renamer.friendly_class(internal);
@@ -724,7 +727,7 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
         std::string text;
         OrderedImports cls_imports;
         try {
-            auto pr = render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, switchmap_tables);
+            auto pr = render_class(cf, renamer, known_internal_by_dotted, stats, enum_ordinals, switchmap_tables, &class_files);
             text = pr.first;
             cls_imports = pr.second;
             // НОВОЕ v1.9.5 (прямая просьба пользователя - "чтобы абсолютно
