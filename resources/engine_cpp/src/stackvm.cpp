@@ -1919,6 +1919,7 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
                     }
                 }
 
+                if (owner == ctx.class_internal) {
                     // Synthetic accessor and bridge inlining: access$000, access$100, etc.
                     if (target_m && ((target_m->access & 0x1000) || name.rfind("access$", 0) == 0) &&
                         target_m->has_code && !target_m->code.empty()) {
