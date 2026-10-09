@@ -622,7 +622,12 @@ std::vector<StmtPtr> Structurer::region(std::optional<int64_t> pc_opt, const std
         if (!pc_opt.has_value() || !cfg_.blocks.count(*pc_opt) || stop_addrs.count(*pc_opt)) break;
         int64_t pc = *pc_opt;
         if (seen_here.count(pc)) {
-            out.push_back(std::make_shared<GotoStmt>("block_" + std::to_string(pc)));
+            StmtPtr sp = try_resolve_special_target(pc);
+            if (sp) {
+                out.push_back(sp);
+            } else {
+                out.push_back(std::make_shared<GotoStmt>("block_" + std::to_string(pc)));
+            }
             break;
         }
         seen_here.insert(pc);
@@ -729,10 +734,15 @@ Structurer::JumpKind Structurer::resolve_jump_stmt(int64_t target, const std::se
     }
     if (stop_addrs.count(target)) return JumpKind::NoStmt;
     auto tit = cfg_.blocks.find(target);
-    if (tit != cfg_.blocks.end() && tit->second.instrs.size() == 1 &&
-        (tit->second.instrs[0].mnemonic == "goto" || tit->second.instrs[0].mnemonic == "goto_w") &&
-        (!results_.count(target) || results_.at(target).stmts.empty())) {
-        return JumpKind::ContinueLinearly;
+    if (tit != cfg_.blocks.end()) {
+        if (tit->second.instrs.size() == 1 &&
+            (tit->second.instrs[0].mnemonic == "goto" || tit->second.instrs[0].mnemonic == "goto_w") &&
+            (!results_.count(target) || results_.at(target).stmts.empty())) {
+            return JumpKind::ContinueLinearly;
+        }
+        if (!all_consumed_.count(target) && !stop_addrs.count(target) && tit->second.preds.size() <= 1) {
+            return JumpKind::ContinueLinearly;
+        }
     }
     // HANDOFF: было throw DecompileAbort(...) здесь - ЛЮБОЙ нередуцируемый
     // goto откатывал ВЕСЬ метод целиком к сырому байткоду, даже если он

@@ -231,7 +231,8 @@ namespace nd {
 // НОВОЕ v1.9.157: ликвидация узких мест O(N^3) в collapse_temp_chains и inline_crossing_pass для гигантских классов (100% стабильная декомпиляция XMaterial / TCCR-crack.jar), строгое именование релизных артефактов [Name]-[OS]-[arch]-[version][ext], выпуск ультралегкого C# клиента NanoDecompilerLite с просмотрщиком Java и апдейт-чекером, полный редизайн docs/index.html.
 // НОВОЕ v1.9.158: 25 строгих синтаксических проверок сгенерированного Java-кода в verify.cpp, детекция и фильтрация релоцированного XSeries (external/com/cryptomorin/xseries) и generic external-зависимостей, автоматическая замена REPLACE_ME стабильными проверенными версиями библиотек в pom.xml, исправление подсветки YAML и XML, фильтрация нечитабельных .sql/.db в GUI, улучшенная навигация и поиск по классам в NanoDecompilerLite с новой иконкой LITE.
 // НОВОЕ v1.9.159: глубокая деобфускация Bukkit/Spigot/Paper плагинов (семантическое именование EventListener и методов @EventHandler on<Event>, детекция CommandExecutor и TabCompleter из plugin.yml, обнаружение PluginMain, PluginTask, MenuHolder), сквозное разрешение XOR-дешифраторов строк между классами, свертка Math.min/max/abs и String.valueOf, упрощение избыточных вложенных кастов, расширение фильтрации библиотек (exp4j, re2j, yamlbeans).
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.159";
+// НОВОЕ v1.9.160: исправление поиска движка в NanoDecompilerLite (поддержка Program Files, Desktop/NanoDecompiler, Downloads, wildcard-поиск версионированных имен и выбор файла через проводник при отсутствии движка), ликвидация нередуцируемых переходов (goto/CFG) через безопасное линейное продолжение и резолв специальных целевых переходов в структуризаторе C++.
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.160";
 }
 
 

@@ -74,9 +74,29 @@ public partial class MainWindow : Window
             string cliPath = FindCliExecutable();
             if (!File.Exists(cliPath))
             {
-                StatusLabel.Text = $"Ошибка: CLI движок не найден ({cliPath})";
-                OpenJarButton.IsEnabled = true;
-                return;
+                StatusLabel.Text = "CLI движок не найден автоматически. Выберите файл движка...";
+                var picked = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+                {
+                    Title = "Укажите NanoDecompilerCLI.exe / NanoDecompilerClApi.exe",
+                    AllowMultiple = false,
+                    FileTypeFilter = new List<FilePickerFileType>
+                    {
+                        new FilePickerFileType("NanoDecompiler CLI Engine") { Patterns = new[] { "NanoDecompilerCLI*.exe", "NanoDecompilerClApi*.exe", "NanoDecompilerCLI*", "*.exe" } },
+                        new FilePickerFileType("Все файлы") { Patterns = new[] { "*.*" } }
+                    }
+                });
+
+                if (picked.Count > 0 && File.Exists(picked[0].Path.LocalPath))
+                {
+                    _manualCliPath = picked[0].Path.LocalPath;
+                    cliPath = _manualCliPath;
+                }
+                else
+                {
+                    StatusLabel.Text = $"Ошибка: CLI движок не найден ({cliPath}). Установите полный клиент или поместите NanoDecompilerCLI.exe рядом.";
+                    OpenJarButton.IsEnabled = true;
+                    return;
+                }
             }
 
             var psi = new ProcessStartInfo
@@ -111,28 +131,161 @@ public partial class MainWindow : Window
         }
     }
 
+    private string? _manualCliPath;
+
     private string FindCliExecutable()
     {
-        string binName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "NanoDecompilerCLI.exe" : "NanoDecompilerCLI";
+        if (!string.IsNullOrEmpty(_manualCliPath) && File.Exists(_manualCliPath))
+            return _manualCliPath;
 
-        // 1. Рядом с исполняемым файлом
-        string appDir = AppContext.BaseDirectory;
-        string direct = Path.Combine(appDir, binName);
-        if (File.Exists(direct)) return direct;
+        string defaultBinName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "NanoDecompilerCLI.exe" : "NanoDecompilerCLI";
+        var candidateNames = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? new[] { "NanoDecompilerCLI.exe", "NanoDecompilerClApi.exe", "NanoDecompilerClApi-windows.exe" }
+            : new[] { "NanoDecompilerCLI", "NanoDecompilerClApi", "NanoDecompilerCLI-Linux-x64", "NanoDecompilerCLI-macOS-arm64", "NanoDecompilerCLI-macOS-x64" };
 
-        // 2. В подкаталоге resources/engine
-        string engineDir = Path.Combine(appDir, "resources", "engine", binName);
-        if (File.Exists(engineDir)) return engineDir;
+        var searchDirs = new List<string>();
 
-        // 3. В AppData установленного клиента (для Windows)
+        // 1. Process directory and BaseDirectory
+        try
+        {
+            if (!string.IsNullOrEmpty(Environment.ProcessPath))
+            {
+                var procDir = Path.GetDirectoryName(Environment.ProcessPath);
+                if (!string.IsNullOrEmpty(procDir)) searchDirs.Add(procDir);
+            }
+        }
+        catch { }
+        try { searchDirs.Add(AppContext.BaseDirectory); } catch { }
+        try { searchDirs.Add(Directory.GetCurrentDirectory()); } catch { }
+
+        // 2. Parent directory
+        try
+        {
+            var p1 = Directory.GetParent(AppContext.BaseDirectory)?.FullName;
+            if (!string.IsNullOrEmpty(p1)) searchDirs.Add(p1);
+        }
+        catch { }
+
+        // 3. Desktop directories (including Desktop\NanoDecompiler)
+        try
+        {
+            string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            if (!string.IsNullOrEmpty(desktop))
+            {
+                searchDirs.Add(Path.Combine(desktop, "NanoDecompiler"));
+                searchDirs.Add(desktop);
+            }
+        }
+        catch { }
+
+        // 4. Downloads directories (including Downloads\NanoDecompiler)
+        try
+        {
+            string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (!string.IsNullOrEmpty(userProfile))
+            {
+                searchDirs.Add(Path.Combine(userProfile, "Downloads", "NanoDecompiler"));
+                searchDirs.Add(Path.Combine(userProfile, "Downloads"));
+            }
+        }
+        catch { }
+
+        // 5. Windows standard Program Files & AppData
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            string installed = Path.Combine(localAppData, "Programs", "NanoDecompiler", "resources", "engine", binName);
-            if (File.Exists(installed)) return installed;
+            try
+            {
+                string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+                if (!string.IsNullOrEmpty(pf)) searchDirs.Add(Path.Combine(pf, "NanoDecompiler"));
+            }
+            catch { }
+            try
+            {
+                string pf86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+                if (!string.IsNullOrEmpty(pf86)) searchDirs.Add(Path.Combine(pf86, "NanoDecompiler"));
+            }
+            catch { }
+            try
+            {
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                if (!string.IsNullOrEmpty(localAppData)) searchDirs.Add(Path.Combine(localAppData, "Programs", "NanoDecompiler"));
+            }
+            catch { }
+        }
+        else
+        {
+            // Linux / macOS
+            searchDirs.Add("/opt/NanoDecompiler");
+            searchDirs.Add("/opt/NanoDecompiler/resources/engine");
+            searchDirs.Add("/usr/local/bin");
+            searchDirs.Add("/usr/bin");
+            searchDirs.Add("/Applications/NanoDecompiler.app/Contents/Resources");
+            searchDirs.Add("/Applications/NanoDecompiler.app/Contents/Resources/engine");
         }
 
-        return binName;
+        // Check PATH environment variable
+        try
+        {
+            var pathEnv = Environment.GetEnvironmentVariable("PATH");
+            if (!string.IsNullOrEmpty(pathEnv))
+            {
+                char sep = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ';' : ':';
+                foreach (var p in pathEnv.Split(sep, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (Directory.Exists(p)) searchDirs.Add(p);
+                }
+            }
+        }
+        catch { }
+
+        // Now search all candidate directories
+        foreach (var dir in searchDirs.Distinct())
+        {
+            if (!Directory.Exists(dir)) continue;
+
+            // Direct in dir
+            foreach (var name in candidateNames)
+            {
+                string candidate = Path.Combine(dir, name);
+                if (File.Exists(candidate)) return candidate;
+            }
+
+            // In resources/engine
+            string subEngine = Path.Combine(dir, "resources", "engine");
+            if (Directory.Exists(subEngine))
+            {
+                foreach (var name in candidateNames)
+                {
+                    string candidate = Path.Combine(subEngine, name);
+                    if (File.Exists(candidate)) return candidate;
+                }
+            }
+
+            // Wildcard search in dir for NanoDecompilerCLI*.exe / NanoDecompilerClApi*.exe
+            try
+            {
+                string pattern = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "NanoDecompilerCLI*.exe" : "NanoDecompilerCLI*";
+                string patternApi = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "NanoDecompilerClApi*.exe" : "NanoDecompilerClApi*";
+
+                var matches = Directory.GetFiles(dir, pattern, SearchOption.TopDirectoryOnly)
+                    .Concat(Directory.GetFiles(dir, patternApi, SearchOption.TopDirectoryOnly))
+                    .OrderByDescending(f => f)
+                    .ToList();
+                if (matches.Count > 0) return matches[0];
+
+                if (Directory.Exists(subEngine))
+                {
+                    var subMatches = Directory.GetFiles(subEngine, pattern, SearchOption.TopDirectoryOnly)
+                        .Concat(Directory.GetFiles(subEngine, patternApi, SearchOption.TopDirectoryOnly))
+                        .OrderByDescending(f => f)
+                        .ToList();
+                    if (subMatches.Count > 0) return subMatches[0];
+                }
+            }
+            catch { }
+        }
+
+        return defaultBinName;
     }
 
     private FileNode? _rootNode;
