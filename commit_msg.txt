@@ -1,6 +1,0 @@
-feat: release v1.9.160 - robust CLI discovery in Lite GUI and irreducible control flow reduction
-
-- fix(lite): implement exhaustive CLI path discovery in FindCliExecutable across Program Files, Desktop/NanoDecompiler, Downloads, AppData, PATH, and wildcard patterns (*.exe)
-- fix(lite): add file picker fallback dialog allowing manual selection of NanoDecompilerCLI.exe if engine is not found automatically
-- feat(structure): reduce irreducible control flow by resolving loop/breakable targets and allowing linear continuation for unconsumed single-predecessor forward targets
-- chore: bump version to 1.9.160 across package.json, version.hpp, and NanoDecompilerLite.csproj
