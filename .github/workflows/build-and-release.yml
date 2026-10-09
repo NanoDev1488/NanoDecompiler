@@ -572,7 +572,7 @@ jobs:
       - name: Сборка и публикация NanoDecompilerLite (${{ matrix.rid }})
         working-directory: src_lite_cs/NanoDecompilerLite
         run: |
-          dotnet publish -c Release -r ${{ matrix.rid }} --self-contained false -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -p:DebugSymbols=false -o out
+          dotnet publish -c Release -r ${{ matrix.rid }} --self-contained false -p:PublishSingleFile=true -p:DebugType=none -p:DebugSymbols=false -o out
           mv out/NanoDecompilerLite${{ matrix.ext }} "../../${{ matrix.out_file }}-${{ needs.resolve-version.outputs.version }}${{ matrix.ext }}"
       - name: Загрузка артефакта Lite
         uses: actions/upload-artifact@v4

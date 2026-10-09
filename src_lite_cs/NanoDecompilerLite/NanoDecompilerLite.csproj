@@ -11,10 +11,9 @@
     <FileVersion>1.9.161.0</FileVersion>
     <ApplicationIcon>Assets\icon-lite.ico</ApplicationIcon>
     
-    <!-- Self-contained, single-file and extreme size optimization -->
+    <!-- Self-contained, single-file and size optimization -->
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>

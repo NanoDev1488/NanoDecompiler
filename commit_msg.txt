@@ -1,0 +1,4 @@
+fix(ci): remove EnableCompressionInSingleFile for framework-dependent lite build
+
+EnableCompressionInSingleFile is only supported for self-contained single-file bundles in .NET SDK.
+NanoDecompilerLite is published framework-dependent (--self-contained false).
