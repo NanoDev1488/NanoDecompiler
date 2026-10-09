@@ -6,26 +6,29 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationTitle>NanoDecompiler Lite</ApplicationTitle>
-    <Version>1.9.160</Version>
-    <AssemblyVersion>1.9.160.0</AssemblyVersion>
-    <FileVersion>1.9.160.0</FileVersion>
+    <Version>1.9.161</Version>
+    <AssemblyVersion>1.9.161.0</AssemblyVersion>
+    <FileVersion>1.9.161.0</FileVersion>
     <ApplicationIcon>Assets\icon-lite.ico</ApplicationIcon>
     
-    <!-- Self-contained and single-file optimization -->
+    <!-- Self-contained, single-file and extreme size optimization -->
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+    <EmbeddedResource Include="Resources\**" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.1.0" />
     <PackageReference Include="Avalonia.Desktop" Version="11.1.0" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.1.0" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.1.0" />
     <PackageReference Include="Avalonia.AvaloniaEdit" Version="11.1.0" />
   </ItemGroup>
 

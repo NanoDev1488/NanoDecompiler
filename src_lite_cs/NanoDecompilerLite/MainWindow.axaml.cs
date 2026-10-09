@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -17,7 +19,7 @@ public partial class MainWindow : Window
 {
     private string? _currentOutDir;
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(6) };
-    private const string CurrentVersion = "1.9.158";
+    private const string CurrentVersion = "1.9.161";
 
     public MainWindow()
     {
@@ -133,10 +135,75 @@ public partial class MainWindow : Window
 
     private string? _manualCliPath;
 
+    private string ExtractEmbeddedCliIfAvailable()
+    {
+        try
+        {
+            string binName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "NanoDecompilerCLI.exe" : "NanoDecompilerCLI";
+            string targetDir = Path.Combine(Path.GetTempPath(), "NanoDecompilerLite", "embedded_engine");
+            Directory.CreateDirectory(targetDir);
+            string targetPath = Path.Combine(targetDir, binName);
+
+            var asm = Assembly.GetExecutingAssembly();
+            string[] resNames = asm.GetManifestResourceNames();
+            string? match = resNames.FirstOrDefault(n =>
+                n.EndsWith(binName, StringComparison.OrdinalIgnoreCase) ||
+                n.EndsWith("NanoDecompilerCLI.exe", StringComparison.OrdinalIgnoreCase) ||
+                n.EndsWith("NanoDecompilerCLI", StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrEmpty(match))
+            {
+                using var stream = asm.GetManifestResourceStream(match);
+                if (stream != null)
+                {
+                    bool needExtract = true;
+                    if (File.Exists(targetPath))
+                    {
+                        try
+                        {
+                            var fi = new FileInfo(targetPath);
+                            if (fi.Length == stream.Length) needExtract = false;
+                        }
+                        catch { }
+                    }
+
+                    if (needExtract)
+                    {
+                        using (var fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                        {
+                            stream.CopyTo(fs);
+                        }
+
+                        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                        {
+                            try
+                            {
+                                File.SetUnixFileMode(targetPath,
+                                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                                    UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                                    UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+                            }
+                            catch { }
+                        }
+                    }
+
+                    if (File.Exists(targetPath)) return targetPath;
+                }
+            }
+        }
+        catch { }
+        return "";
+    }
+
     private string FindCliExecutable()
     {
         if (!string.IsNullOrEmpty(_manualCliPath) && File.Exists(_manualCliPath))
             return _manualCliPath;
+
+        // 0. Прежде всего - встроенный в .exe нативный движок!
+        string embedded = ExtractEmbeddedCliIfAvailable();
+        if (!string.IsNullOrEmpty(embedded) && File.Exists(embedded))
+            return embedded;
 
         string defaultBinName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "NanoDecompilerCLI.exe" : "NanoDecompilerCLI";
         var candidateNames = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)

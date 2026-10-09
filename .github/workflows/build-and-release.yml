@@ -516,7 +516,7 @@ jobs:
           if-no-files-found: error
 
   build-lite-gui:
-    needs: [resolve-version]
+    needs: [resolve-version, build-clapi-windows, build-clapi-linux, build-clapi-macos]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -526,23 +526,45 @@ jobs:
             arch_name: x64
             ext: .exe
             out_file: NanoDecompilerLite-Windows-x64
+            clapi_artifact: clapi-artifacts-windows
+            clapi_bin: NanoDecompilerClApi.exe
+            embedded_name: NanoDecompilerCLI.exe
           - rid: linux-x64
             os_name: Linux
             arch_name: x64
             ext: ""
             out_file: NanoDecompilerLite-Linux-x64
+            clapi_artifact: clapi-artifacts-linux
+            clapi_bin: NanoDecompilerClApi
+            embedded_name: NanoDecompilerCLI
           - rid: osx-x64
             os_name: macOS
             arch_name: x64
             ext: ""
             out_file: NanoDecompilerLite-macOS-x64
+            clapi_artifact: clapi-artifacts-macos
+            clapi_bin: NanoDecompilerClApi
+            embedded_name: NanoDecompilerCLI
           - rid: osx-arm64
             os_name: macOS
             arch_name: arm64
             ext: ""
             out_file: NanoDecompilerLite-macOS-arm64
+            clapi_artifact: clapi-artifacts-macos
+            clapi_bin: NanoDecompilerClApi
+            embedded_name: NanoDecompilerCLI
     steps:
       - uses: actions/checkout@v4
+      - name: Скачать собранный нативный CLI движок
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.clapi_artifact }}
+          path: clapi_temp
+      - name: Встроить нативный движок в ресурсы NanoDecompilerLite
+        run: |
+          mkdir -p src_lite_cs/NanoDecompilerLite/Resources
+          cp clapi_temp/${{ matrix.clapi_bin }} src_lite_cs/NanoDecompilerLite/Resources/${{ matrix.embedded_name }}
+          chmod +x src_lite_cs/NanoDecompilerLite/Resources/${{ matrix.embedded_name }}
       - name: Установка .NET 8 SDK
         uses: actions/setup-dotnet@v4
         with:
@@ -550,7 +572,7 @@ jobs:
       - name: Сборка и публикация NanoDecompilerLite (${{ matrix.rid }})
         working-directory: src_lite_cs/NanoDecompilerLite
         run: |
-          dotnet publish -c Release -r ${{ matrix.rid }} --self-contained false -p:PublishSingleFile=true -o out
+          dotnet publish -c Release -r ${{ matrix.rid }} --self-contained false -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -p:DebugSymbols=false -o out
           mv out/NanoDecompilerLite${{ matrix.ext }} "../../${{ matrix.out_file }}-${{ needs.resolve-version.outputs.version }}${{ matrix.ext }}"
       - name: Загрузка артефакта Lite
         uses: actions/upload-artifact@v4

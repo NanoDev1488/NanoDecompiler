@@ -232,7 +232,8 @@ namespace nd {
 // НОВОЕ v1.9.158: 25 строгих синтаксических проверок сгенерированного Java-кода в verify.cpp, детекция и фильтрация релоцированного XSeries (external/com/cryptomorin/xseries) и generic external-зависимостей, автоматическая замена REPLACE_ME стабильными проверенными версиями библиотек в pom.xml, исправление подсветки YAML и XML, фильтрация нечитабельных .sql/.db в GUI, улучшенная навигация и поиск по классам в NanoDecompilerLite с новой иконкой LITE.
 // НОВОЕ v1.9.159: глубокая деобфускация Bukkit/Spigot/Paper плагинов (семантическое именование EventListener и методов @EventHandler on<Event>, детекция CommandExecutor и TabCompleter из plugin.yml, обнаружение PluginMain, PluginTask, MenuHolder), сквозное разрешение XOR-дешифраторов строк между классами, свертка Math.min/max/abs и String.valueOf, упрощение избыточных вложенных кастов, расширение фильтрации библиотек (exp4j, re2j, yamlbeans).
 // НОВОЕ v1.9.160: исправление поиска движка в NanoDecompilerLite (поддержка Program Files, Desktop/NanoDecompiler, Downloads, wildcard-поиск версионированных имен и выбор файла через проводник при отсутствии движка), ликвидация нередуцируемых переходов (goto/CFG) через безопасное линейное продолжение и резолв специальных целевых переходов в структуризаторе C++.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.160";
+// НОВОЕ v1.9.161: автономный NanoDecompilerLite со встроенным нативным C++ движком в бинарнике (ExtractEmbeddedCliIfAvailable), экстремальная оптимизация размера Lite (.NET SingleFile Deflate-сжатие, удаление неиспользуемых шрифтов, стрип символов DebugType=none).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.161";
 }
 
 
