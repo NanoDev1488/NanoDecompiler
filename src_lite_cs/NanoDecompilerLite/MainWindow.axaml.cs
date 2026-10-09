@@ -19,7 +19,7 @@ public partial class MainWindow : Window
 {
     private string? _currentOutDir;
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(6) };
-    private const string CurrentVersion = "1.9.161";
+    private const string CurrentVersion = "1.9.162";
 
     public MainWindow()
     {

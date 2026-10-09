@@ -1,5 +1,8 @@
+import packageJson from "../package.json";
+
 /**
  * Единый источник отображаемой версии GUI на клиенте.
- * В package.json хранится строго числовая semver-версия (X.Y.Z) для electron-builder и npm.
+ * Читается напрямую из package.json для предотвращения рассинхронизации версий.
  */
-export const GUI_VERSION = "1.9.157";
+export const GUI_VERSION: string = packageJson.version || "1.9.162";
+

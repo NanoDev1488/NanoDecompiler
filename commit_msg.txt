@@ -1,4 +1,5 @@
-fix(ci): remove EnableCompressionInSingleFile for framework-dependent lite build
+fix(version): sync GUI_VERSION dynamically with package.json and electron app.getVersion
 
-EnableCompressionInSingleFile is only supported for self-contained single-file bundles in .NET SDK.
-NanoDecompilerLite is published framework-dependent (--self-contained false).
+Previously GUI_VERSION was hardcoded to 1.9.157 in src/version.ts and electron/version.ts.
+This caused the Electron client to report 1.9.157 while the C++ engine was 1.9.161,
+triggering repeated update prompts. Bump all targets to v1.9.162 with dynamic version resolution.
