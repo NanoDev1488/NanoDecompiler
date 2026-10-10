@@ -483,7 +483,14 @@ bool looks_obfuscated(const std::optional<std::string>& name_opt, const std::str
         if (base.size() == 1) return true;
         if (base.size() == 2) {
             static const std::unordered_set<std::string> kCommonShortWords = {
-                "id", "io", "in", "to", "of", "by", "on", "as", "at", "if", "do", "go", "is", "it", "me", "my", "no", "ok", "up", "we", "ui", "os", "db"
+                // Common words & abbreviations
+                "id", "io", "in", "to", "of", "by", "on", "as", "at", "if", "do", "go", "is", "it",
+                "me", "my", "no", "ok", "up", "we", "ui", "os", "db", "ai", "gg", "so", "fm", "tv",
+                // Country-code TLDs (frequently used as Java root package names)
+                "ru", "ua", "by", "kz", "su", "eu", "us", "uk", "de", "fr", "es", "it", "nl", "pl",
+                "cz", "br", "ca", "cn", "jp", "kr", "ch", "se", "fi", "no", "at", "au",
+                // Minecraft & API versioning segments
+                "mc", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"
             };
             std::string lower2 = base;
             for (char& c : lower2) c = std::tolower(static_cast<unsigned char>(c));
@@ -499,7 +506,11 @@ bool looks_obfuscated(const std::optional<std::string>& name_opt, const std::str
                 "nms", "tcp", "udp", "log", "dao", "dto", "rpc", "tag", "pos", "loc",
                 "vec", "min", "max", "key", "val", "arg", "env", "msg", "app", "lib",
                 "net", "org", "com", "dev", "run", "set", "get", "add", "del", "put",
-                "map", "box", "raw", "opt", "ctx", "doc", "err", "out", "str", "num"
+                "map", "box", "raw", "opt", "ctx", "doc", "err", "out", "str", "num",
+                // Minecraft plugin & common domains
+                "bot", "hub", "web", "sdk", "mod", "tab", "bar", "hud", "top", "war",
+                "job", "vip", "npc", "mob", "kit", "fly", "van", "eco", "pay", "buy",
+                "pro", "all", "one", "two", "end", "sky", "bed", "box", "pvp", "pve"
             };
             if (!kCommon3LetterWords.count(lower3)) {
                 bool has_vowel = false;

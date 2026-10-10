@@ -127,9 +127,20 @@ jobs:
           resources/engine/NanoDecompilerCLI.exe test_jars/NeoBuyer.jar out_check_neobuyer --no-legitimacy-check
           if [ ! -d "out_check_neobuyer" ]; then echo "движок: out_check_neobuyer не создан"; exit 1; fi
 
+          echo "=== 5. Тестирование плагинов автора (NanoForge, GlowCases, NanoMarket, NanoCore) ==="
+          resources/engine/NanoDecompilerCLI.exe test_jars/user_plugins/NanoForge-1.6.1.jar out_user_nanoforge --no-legitimacy-check
+          if [ ! -d "out_user_nanoforge" ]; then echo "движок: out_user_nanoforge не создан"; exit 1; fi
+          resources/engine/NanoDecompilerCLI.exe test_jars/user_plugins/GlowCases-1.1.0.jar out_user_glowcases --no-legitimacy-check
+          if [ ! -d "out_user_glowcases" ]; then echo "движок: out_user_glowcases не создан"; exit 1; fi
+          resources/engine/NanoDecompilerCLI.exe test_jars/user_plugins/NanoMarket-2.0.0.jar out_user_nanomarket --no-legitimacy-check
+          if [ ! -d "out_user_nanomarket" ]; then echo "движок: out_user_nanomarket не создан"; exit 1; fi
+          resources/engine/NanoDecompilerCLI.exe test_jars/user_plugins/NanoCore.jar out_user_nanocore --no-legitimacy-check
+          if [ ! -d "out_user_nanocore" ]; then echo "движок: out_user_nanocore не создан"; exit 1; fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
 
       - name: Подготовить хэш зависимостей
         shell: bash
@@ -222,9 +233,20 @@ jobs:
           resources/engine/NanoDecompilerCLI test_jars/large_legit/BukkitOfUtils-1_19_0.jar out_check_bukkit_utils --no-legitimacy-check
           if [ ! -d "out_check_bukkit_utils" ]; then echo "движок: out_check_bukkit_utils не создан"; exit 1; fi
 
+          echo "=== 4. Тестирование плагинов автора (NanoForge, GlowCases, NanoMarket, NanoCore) ==="
+          resources/engine/NanoDecompilerCLI test_jars/user_plugins/NanoForge-1.6.1.jar out_user_nanoforge --no-legitimacy-check
+          if [ ! -d "out_user_nanoforge" ]; then echo "движок: out_user_nanoforge не создан"; exit 1; fi
+          resources/engine/NanoDecompilerCLI test_jars/user_plugins/GlowCases-1.1.0.jar out_user_glowcases --no-legitimacy-check
+          if [ ! -d "out_user_glowcases" ]; then echo "движок: out_user_glowcases не создан"; exit 1; fi
+          resources/engine/NanoDecompilerCLI test_jars/user_plugins/NanoMarket-2.0.0.jar out_user_nanomarket --no-legitimacy-check
+          if [ ! -d "out_user_nanomarket" ]; then echo "движок: out_user_nanomarket не создан"; exit 1; fi
+          resources/engine/NanoDecompilerCLI test_jars/user_plugins/NanoCore.jar out_user_nanocore --no-legitimacy-check
+          if [ ! -d "out_user_nanocore" ]; then echo "движок: out_user_nanocore не создан"; exit 1; fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
 
       - name: Подготовить хэш зависимостей
         shell: bash
@@ -384,6 +406,7 @@ jobs:
         with:
           msystem: MINGW64
           update: false
+          cache: true
           install: >-
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
@@ -569,6 +592,13 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - name: Кэш NuGet пакетов (.NET Avalonia)
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('src_lite_cs/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
       - name: Сборка и публикация NanoDecompilerLite (${{ matrix.rid }})
         working-directory: src_lite_cs/NanoDecompilerLite
         run: |

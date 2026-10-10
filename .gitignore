@@ -42,10 +42,13 @@ out_check_client_cli/
 .DS_Store
 Thumbs.db
 
-# Test JARs and scratch tests (local only, never committed)
+# Test JARs and scratch tests
 temp_test_jars/
 *.jar
 !test_jars/NeoBuyer.jar
+!test_jars/smoketest_plugin.jar
+!test_jars/large_legit/**
+!test_jars/user_plugins/**
 out_decompile_test/
 erybuyer_src/
 erybuyer_v3.zip

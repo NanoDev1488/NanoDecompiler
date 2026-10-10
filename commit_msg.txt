@@ -1,5 +1,7 @@
-fix(version): sync GUI_VERSION dynamically with package.json and electron app.getVersion
+feat: release v1.9.163 - fix package deobfuscation, CI caching and author plugins tests
 
-Previously GUI_VERSION was hardcoded to 1.9.157 in src/version.ts and electron/version.ts.
-This caused the Electron client to report 1.9.157 while the C++ engine was 1.9.161,
-triggering repeated update prompts. Bump all targets to v1.9.162 with dynamic version resolution.
+- Fix excessive pkg creation: whitelist ccTLDs (ru, ua, by, kz), Minecraft and API prefixes (mc, v1-v9); implement hierarchical package prefix mapping in Renamer to preserve package trees.
+- Add -o / --out / --output CLI argument support.
+- Add user plugins from author repos (NanoForge, GlowCases, NanoMarket, NanoCore) with automated CI verification.
+- Add end-to-end CI caching: MSYS2 packages, .NET NuGet packages, npm modules, electron-builder and ccache.
+- Bump version to 1.9.163 across engine, Electron, Lite and package.json.

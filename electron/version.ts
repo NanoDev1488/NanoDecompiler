@@ -20,7 +20,7 @@ function resolveGuiVersion(): string {
       if (pkg.version) return pkg.version;
     }
   } catch {}
-  return "1.9.162";
+  return "1.9.163";
 }
 
 export const GUI_VERSION = resolveGuiVersion();

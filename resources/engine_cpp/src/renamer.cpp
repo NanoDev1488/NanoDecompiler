@@ -101,23 +101,42 @@ std::string Renamer::friendly_class(const std::string& internal_name) const {
 }
 
 std::string Renamer::friendly_package(const std::string& pkg_internal) const {
+    if (pkg_internal.empty()) return "";
     auto it = package_map_.find(pkg_internal);
     if (it != package_map_.end()) return it->second;
 
     std::vector<std::string> parts = split_char(pkg_internal, '/');
-    std::vector<std::string> new_parts;
-    new_parts.reserve(parts.size());
-    for (auto& p : parts) {
+    std::string current_orig_prefix;
+    std::string current_friendly_prefix;
+
+    for (size_t i = 0; i < parts.size(); ++i) {
+        const std::string& p = parts[i];
+        if (!current_orig_prefix.empty()) current_orig_prefix += "/";
+        current_orig_prefix += p;
+
+        // Если для префикса этого уровня уже вычислено имя - переиспользуем его
+        auto prefix_it = package_map_.find(current_orig_prefix);
+        if (prefix_it != package_map_.end()) {
+            current_friendly_prefix = prefix_it->second;
+            continue;
+        }
+
+        std::string friendly_segment;
         if (looks_obfuscated(p, "package")) {
             pkg_ctr_ += 1;
-            new_parts.push_back("pkg" + std::to_string(pkg_ctr_));
+            friendly_segment = "pkg" + std::to_string(pkg_ctr_);
         } else {
-            new_parts.push_back(p);
+            friendly_segment = p;
         }
+
+        if (!current_friendly_prefix.empty()) current_friendly_prefix += "/";
+        current_friendly_prefix += friendly_segment;
+
+        package_map_[current_orig_prefix] = current_friendly_prefix;
     }
-    std::string new_pkg = join_char(new_parts, '/');
-    package_map_[pkg_internal] = new_pkg;
-    return new_pkg;
+
+    package_map_[pkg_internal] = current_friendly_prefix;
+    return current_friendly_prefix;
 }
 
 std::string Renamer::method_name(const std::string& owner_internal, const std::string& name, const std::string& desc) const {

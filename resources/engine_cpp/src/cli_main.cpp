@@ -431,17 +431,19 @@ int run_cli(int argc, char** argv) {
     std::string jar_path = args[0];
     bool skip_legitimacy = false;
     bool json_output = false;
-    std::vector<std::string> positional_rest;
+    std::string explicit_out_dir;
     for (size_t i = 1; i < args.size(); ++i) {
         if (args[i] == "--no-legitimacy-check") {
             skip_legitimacy = true;
         } else if (args[i] == "--json-output" || args[i] == "--api") {
             json_output = true;
+        } else if ((args[i] == "-o" || args[i] == "--out" || args[i] == "--output") && i + 1 < args.size()) {
+            explicit_out_dir = args[++i];
         } else {
             positional_rest.push_back(args[i]);
         }
     }
-    std::string out_dir = !positional_rest.empty() ? positional_rest[0] : (fs::u8path(jar_path).stem().u8string() + "_decompiled");
+    std::string out_dir = !explicit_out_dir.empty() ? explicit_out_dir : (!positional_rest.empty() ? positional_rest[0] : (fs::u8path(jar_path).stem().u8string() + "_decompiled"));
 
     // БАГ-ФИКС v1.7.6 (реальная жалоба пользователя - "не может декомпить
     // плагин на диске С, будто нет прав, но через Загрузки всё ок"):
