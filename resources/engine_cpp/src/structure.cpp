@@ -3411,24 +3411,35 @@ std::vector<StmtPtr> desugar_enhanced_for_loops(std::vector<StmtPtr> stmts) {
                 if (!idx_name.empty()) {
                     if (f->body[0] && f->body[0]->kind == StmtKind::LocalDecl) {
                         auto* ld = static_cast<LocalDecl*>(f->body[0].get());
+                        ExprPtr source_container = nullptr;
                         if (ld->init && ld->init->kind == ExprKind::ArrayAccess) {
                             auto* aa = static_cast<ArrayAccess*>(ld->init.get());
                             if (aa->index && aa->index->kind == ExprKind::Local &&
                                 static_cast<Local*>(aa->index.get())->name == idx_name) {
-                                bool idx_used_again = false;
-                                for (size_t b_idx = 1; b_idx < f->body.size(); ++b_idx) {
-                                    if (contains_local_ref_stmt(f->body[b_idx], idx_name)) {
-                                        idx_used_again = true;
-                                        break;
-                                    }
+                                source_container = aa->array;
+                            }
+                        } else if (ld->init && ld->init->kind == ExprKind::MethodCall) {
+                            auto* mc = static_cast<MethodCall*>(ld->init.get());
+                            if (mc->name == "get" && mc->args.size() == 1 && mc->args[0] &&
+                                mc->args[0]->kind == ExprKind::Local &&
+                                static_cast<Local*>(mc->args[0].get())->name == idx_name && mc->target) {
+                                source_container = mc->target;
+                            }
+                        }
+                        if (source_container) {
+                            bool idx_used_again = false;
+                            for (size_t b_idx = 1; b_idx < f->body.size(); ++b_idx) {
+                                if (contains_local_ref_stmt(f->body[b_idx], idx_name)) {
+                                    idx_used_again = true;
+                                    break;
                                 }
-                                if (!idx_used_again && aa->array) {
-                                    std::string arr_str = emit_expr(aa->array);
-                                    f->init = std::make_shared<Raw>(ld->type + " " + ld->name + " : " + arr_str);
-                                    f->cond = nullptr;
-                                    f->update = nullptr;
-                                    f->body.erase(f->body.begin());
-                                }
+                            }
+                            if (!idx_used_again) {
+                                std::string cont_str = emit_expr(source_container);
+                                f->init = std::make_shared<Raw>(ld->type + " " + ld->name + " : " + cont_str);
+                                f->cond = nullptr;
+                                f->update = nullptr;
+                                f->body.erase(f->body.begin());
                             }
                         }
                     }
@@ -3784,6 +3795,65 @@ std::vector<StmtPtr> fold_compound_assignments(std::vector<StmtPtr> stmts) {
     return stmts;
 }
 
+std::vector<StmtPtr> desugar_instanceof_pattern_matching(std::vector<StmtPtr> stmts) {
+    for (auto& s : stmts) {
+        if (!s) continue;
+        if (s->kind == StmtKind::IfStmt) {
+            auto* i = static_cast<IfStmt*>(s.get());
+            if (i->cond && i->cond->kind == ExprKind::InstanceOf && !i->then_body.empty()) {
+                auto* io = static_cast<InstanceOf*>(i->cond.get());
+                StmtPtr first = i->then_body[0];
+                std::optional<std::string> pat_name;
+                if (first->kind == StmtKind::LocalDecl) {
+                    auto* ld = static_cast<LocalDecl*>(first.get());
+                    if (ld->init && ld->init->kind == ExprKind::Cast) {
+                        auto* c = static_cast<Cast*>(ld->init.get());
+                        if (is_same_expr(c->expr, io->expr)) {
+                            pat_name = ld->name;
+                        }
+                    }
+                } else if (first->kind == StmtKind::ExprStmt) {
+                    auto* es = static_cast<ExprStmtNode*>(first.get());
+                    if (es->expr && es->expr->kind == ExprKind::Assign) {
+                        auto* a = static_cast<Assign*>(es->expr.get());
+                        if (a->op == "=" && a->target && a->target->kind == ExprKind::Local &&
+                            a->value && a->value->kind == ExprKind::Cast) {
+                            auto* c = static_cast<Cast*>(a->value.get());
+                            if (is_same_expr(c->expr, io->expr)) {
+                                pat_name = static_cast<Local*>(a->target.get())->name;
+                            }
+                        }
+                    }
+                }
+                if (pat_name.has_value() && !pat_name->empty()) {
+                    io->pattern_var = pat_name;
+                    i->then_body.erase(i->then_body.begin());
+                }
+            }
+            i->then_body = desugar_instanceof_pattern_matching(i->then_body);
+            if (i->else_body) i->else_body = desugar_instanceof_pattern_matching(*i->else_body);
+        } else if (s->kind == StmtKind::WhileStmt) {
+            auto* w = static_cast<WhileStmt*>(s.get());
+            w->body = desugar_instanceof_pattern_matching(w->body);
+        } else if (s->kind == StmtKind::DoWhileStmt) {
+            auto* dw = static_cast<DoWhileStmt*>(s.get());
+            dw->body = desugar_instanceof_pattern_matching(dw->body);
+        } else if (s->kind == StmtKind::ForStmt) {
+            auto* f = static_cast<ForStmt*>(s.get());
+            f->body = desugar_instanceof_pattern_matching(f->body);
+        } else if (s->kind == StmtKind::BlockStmt) {
+            auto* b = static_cast<BlockStmt*>(s.get());
+            b->stmts = desugar_instanceof_pattern_matching(b->stmts);
+        } else if (s->kind == StmtKind::TryStmt) {
+            auto* t = static_cast<TryStmt*>(s.get());
+            t->body = desugar_instanceof_pattern_matching(t->body);
+            for (auto& c : t->catches) c.body = desugar_instanceof_pattern_matching(c.body);
+            if (t->finally_body) t->finally_body = desugar_instanceof_pattern_matching(*t->finally_body);
+        }
+    }
+    return stmts;
+}
+
 std::vector<StmtPtr> desugar_objects_require_non_null(std::vector<StmtPtr> stmts) {
     std::vector<StmtPtr> out;
     for (auto& s : stmts) {
@@ -3899,13 +3969,15 @@ std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
         out = prune_empty_blocks_pass(out);
         nd::g_crash_pass_name = "prune_dead_code_pass";
         out = prune_dead_code_pass(out);
-        nd::g_crash_pass_name = "clean_synthetic_null_checks";
-        out = clean_synthetic_null_checks(out);
-        nd::g_crash_pass_name = "desugar_objects_require_non_null";
-        out = desugar_objects_require_non_null(out);
-        nd::g_crash_pass_name = "fold_compound_assignments";
-        out = fold_compound_assignments(out);
     }
+    nd::g_crash_pass_name = "clean_synthetic_null_checks";
+    out = clean_synthetic_null_checks(out);
+    nd::g_crash_pass_name = "desugar_objects_require_non_null";
+    out = desugar_objects_require_non_null(out);
+    nd::g_crash_pass_name = "fold_compound_assignments";
+    out = fold_compound_assignments(out);
+    nd::g_crash_pass_name = "desugar_instanceof_pattern_matching";
+    out = desugar_instanceof_pattern_matching(out);
     nd::g_crash_pass_name = "smart_rename_locals";
     out = smart_rename_locals(out);
     nd::g_crash_pass_name = "simplify_stmts_done";

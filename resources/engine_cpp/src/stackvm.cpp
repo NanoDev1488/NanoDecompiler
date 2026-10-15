@@ -1395,7 +1395,7 @@ BlockResult simulate_block(const Block& block, const std::vector<ExprPtr>& entry
     auto push = [&](ExprPtr v) { stack.push_back(std::move(v)); };
     auto pop = [&]() -> ExprPtr {
         if (stack.empty()) {
-            if (underflow_missing && underflow_missing->size() < 32) {
+            if (underflow_missing && underflow_missing->size() < 8) {
                 auto ph = std::make_shared<Local>("__entry" + std::to_string(underflow_missing->size()) + "__", "Object");
                 underflow_missing->push_back(ph);
                 return ph;

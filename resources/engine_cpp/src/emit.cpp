@@ -143,7 +143,11 @@ std::string emit_expr(const ExprPtr& e) {
         }
         case ExprKind::InstanceOf: {
             const auto* io = static_cast<const InstanceOf*>(e.get());
-            return paren(io->expr, io) + " instanceof " + simple(io->check_type);
+            std::string res = paren(io->expr, io) + " instanceof " + simple(io->check_type);
+            if (io->pattern_var.has_value() && !io->pattern_var->empty()) {
+                res += " " + *io->pattern_var;
+            }
+            return res;
         }
         case ExprKind::BinOp: {
             const auto* b = static_cast<const BinOp*>(e.get());

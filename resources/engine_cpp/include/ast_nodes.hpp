@@ -161,7 +161,9 @@ class InstanceOf : public Expr {
 public:
     ExprPtr expr;
     std::string check_type;
-    InstanceOf(ExprPtr expr_, std::string type_) : Expr(ExprKind::InstanceOf), expr(std::move(expr_)), check_type(std::move(type_)) {
+    std::optional<std::string> pattern_var;
+    InstanceOf(ExprPtr expr_, std::string type_, std::optional<std::string> pattern_var_ = std::nullopt)
+        : Expr(ExprKind::InstanceOf), expr(std::move(expr_)), check_type(std::move(type_)), pattern_var(std::move(pattern_var_)) {
         type = "boolean";
     }
     int prec() const override { return 70; }

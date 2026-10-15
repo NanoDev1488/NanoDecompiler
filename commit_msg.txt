@@ -1,1 +1,7 @@
-fix(engine): use mc->name instead of mc->method_name in structure.cpp
+perf(engine): optimize pass scheduling and add instanceof pattern matching + collection foreach desugaring
+
+- Fix stack underflow loop divergence by preserving underflow_missing bound (<8)
+- Move readability passes (null checks, compound assigns, requireNonNull, pattern matching)
+  outside 4-iteration simplify_stmts loop to run once per method (huge speedup)
+- Add Java 16+ pattern matching for instanceof (if (x instanceof Type t))
+- Add enhanced for-loop desugaring for collections (for (T x : list.get(i)))
