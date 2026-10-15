@@ -1005,7 +1005,7 @@ std::pair<StmtPtr, std::optional<int64_t>> Structurer::build_switch(int64_t pc, 
             auto* fa = static_cast<FieldAccess*>(aa->array.get());
             if (fa->name.find("$SwitchMap$") != std::string::npos && aa->index && aa->index->kind == ExprKind::MethodCall) {
                 auto* mc = static_cast<MethodCall*>(aa->index.get());
-                if (mc->method_name == "ordinal" && mc->target) {
+                if (mc->name == "ordinal" && mc->target) {
                     selector = mc->target;
                 }
             }
@@ -3708,7 +3708,7 @@ std::vector<StmtPtr> clean_synthetic_null_checks(std::vector<StmtPtr> stmts) {
             if (es->expr && es->expr->kind == ExprKind::MethodCall) {
                 auto* mc = static_cast<MethodCall*>(es->expr.get());
                 // x.getClass() as standalone statement is javac's synthetic null check
-                if (mc->method_name == "getClass" && mc->args.empty() && mc->target &&
+                if (mc->name == "getClass" && mc->args.empty() && mc->target &&
                     (mc->target->kind == ExprKind::Local || mc->target->kind == ExprKind::FieldAccess)) {
                     continue; // drop redundant synthetic null-check line
                 }

@@ -1,13 +1,1 @@
-fix(engine): resolve stack underflows and introduce 10 major readability passes (v1.9.164)
-
-- Eliminate 100% ItemsAdder fallback aborts by safely generating synthetic
-  typed locals on stack underflow in irreducible bytecode
-- Add 10 major code readability improvements (ReadUpd 22-31):
-  * Spigot/Bukkit local names dictionary extension (ItemMeta, Config, NamespacedKey, etc.)
-  * Clean synthetic null-check calls (x.getClass())
-  * Desugar Objects.requireNonNull(x) pattern
-  * Fold compound assignments (+=, -=, *=, /=, %=, &=, |=, ^=, <<=, >>=, >>>=)
-  * Desugar $SwitchMap$ enum dispatch arrays into clean switch(enumValue)
-  * Strip redundant java.lang. prefixes from classes in method signatures and bodies
-- Bump version to 1.9.164 across package.json, version.hpp, and NanoDecompilerLite.csproj
-- Add PROJECT_STATE.md and BUILD_LOG.md
+fix(engine): use mc->name instead of mc->method_name in structure.cpp
