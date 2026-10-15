@@ -83,7 +83,11 @@ std::string emit_expr(const ExprPtr& e) {
             const auto* f = static_cast<const FieldAccess*>(e.get());
             if (f->is_static) {
                 if (f->owner.has_value() && f->owner == g_current_class_dotted) return f->name;
-                return simple(f->owner.value_or("")) + "." + f->name;
+                std::string owner_str = f->owner.value_or("");
+                if (owner_str.rfind("java.lang.", 0) == 0 && owner_str.find('.', 10) == std::string::npos) {
+                    owner_str = owner_str.substr(10);
+                }
+                return simple(owner_str) + "." + f->name;
             }
             if (f->target && f->target->kind == ExprKind::This && !g_shadowed_names.count(f->name)) {
                 return f->name;
@@ -102,7 +106,11 @@ std::string emit_expr(const ExprPtr& e) {
             if (m->is_ctor) return m->name + "(" + args + ")";
             if (m->is_static) {
                 if (m->owner.has_value() && m->owner == g_current_class_dotted) return m->name + "(" + args + ")";
-                return simple(m->owner.value_or("")) + "." + m->name + "(" + args + ")";
+                std::string owner_str = m->owner.value_or("");
+                if (owner_str.rfind("java.lang.", 0) == 0 && owner_str.find('.', 10) == std::string::npos) {
+                    owner_str = owner_str.substr(10);
+                }
+                return simple(owner_str) + "." + m->name + "(" + args + ")";
             }
             if (m->is_super) return "super." + m->name + "(" + args + ")";
             if (m->target && m->target->kind == ExprKind::This) return m->name + "(" + args + ")";

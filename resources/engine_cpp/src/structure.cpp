@@ -3,6 +3,7 @@
 #include "structure.hpp"
 #include "emit.hpp"
 #include "process_jar.hpp"
+#include "javatypes.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -3436,7 +3437,7 @@ std::vector<StmtPtr> desugar_enhanced_for_loops(std::vector<StmtPtr> stmts) {
                             }
                             if (!idx_used_again) {
                                 std::string cont_str = emit_expr(source_container);
-                                f->init = std::make_shared<Raw>(ld->type + " " + ld->name + " : " + cont_str);
+                                f->init = std::make_shared<Raw>(mark_type(ld->type) + " " + ld->name + " : " + cont_str);
                                 f->cond = nullptr;
                                 f->update = nullptr;
                                 f->body.erase(f->body.begin());

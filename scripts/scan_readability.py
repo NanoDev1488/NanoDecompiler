@@ -149,16 +149,14 @@ def get_bytecode_for_class(jar_path, class_rel_path):
     """Извлекает .class файл из JAR и запускает javap -c -p для сравнения."""
     try:
         with zipfile.ZipFile(jar_path, 'r') as z:
-            # Находим путь .class внутри jar
-            target_class = class_rel_path.replace(".java", ".class")
-            # Пробуем варианты путей
+            base_name = os.path.basename(class_rel_path).replace(".java", ".class")
             match = None
             for name in z.namelist():
-                if name.endswith(target_class) or name == target_class:
+                if os.path.basename(name) == base_name:
                     match = name
                     break
             if not match:
-                return f"Class {target_class} not found in {jar_path}"
+                return f"Class {base_name} not found in {jar_path}"
 
             data = z.read(match)
             tmp_class = "tmp_inspect.class"
