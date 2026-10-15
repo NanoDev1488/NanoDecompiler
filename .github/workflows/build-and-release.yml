@@ -758,3 +758,4 @@ jobs:
           name: "NanoDecompiler ${{ env.RELEASE_TAG }}"
           files: release-files/*
           body_path: release_notes.md
+          prerelease: ${{ contains(env.RELEASE_TAG, 'alpha') || contains(env.RELEASE_TAG, 'beta') }}
