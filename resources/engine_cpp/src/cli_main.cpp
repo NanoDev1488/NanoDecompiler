@@ -432,6 +432,7 @@ int run_cli(int argc, char** argv) {
     bool skip_legitimacy = false;
     bool json_output = false;
     std::string explicit_out_dir;
+    std::vector<std::string> positional_rest;
     for (size_t i = 1; i < args.size(); ++i) {
         if (args[i] == "--no-legitimacy-check") {
             skip_legitimacy = true;
