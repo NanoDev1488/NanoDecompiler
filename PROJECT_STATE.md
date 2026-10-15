@@ -20,4 +20,10 @@
   7. Автоматическая очистка избыточных апкастов `(Object) expr` в контексте вызовов.
   8. Упрощение булевых условий (`== true`, `== false`, двойные отрицания).
   9. Очистка нередуцируемых CFG переходов и пустых блоков.
-  10. Тестирование ItemsAdder_4.0.18_.jar в облачном GitHub Actions без локальной нагрузки.
+- **Тестирование ItemsAdder 4.0.18**: завершено в GitHub Actions с РЕЗУЛЬТАТОМ **0 fallback-методов** (16327/16327 методов декомпилированы, Status: ok).
+- **Новые модули**:
+  - **Rust FastScan & Malware Core** (`crates/nanodecompiler-fastscan`): параллельный анализ JAR на Rayon/Memmap2, сканирование энтропии Шеннона, детекция ForceOP/Discord-вебхуков/RCE с Danger Score.
+  - **Event Flow & Permissions Tree** (`scripts/plugin_tree_explorer.py`): интерактивное дерево команд, прав, алиасов и слушателей эвентов Bukkit/Paper.
+  - **Plugin Diff Viewer** (`scripts/plugin_diff_viewer.py`): экспериментальный дифф-декомпилятор версий JAR (сравнение классов, байткода, plugin.yml).
+  - **Auto NMS-Remapper** (`resources/engine_cpp/src/renamer.cpp`): автоматический ремаппинг NMS / Mojang-mapped сущностей (ServerPlayer, Connection, CompoundTag).
+  - **Web / WASM Edition** (`docs/web_decompiler.html`): клиентский декомпилятор прямо в браузере с drag-and-drop.

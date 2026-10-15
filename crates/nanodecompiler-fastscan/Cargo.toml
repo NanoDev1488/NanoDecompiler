@@ -1,0 +1,20 @@
+[package]
+name = "nanodecompiler-fastscan"
+version = "1.9.164"
+edition = "2021"
+authors = ["NanoDev <nonames>"]
+description = "High-performance parallel JAR indexer, entropy analyzer and malware scanner for NanoDecompiler"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
+memmap2 = "0.9"
+rayon = "1.10"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[[bin]]
+name = "nanofastscan"
+path = "src/main.rs"

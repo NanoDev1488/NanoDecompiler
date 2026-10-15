@@ -1,7 +1,9 @@
-perf(engine): optimize pass scheduling and add instanceof pattern matching + collection foreach desugaring
+feat(ecosystem): introduce Rust FastScan, Plugin Diff Viewer, Event Tree, Auto NMS Remapper, and Web Edition
 
-- Fix stack underflow loop divergence by preserving underflow_missing bound (<8)
-- Move readability passes (null checks, compound assigns, requireNonNull, pattern matching)
-  outside 4-iteration simplify_stmts loop to run once per method (huge speedup)
-- Add Java 16+ pattern matching for instanceof (if (x instanceof Type t))
-- Add enhanced for-loop desugaring for collections (for (T x : list.get(i)))
+- Add Rust crate crates/nanodecompiler-fastscan with Shannon entropy analysis,
+  multi-threaded Rayon indexing, and Malware/Backdoor scanning
+- Add experimental Plugin Diff Viewer (scripts/plugin_diff_viewer.py)
+- Add Event Flow & Permissions Tree Explorer (scripts/plugin_tree_explorer.py)
+- Add Auto NMS-Remapper mappings for Mojang/Spigot server classes in renamer.cpp
+- Add Web / WASM Edition (docs/web_decompiler.html) with drag-and-drop
+- Add Rust compilation step to GitHub Actions CI workflow

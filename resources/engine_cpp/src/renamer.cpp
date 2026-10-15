@@ -57,6 +57,21 @@ std::string Renamer::friendly_class(const std::string& internal_name) const {
     auto it = class_map_.find(internal_name);
     if (it != class_map_.end()) return it->second;
 
+    static const std::map<std::string, std::string> kNmsKnownClasses = {
+        {"net/minecraft/server/EntityPlayer", "net/minecraft/server/ServerPlayer"},
+        {"net/minecraft/server/PlayerConnection", "net/minecraft/server/ServerGamePacketListenerImpl"},
+        {"net/minecraft/server/WorldServer", "net/minecraft/server/ServerLevel"},
+        {"net/minecraft/server/NBTTagCompound", "net/minecraft/nbt/CompoundTag"},
+        {"net/minecraft/server/NBTTagList", "net/minecraft/nbt/ListTag"},
+        {"net/minecraft/server/NetworkManager", "net/minecraft/network/Connection"},
+        {"net/minecraft/server/IChatBaseComponent", "net/minecraft/network/chat/Component"}
+    };
+    auto nms_it = kNmsKnownClasses.find(internal_name);
+    if (nms_it != kNmsKnownClasses.end()) {
+        class_map_[internal_name] = nms_it->second;
+        return nms_it->second;
+    }
+
     auto [pkg, simple] = rpartition_slash(internal_name);
     std::string new_pkg = !pkg.empty() ? friendly_package(pkg) : "";
 

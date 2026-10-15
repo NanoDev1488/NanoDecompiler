@@ -31,6 +31,10 @@ jobs:
           ninja -C build -j $(nproc)
           cp build/NanoDecompilerCLI ../../NanoDecompilerCLI
 
+      - name: Собрать Rust модуль (FastScan & Malware Scanner)
+        working-directory: crates/nanodecompiler-fastscan
+        run: cargo build --release
+
       - name: Скачать ItemsAdder с Google Drive
         run: |
           mkdir -p test_jars
