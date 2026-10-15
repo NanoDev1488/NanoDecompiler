@@ -19,6 +19,7 @@ import { registerUpdateHandlers } from "./updater";
 import { readJarSummaryNative } from "./jarSummary";
 import { GUI_VERSION } from "./version";
 import { extractArchiveAndScanPlugins, isSupportedArchive, ArchiveProgressEvent } from "./archiveExtractor";
+import { getPluginTree, compareJars, exportToGitHub } from "./pluginTools";
 
 // БАГ-ФИКС (реальный, воспроизведён пользователем на AntiX Linux -
 // "Read-only file system"): DEFAULT_SETTINGS.outputDir = "~/NanoDecompiler/out"
@@ -1368,3 +1369,19 @@ ipcMain.handle("tools:install", async (_event, only?: "jdk" | "java" | "maven") 
     });
   });
 });
+
+// НОВОЕ v2.0.0-alpha: Event & Permissions Tree
+ipcMain.handle("plugin:tree", async (_e, jarPath: string) => {
+  return await getPluginTree(jarPath);
+});
+
+// НОВОЕ v2.0.0-alpha: Plugin Diff Viewer
+ipcMain.handle("plugin:compare", async (_e, jarA: string, jarB: string) => {
+  return await compareJars(jarA, jarB);
+});
+
+// НОВОЕ v2.0.0-alpha: GitHub Exporter с PAT токеном
+ipcMain.handle("github:export", async (_e, options: any) => {
+  return await exportToGitHub(options);
+});
+

@@ -6,9 +6,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationTitle>NanoDecompiler Lite</ApplicationTitle>
-    <Version>1.9.164</Version>
-    <AssemblyVersion>1.9.164.0</AssemblyVersion>
-    <FileVersion>1.9.164.0</FileVersion>
+    <Version>2.0.0-alpha</Version>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <FileVersion>2.0.0.0</FileVersion>
     <ApplicationIcon>Assets\icon-lite.ico</ApplicationIcon>
     
     <!-- Self-contained, single-file and size optimization -->

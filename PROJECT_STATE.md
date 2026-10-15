@@ -1,7 +1,7 @@
 # NanoDecompiler - Состояние проекта
 
-- **Версия**: 1.9.164
-- **Стек**: C++20 нативный движок (`resources/engine_cpp`), Electron + React/Vite фронтенд, Avalonia .NET 8 (`NanoDecompilerLite`).
+- **Версия**: 2.0.0-alpha
+- **Стек**: C++20 нативный движок (`resources/engine_cpp`), Rust FastScan Core (`crates/nanodecompiler-fastscan`), Electron + React/Vite фронтенд, Avalonia .NET 8 (`NanoDecompilerLite`).
 - **Окружение**: Windows 10, слабый процессор, 4 ГБ ОЗУ.
 - **Главные правила**:
   - ТОЛЬКО `cmd.exe /c`, PowerShell КАТЕГОРИЧЕСКИ ЗАПРЕЩЁН.

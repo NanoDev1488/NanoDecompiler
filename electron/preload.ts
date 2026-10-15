@@ -193,4 +193,10 @@ contextBridge.exposeInMainWorld("nano", {
     ipcRenderer.on("archive:progress", handler);
     return () => ipcRenderer.removeListener("archive:progress", handler);
   },
+  // НОВОЕ v2.0.0-alpha: Event & Permissions Tree
+  getPluginTree: (jarPath: string): Promise<any> => ipcRenderer.invoke("plugin:tree", jarPath),
+  // НОВОЕ v2.0.0-alpha: Plugin Diff Viewer
+  compareJars: (jarA: string, jarB: string): Promise<any> => ipcRenderer.invoke("plugin:compare", jarA, jarB),
+  // НОВОЕ v2.0.0-alpha: GitHub Exporter с PAT токеном
+  exportToGitHub: (options: any): Promise<any> => ipcRenderer.invoke("github:export", options),
 });

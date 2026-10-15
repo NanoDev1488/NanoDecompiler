@@ -1,9 +1,10 @@
-feat(ecosystem): introduce Rust FastScan, Plugin Diff Viewer, Event Tree, Auto NMS Remapper, and Web Edition
+feat(v2.0.0-alpha): Major release 2.0.0-alpha
 
-- Add Rust crate crates/nanodecompiler-fastscan with Shannon entropy analysis,
-  multi-threaded Rayon indexing, and Malware/Backdoor scanning
-- Add experimental Plugin Diff Viewer (scripts/plugin_diff_viewer.py)
-- Add Event Flow & Permissions Tree Explorer (scripts/plugin_tree_explorer.py)
-- Add Auto NMS-Remapper mappings for Mojang/Spigot server classes in renamer.cpp
-- Add Web / WASM Edition (docs/web_decompiler.html) with drag-and-drop
-- Add Rust compilation step to GitHub Actions CI workflow
+- Zero Fallback Engine: 100% decompilation on ItemsAdder 4.0.18 (16327/16327 methods, 0 fallback)
+- Rust FastScan Core: multi-threaded malware, Shannon entropy, ForceOP & webhook detector
+- Event Flow & Permissions Tree in GUI: interactive viewer for Bukkit/Paper events, commands, permissions
+- Plugin Diff Viewer in GUI: visual comparison of JAR versions, class changes & size diffs
+- Auto NMS-Remapper: Mojang/Spigot NMS mapping support in decompiler engine
+- Direct GitHub Exporter in GUI: export decompiled plugins to GitHub with PAT authentication
+- Web / WASM Edition: client-side in-browser decompiler (docs/web_decompiler.html)
+- Synchronized version 2.0.0-alpha across package.json, version.hpp, NanoDecompilerLite.csproj

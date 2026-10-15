@@ -1,6 +1,6 @@
 {
   "name": "NanoDecompiler-client",
-  "version": "1.9.164",
+  "version": "2.0.0-alpha",
   "description": "Мощный майнкрафт декомпилер для удобства и повседневного использования для разработчиков/копипастеров",
   "main": "dist-electron/main.js",
   "scripts": {
