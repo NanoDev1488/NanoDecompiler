@@ -101,6 +101,12 @@ jobs:
           echo "=== STDERR (если был) ==="
           head -n 50 itemsadder_err.log || true
 
+      - name: Сканировать читабельность декомпилированного кода
+        run: |
+          python3 scripts/scan_readability.py out_itemsadder test_jars/ItemsAdder_4.0.18_.jar
+          echo "=== READABILITY REPORT SUMMARY ==="
+          head -n 80 readability_report.md || true
+
       - name: Загрузить результат
         uses: actions/upload-artifact@v4
         with:
@@ -108,3 +114,6 @@ jobs:
           path: |
             itemsadder_result.json
             itemsadder_err.log
+            readability_report.json
+            readability_report.md
+
