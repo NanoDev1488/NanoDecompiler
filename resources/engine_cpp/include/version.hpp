@@ -235,7 +235,8 @@ namespace nd {
 // НОВОЕ v1.9.161: автономный NanoDecompilerLite со встроенным нативным C++ движком в бинарнике (ExtractEmbeddedCliIfAvailable), экстремальная оптимизация размера Lite (.NET SingleFile Deflate-сжатие, удаление неиспользуемых шрифтов, стрип символов DebugType=none).
 // НОВОЕ v1.9.162: синхронизация версионирования GUI и движка (динамический GUI_VERSION из package.json и Electron app.getVersion(), предотвращение ложного уведомления об обновлении).
 // НОВОЕ v1.9.163: исправление деобфускации пакетов (ru/mc/ccTLD больше не превращаются в pkg; иерархическое сохранение префиксов pkg), поддержка флагов -o/--out в CLI, тестирование на реальных плагинах автора (NanoForge, GlowCases, NanoMarket, NanoCore), сквозное кэширование MSYS2, NuGet, npm, electron-builder и ccache в CI.
-constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.163";
+// НОВОЕ v1.9.164: ликвидация fallback-ошибок (zero fallback engine) при stack underflow в нередуцируемом байткоде ItemsAdder через генерацию синтетических локалов, 10 масштабных улучшений читабельности (ReadUpd 22-31: расширение Bukkit/Paper типов в smart_rename_locals, удаление синтетических null-check артефактов javac x.getClass(), десахаризация Objects.requireNonNull, свертка составных присваиваний +=, -=, *=, очистка SwitchMap таблиц enum switch, схлопывание префиксов java.lang.).
+constexpr const char* NANO_DECOMPILER_VERSION = "NanoDecompiler v1.9.164";
 }
 
 

@@ -1,7 +1,13 @@
-feat: release v1.9.163 - fix package deobfuscation, CI caching and author plugins tests
+fix(engine): resolve stack underflows and introduce 10 major readability passes (v1.9.164)
 
-- Fix excessive pkg creation: whitelist ccTLDs (ru, ua, by, kz), Minecraft and API prefixes (mc, v1-v9); implement hierarchical package prefix mapping in Renamer to preserve package trees.
-- Add -o / --out / --output CLI argument support.
-- Add user plugins from author repos (NanoForge, GlowCases, NanoMarket, NanoCore) with automated CI verification.
-- Add end-to-end CI caching: MSYS2 packages, .NET NuGet packages, npm modules, electron-builder and ccache.
-- Bump version to 1.9.163 across engine, Electron, Lite and package.json.
+- Eliminate 100% ItemsAdder fallback aborts by safely generating synthetic
+  typed locals on stack underflow in irreducible bytecode
+- Add 10 major code readability improvements (ReadUpd 22-31):
+  * Spigot/Bukkit local names dictionary extension (ItemMeta, Config, NamespacedKey, etc.)
+  * Clean synthetic null-check calls (x.getClass())
+  * Desugar Objects.requireNonNull(x) pattern
+  * Fold compound assignments (+=, -=, *=, /=, %=, &=, |=, ^=, <<=, >>=, >>>=)
+  * Desugar $SwitchMap$ enum dispatch arrays into clean switch(enumValue)
+  * Strip redundant java.lang. prefixes from classes in method signatures and bodies
+- Bump version to 1.9.164 across package.json, version.hpp, and NanoDecompilerLite.csproj
+- Add PROJECT_STATE.md and BUILD_LOG.md

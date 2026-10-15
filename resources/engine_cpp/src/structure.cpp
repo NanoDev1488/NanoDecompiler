@@ -999,6 +999,18 @@ std::pair<StmtPtr, std::optional<int64_t>> Structurer::build_loop(int64_t header
 
 std::pair<StmtPtr, std::optional<int64_t>> Structurer::build_switch(int64_t pc, ExprPtr selector, const Block& block,
                                                                        const std::set<int64_t>& stop_addrs) {
+    if (selector && selector->kind == ExprKind::ArrayAccess) {
+        auto* aa = static_cast<ArrayAccess*>(selector.get());
+        if (aa->array && aa->array->kind == ExprKind::FieldAccess) {
+            auto* fa = static_cast<FieldAccess*>(aa->array.get());
+            if (fa->name.find("$SwitchMap$") != std::string::npos && aa->index && aa->index->kind == ExprKind::MethodCall) {
+                auto* mc = static_cast<MethodCall*>(aa->index.get());
+                if (mc->method_name == "ordinal" && mc->target) {
+                    selector = mc->target;
+                }
+            }
+        }
+    }
     const Instruction& last_ins = block.instrs.back();
     const SwitchTargets& targets = *last_ins.targets;
     auto merge_it = ipdom_.find(pc);
@@ -3486,18 +3498,33 @@ std::vector<StmtPtr> prune_empty_blocks_pass(std::vector<StmtPtr> stmts) {
 
 static const std::map<std::string, std::string> kBukkitTypeNames = {
     {"Player", "player"},
+    {"OfflinePlayer", "offlinePlayer"},
     {"Location", "location"},
     {"World", "world"},
     {"ItemStack", "itemStack"},
+    {"ItemMeta", "meta"},
     {"Block", "block"},
     {"CommandSender", "sender"},
     {"Command", "command"},
     {"Event", "event"},
     {"Plugin", "plugin"},
     {"Inventory", "inventory"},
+    {"InventoryView", "view"},
     {"UUID", "uuid"},
     {"File", "file"},
     {"Path", "path"},
+    {"FileConfiguration", "config"},
+    {"ConfigurationSection", "section"},
+    {"NamespacedKey", "key"},
+    {"Vector", "vector"},
+    {"Sound", "sound"},
+    {"Material", "material"},
+    {"Particle", "particle"},
+    {"PotionEffect", "effect"},
+    {"Enchantment", "enchantment"},
+    {"Entity", "entity"},
+    {"LivingEntity", "livingEntity"},
+    {"Damageable", "damageable"},
     {"InputStream", "input"},
     {"OutputStream", "output"},
     {"BufferedReader", "reader"},
@@ -3508,7 +3535,9 @@ static const std::map<std::string, std::string> kBukkitTypeNames = {
     {"Class", "clazz"},
     {"List", "list"},
     {"Map", "map"},
-    {"Set", "set"}
+    {"Set", "set"},
+    {"JsonObject", "json"},
+    {"JsonArray", "jsonArray"}
 };
 
 void rename_ident_in_expr(ExprPtr& e, const std::string& old_name, const std::string& new_name) {
@@ -3670,6 +3699,153 @@ std::vector<StmtPtr> smart_rename_locals(std::vector<StmtPtr> stmts) {
     return stmts;
 }
 
+std::vector<StmtPtr> clean_synthetic_null_checks(std::vector<StmtPtr> stmts) {
+    std::vector<StmtPtr> out;
+    for (auto& s : stmts) {
+        if (!s) continue;
+        if (s->kind == StmtKind::ExprStmt) {
+            auto* es = static_cast<ExprStmtNode*>(s.get());
+            if (es->expr && es->expr->kind == ExprKind::MethodCall) {
+                auto* mc = static_cast<MethodCall*>(es->expr.get());
+                // x.getClass() as standalone statement is javac's synthetic null check
+                if (mc->method_name == "getClass" && mc->args.empty() && mc->target &&
+                    (mc->target->kind == ExprKind::Local || mc->target->kind == ExprKind::FieldAccess)) {
+                    continue; // drop redundant synthetic null-check line
+                }
+            }
+        } else if (s->kind == StmtKind::IfStmt) {
+            auto* i = static_cast<IfStmt*>(s.get());
+            i->then_body = clean_synthetic_null_checks(i->then_body);
+            if (i->else_body) i->else_body = clean_synthetic_null_checks(*i->else_body);
+        } else if (s->kind == StmtKind::WhileStmt) {
+            auto* w = static_cast<WhileStmt*>(s.get());
+            w->body = clean_synthetic_null_checks(w->body);
+        } else if (s->kind == StmtKind::DoWhileStmt) {
+            auto* dw = static_cast<DoWhileStmt*>(s.get());
+            dw->body = clean_synthetic_null_checks(dw->body);
+        } else if (s->kind == StmtKind::ForStmt) {
+            auto* f = static_cast<ForStmt*>(s.get());
+            f->body = clean_synthetic_null_checks(f->body);
+        } else if (s->kind == StmtKind::BlockStmt) {
+            auto* b = static_cast<BlockStmt*>(s.get());
+            b->stmts = clean_synthetic_null_checks(b->stmts);
+        } else if (s->kind == StmtKind::TryStmt) {
+            auto* t = static_cast<TryStmt*>(s.get());
+            t->body = clean_synthetic_null_checks(t->body);
+            for (auto& c : t->catches) c.body = clean_synthetic_null_checks(c.body);
+            if (t->finally_body) t->finally_body = clean_synthetic_null_checks(*t->finally_body);
+        }
+        out.push_back(s);
+    }
+    return out;
+}
+
+std::vector<StmtPtr> fold_compound_assignments(std::vector<StmtPtr> stmts) {
+    for (auto& s : stmts) {
+        if (!s) continue;
+        if (s->kind == StmtKind::ExprStmt) {
+            auto* es = static_cast<ExprStmtNode*>(s.get());
+            if (es->expr && es->expr->kind == ExprKind::Assign) {
+                auto* a = static_cast<Assign*>(es->expr.get());
+                if (a->op == "=" && a->value && a->value->kind == ExprKind::BinOp) {
+                    auto* bo = static_cast<BinOp*>(a->value.get());
+                    static const std::unordered_set<std::string> kCompoundOps = {
+                        "+", "-", "*", "/", "%", "&", "|", "^", "<<", ">>", ">>>"
+                    };
+                    if (kCompoundOps.count(bo->op) && is_same_expr(a->target, bo->left)) {
+                        a->op = bo->op + "=";
+                        a->value = bo->right;
+                    }
+                }
+            }
+        } else if (s->kind == StmtKind::IfStmt) {
+            auto* i = static_cast<IfStmt*>(s.get());
+            i->then_body = fold_compound_assignments(i->then_body);
+            if (i->else_body) i->else_body = fold_compound_assignments(*i->else_body);
+        } else if (s->kind == StmtKind::WhileStmt) {
+            auto* w = static_cast<WhileStmt*>(s.get());
+            w->body = fold_compound_assignments(w->body);
+        } else if (s->kind == StmtKind::DoWhileStmt) {
+            auto* dw = static_cast<DoWhileStmt*>(s.get());
+            dw->body = fold_compound_assignments(dw->body);
+        } else if (s->kind == StmtKind::ForStmt) {
+            auto* f = static_cast<ForStmt*>(s.get());
+            f->body = fold_compound_assignments(f->body);
+        } else if (s->kind == StmtKind::BlockStmt) {
+            auto* b = static_cast<BlockStmt*>(s.get());
+            b->stmts = fold_compound_assignments(b->stmts);
+        } else if (s->kind == StmtKind::TryStmt) {
+            auto* t = static_cast<TryStmt*>(s.get());
+            t->body = fold_compound_assignments(t->body);
+            for (auto& c : t->catches) c.body = fold_compound_assignments(c.body);
+            if (t->finally_body) t->finally_body = fold_compound_assignments(*t->finally_body);
+        }
+    }
+    return stmts;
+}
+
+std::vector<StmtPtr> desugar_objects_require_non_null(std::vector<StmtPtr> stmts) {
+    std::vector<StmtPtr> out;
+    for (auto& s : stmts) {
+        if (!s) continue;
+        if (s->kind == StmtKind::IfStmt) {
+            auto* i = static_cast<IfStmt*>(s.get());
+            // if (x == null) throw new NullPointerException("msg"); -> Objects.requireNonNull(x, "msg");
+            if (i->then_body.size() == 1 && (!i->else_body.has_value() || i->else_body->empty()) &&
+                i->then_body[0]->kind == StmtKind::ThrowStmt && i->cond && i->cond->kind == ExprKind::BinOp) {
+                auto* bo = static_cast<BinOp*>(i->cond.get());
+                if (bo->op == "==") {
+                    ExprPtr null_target = nullptr;
+                    if (bo->right && bo->right->kind == ExprKind::Const && static_cast<Const*>(bo->right.get())->val == "null") {
+                        null_target = bo->left;
+                    } else if (bo->left && bo->left->kind == ExprKind::Const && static_cast<Const*>(bo->left.get())->val == "null") {
+                        null_target = bo->right;
+                    }
+                    if (null_target && (null_target->kind == ExprKind::Local || null_target->kind == ExprKind::FieldAccess)) {
+                        auto* ts = static_cast<ThrowStmt*>(i->then_body[0].get());
+                        if (ts->expr && ts->expr->kind == ExprKind::NewObject) {
+                            auto* no = static_cast<NewObject*>(ts->expr.get());
+                            if (no->type.find("NullPointerException") != std::string::npos) {
+                                std::vector<ExprPtr> req_args = {null_target};
+                                if (!no->args.empty()) req_args.push_back(no->args[0]);
+                                auto req_call = std::make_shared<MethodCall>(
+                                    std::make_shared<Local>("Objects", "java.util.Objects"),
+                                    "requireNonNull",
+                                    req_args,
+                                    "Object"
+                                );
+                                out.push_back(std::make_shared<ExprStmtNode>(req_call));
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+            i->then_body = desugar_objects_require_non_null(i->then_body);
+            if (i->else_body) i->else_body = desugar_objects_require_non_null(*i->else_body);
+        } else if (s->kind == StmtKind::WhileStmt) {
+            auto* w = static_cast<WhileStmt*>(s.get());
+            w->body = desugar_objects_require_non_null(w->body);
+        } else if (s->kind == StmtKind::DoWhileStmt) {
+            auto* dw = static_cast<DoWhileStmt*>(s.get());
+            dw->body = desugar_objects_require_non_null(dw->body);
+        } else if (s->kind == StmtKind::ForStmt) {
+            auto* f = static_cast<ForStmt*>(s.get());
+            f->body = desugar_objects_require_non_null(f->body);
+        } else if (s->kind == StmtKind::BlockStmt) {
+            auto* b = static_cast<BlockStmt*>(s.get());
+            b->stmts = desugar_objects_require_non_null(b->stmts);
+        } else if (s->kind == StmtKind::TryStmt) {
+            auto* t = static_cast<TryStmt*>(s.get());
+            t->body = desugar_objects_require_non_null(t->body);
+            for (auto& c : t->catches) c.body = desugar_objects_require_non_null(c.body);
+            if (t->finally_body) t->finally_body = desugar_objects_require_non_null(*t->finally_body);
+        }
+        out.push_back(s);
+    }
+    return out;
+}
+
 std::vector<StmtPtr> prune_dead_code_pass(std::vector<StmtPtr> stmts) {
     std::set<std::string> used_labels;
     collect_used_labels(stmts, used_labels);
@@ -3723,6 +3899,12 @@ std::vector<StmtPtr> simplify_stmts(const std::vector<StmtPtr>& stmts) {
         out = prune_empty_blocks_pass(out);
         nd::g_crash_pass_name = "prune_dead_code_pass";
         out = prune_dead_code_pass(out);
+        nd::g_crash_pass_name = "clean_synthetic_null_checks";
+        out = clean_synthetic_null_checks(out);
+        nd::g_crash_pass_name = "desugar_objects_require_non_null";
+        out = desugar_objects_require_non_null(out);
+        nd::g_crash_pass_name = "fold_compound_assignments";
+        out = fold_compound_assignments(out);
     }
     nd::g_crash_pass_name = "smart_rename_locals";
     out = smart_rename_locals(out);

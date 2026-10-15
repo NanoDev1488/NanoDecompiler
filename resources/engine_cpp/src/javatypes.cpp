@@ -167,7 +167,9 @@ std::string resolve_type_markers(const std::string& text, const std::unordered_s
             // при отсутствии закрывающего маркера), не глотаем ошибку молча.
             if (j == std::string::npos) throw std::invalid_argument("resolve_type_markers: unmatched TYPE_MARK_OPEN");
             std::string dotted = text.substr(i + 1, j - (i + 1));
-            if (losers.count(dotted)) {
+            if (dotted.rfind("java.lang.", 0) == 0 && dotted.find('.', 10) == std::string::npos && !losers.count(dotted)) {
+                out += dotted.substr(10);
+            } else if (losers.count(dotted)) {
                 out += dotted;
             } else {
                 out += last_segment_after(dotted, '.');
