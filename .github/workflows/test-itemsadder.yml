@@ -1,0 +1,106 @@
+name: test-itemsadder
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/test-itemsadder.yml'
+
+jobs:
+  run-itemsadder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Кэш ccache (Linux)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ${{ runner.os }}-ccache-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-${{ github.ref_name }}-
+            ${{ runner.os }}-ccache-
+
+      - name: Установить зависимости сборки
+        run: sudo apt-get update && sudo apt-get install -y build-essential zlib1g-dev ccache ninja-build python3-pip
+
+      - name: Собрать движок C++ (Linux)
+        working-directory: resources/engine_cpp
+        run: |
+          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          ninja -C build -j $(nproc)
+          cp build/NanoDecompilerCLI ../../NanoDecompilerCLI
+
+      - name: Скачать ItemsAdder с Google Drive
+        run: |
+          mkdir -p test_jars
+          python3 -c "
+          import requests, re, os
+          URL = 'https://docs.google.com/uc?export=download'
+          file_id = '1VLn6XMCNCzb1LL0e537xMWPrW4e6nrYt'
+          s = requests.Session()
+          r = s.get(URL, params={'id': file_id}, stream=True)
+          token = None
+          for k, v in r.cookies.items():
+              if k.startswith('download_warning'):
+                  token = v; break
+          if not token:
+              m = re.search(r'confirm=([0-9A-Za-z_]+)', r.text)
+              if m: token = m.group(1)
+          if token:
+              r = s.get(URL, params={'id': file_id, 'confirm': token}, stream=True)
+          with open('test_jars/ItemsAdder_4.0.18_.jar', 'wb') as f:
+              for chunk in r.iter_content(65536):
+                  if chunk: f.write(chunk)
+          print('Downloaded ItemsAdder size:', os.path.getsize('test_jars/ItemsAdder_4.0.18_.jar'))
+          "
+
+      - name: Прогнать декомпиляцию ItemsAdder
+        run: |
+          chmod +x NanoDecompilerCLI
+          ./NanoDecompilerCLI test_jars/ItemsAdder_4.0.18_.jar out_itemsadder --no-legitimacy-check --json-output > itemsadder_result.json 2> itemsadder_err.log || true
+
+      - name: Показать результаты и fallback-места
+        run: |
+          echo "=== JSON РЕЗУЛЬТАТ ==="
+          python3 -c "
+          import json
+          try:
+              with open('itemsadder_result.json', 'r', encoding='utf-8') as f:
+                  raw = f.read().strip()
+              data = None
+              for line in raw.splitlines():
+                  line = line.strip()
+                  if line.startswith('{') and line.endswith('}'):
+                      try:
+                          cand = json.loads(line)
+                          if 'total_methods' in cand or 'status' in cand:
+                              data = cand
+                              break
+                      except: pass
+              if data:
+                  print('Status:', data.get('status'))
+                  print('Total classes:', data.get('total_classes'))
+                  print('Total methods:', data.get('total_methods'))
+                  print('Decompiled:', data.get('decompiled_methods'))
+                  print('Fallback methods:', data.get('fallback_methods'))
+                  fallbacks = data.get('fallback_locations', [])
+                  print(f'Fallbacks count: {len(fallbacks)}')
+                  for loc in fallbacks:
+                      print('  FALLBACK:', loc)
+              else:
+                  print('No valid json found, raw tail:')
+                  print(raw[-500:])
+          except Exception as e:
+              print('Error reading json:', e)
+          "
+          echo "=== STDERR (если был) ==="
+          head -n 50 itemsadder_err.log || true
+
+      - name: Загрузить результат
+        uses: actions/upload-artifact@v4
+        with:
+          name: itemsadder-analysis
+          path: |
+            itemsadder_result.json
+            itemsadder_err.log
