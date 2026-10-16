@@ -344,6 +344,20 @@ JarProcessResult process_jar_with_stats(const std::string& jar_path, const std::
     ZipReader zr(jar_path);
     std::vector<std::string> all_names = zr.namelist();
 
+    // --- 1.1. Проверка защиты NanoGuard (NANOGUARD.INF в корне или любой подпапке).
+    // Если плагин защищён обфускатором NanoGuard, декомпиляция невозможна.
+    for (const auto& entry_name : all_names) {
+        std::string upper_name = entry_name;
+        for (char& c : upper_name) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        if (upper_name == "NANOGUARD.INF" ||
+            (upper_name.size() > 14 && upper_name.compare(upper_name.size() - 14, 14, "/NANOGUARD.INF") == 0) ||
+            upper_name.find("NANOGUARD.INF") != std::string::npos) {
+            jr.rejected = true;
+            jr.rejected_reason = "Файл защищен NanoGuard, декомпиляция невозможна!";
+            return jr;
+        }
+    }
+
     // --- 1.2. Проверка реального содержимого - хотя бы один .class файл.
     // Валидный ZIP с посторонним содержимым (текст, картинки, что угодно
     // вместо скомпилированного плагина) раньше тихо давал

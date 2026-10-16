@@ -191,9 +191,13 @@ std::string jar_process_result_to_json(const JarProcessResult& jr, const std::st
     // показать точно нужное сообщение, а не общий текст ошибки.
     if (jr.rejected) {
         std::ostringstream mo;
-        mo << "{\"status\":\"rejected\",\"out_dir\":" << js(out_dir) << ",\"elapsed_sec\":" << round2(elapsed_sec)
+        std::string reason = jr.rejected_reason.value_or("");
+        bool is_nanoguard = (reason.find("NanoGuard") != std::string::npos);
+        std::string status = is_nanoguard ? "nanoguard_protected" : "rejected";
+        mo << "{\"status\":" << js(status) << ",\"code\":" << (is_nanoguard ? 78 : 1)
+           << ",\"out_dir\":" << js(out_dir) << ",\"elapsed_sec\":" << round2(elapsed_sec)
            << ",\"platform\":" << js(jr.platform.kind_label())
-           << ",\"reason\":" << js(jr.rejected_reason.value_or("")) << "}";
+           << ",\"reason\":" << js(reason) << "}";
         return mo.str();
     }
     std::ostringstream o;

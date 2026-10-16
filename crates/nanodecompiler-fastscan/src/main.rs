@@ -13,6 +13,14 @@ fn main() {
 
     match nanodecompiler_fastscan::scan_jar(jar_path) {
         Ok(report) => {
+            if report.is_nanoguard_protected {
+                if is_json {
+                    println!("{}", serde_json::to_string_pretty(&report).unwrap());
+                } else {
+                    eprintln!("Файл защищен NanoGuard, декомпиляция невозможна!");
+                }
+                process::exit(78); // Специальный неразмеченный код выхода: защита NanoGuard
+            }
             if is_json {
                 println!("{}", serde_json::to_string_pretty(&report).unwrap());
             } else {

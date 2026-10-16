@@ -20,6 +20,8 @@ pub struct JarScanReport {
     pub danger_score: u32, // 0..100
     pub max_entropy: f64,
     pub threats: Vec<ThreatFinding>,
+    pub is_nanoguard_protected: bool,
+    pub guard_code: Option<u32>,
 }
 
 pub fn scan_jar<P: AsRef<Path>>(path: P) -> Result<JarScanReport, String> {
@@ -34,10 +36,15 @@ pub fn scan_jar<P: AsRef<Path>>(path: P) -> Result<JarScanReport, String> {
 
     let mut class_entries = Vec::new();
     let mut plugin_yml_content: Option<String> = None;
+    let mut is_nanoguard_protected = false;
 
     for i in 0..zip.len() {
         if let Ok(mut entry) = zip.by_index(i) {
             let name = entry.name().to_string();
+            let upper = name.to_uppercase();
+            if upper == "NANOGUARD.INF" || upper.ends_with("/NANOGUARD.INF") || upper.contains("NANOGUARD.INF") {
+                is_nanoguard_protected = true;
+            }
             if name == "plugin.yml" {
                 let mut s = String::new();
                 let _ = entry.read_to_string(&mut s);
@@ -104,6 +111,8 @@ pub fn scan_jar<P: AsRef<Path>>(path: P) -> Result<JarScanReport, String> {
         danger_score,
         max_entropy,
         threats: all_threats,
+        is_nanoguard_protected,
+        guard_code: if is_nanoguard_protected { Some(78) } else { None },
     })
 }
 

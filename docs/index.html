@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NanoDecompiler v1.9.158 — High-End C++ Decompiler & Security Engine</title>
-    <meta name="description" content="Официальная документация NanoDecompiler v1.9.158 — Сверхбыстрый C++17 декомпилятор Minecraft плагинов, легковесный C# клиент NanoDecompilerLite, 20 проходов читаемости и 15 стадий деобфускации.">
+    <title>NanoDecompiler v2.0.0-alpha — High-End C++ Decompiler & Security Engine</title>
+    <meta name="description" content="Официальная документация NanoDecompiler v2.0.0-alpha — Сверхбыстрый C++20 декомпилятор Minecraft плагинов, легковесный C# клиент NanoDecompilerLite, Rust FastScan движок, Zero-Fallback алгоритм, 30 проходов читаемости.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:ital,wght@0,400;0,500;0,600;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -657,13 +657,52 @@
             font-size: 0.9rem;
         }
 
+        /* Table wrapper for mobile scrolling */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin-bottom: 2rem;
+        }
+
         @media (max-width: 850px) {
             .container { flex-direction: column; }
-            aside { width: 100%; height: auto; position: static; border-right: none; border-bottom: 1px solid var(--border); }
-            main { padding: 2rem 1.5rem; }
-            header { padding: 0.8rem 1.2rem; }
-            .hero { padding: 2rem 1.5rem; }
-            .hero h1 { font-size: 2.2rem; }
+            aside {
+                width: 100%;
+                height: auto;
+                position: static;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+                padding: 1rem;
+            }
+            aside ul {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            aside li a {
+                padding: 6px 10px;
+                font-size: 0.8rem;
+                background: rgba(255, 255, 255, 0.03);
+            }
+            main { padding: 1.5rem 1rem; max-width: 100%; }
+            header {
+                padding: 0.8rem 1rem;
+                flex-wrap: wrap;
+                gap: 0.8rem;
+            }
+            .header-links {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+                font-size: 0.85rem;
+            }
+            .hero { padding: 1.5rem 1rem; }
+            .hero h1 { font-size: 1.8rem; word-break: break-word; }
+            .hero p { font-size: 0.95rem; }
+            .code-comparison { grid-template-columns: 1fr; }
+            .downloads-table th, .downloads-table td { padding: 10px 12px; font-size: 0.8rem; }
+            footer { flex-direction: column; gap: 1rem; text-align: center; }
         }
     </style>
 </head>
@@ -1033,8 +1072,73 @@
             <h2>📜 История релизов</h2>
             <p class="desc">Декомпилятор активно развивается. Последние ключевые изменения:</p>
 
-            <div class="card" style="margin-bottom: 1.25rem; border-color: rgba(182, 255, 60, 0.4);">
-                <h3 style="color: var(--acid);">v1.9.158 (2026-10-07)</h3>
+            <div class="card" style="margin-bottom: 1.25rem; border-color: rgba(182, 255, 60, 0.6); box-shadow: 0 0 20px rgba(182, 255, 60, 0.15);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <h3 style="color: var(--acid);">v2.0.0-alpha (2026-10-16)</h3>
+                    <span class="pill-badge active-version">Текущая версия</span>
+                </div>
+                <p><strong>Мажорный юбилейный релиз NanoDecompiler 2.0.0-alpha:</strong><br>
+                • <strong>Zero-Fallback Decompilation Engine</strong>: 100% покрытие сложнейших методов на реальных плагинах (ItemsAdder 4.0.18: 16 327 из 16 327 методов декомпилированы без единого фолбэка).<br>
+                • <strong>Ликвидация Stack Underflow</strong>: Лимит аргументов на стеке перед ветвлениями расширен с 8 до 32, что решило проблемы с глубокими цепочками параметров (RayAuction, конструкторы сущностей, <code>Map.of</code>).<br>
+                • <strong>Rust FastScan & Malware Core</strong>: Параллельный сканер энтропии Шеннона, детекция ForceOP бэкдоров, малвари и Discord-вебхуков на Rayon.<br>
+                • <strong>Защита NanoGuard</strong>: Интегрирована детекция обфусцированных файлов с маркером <code>NANOGUARD.INF</code> — движок безопасно останавливает анализ и сигнализирует кодом <code>78</code> («Файл защищен NanoGuard, декомпиляция невозможна!»).<br>
+                • <strong>Event Flow & Permissions Tree</strong>: Интерактивное дерево команд, слушателей <code>@EventHandler</code> и прав доступа Bukkit/Paper.<br>
+                • <strong>Plugin Diff Viewer</strong>: Сравнение двух версий JAR плагинов в GUI с подсветкой изменений.<br>
+                • <strong>Auto NMS-Remapper</strong>: Автоматический маппинг внутренних версионных пакетов Mojang/Spigot NMS в декомпилированном коде.<br>
+                • <strong>Web / WASM Edition</strong>: Обновленный веб-декомпилятор прямо в браузере с адаптивной мобильной версткой.</p>
+            </div>
+
+            <div class="card" style="margin-bottom: 1.25rem; border-color: rgba(56, 189, 248, 0.4);">
+                <h3 style="color: var(--cyan);">v1.9.164 (2026-10-15)</h3>
+                <p><strong>10 масштабных обновлений читаемости (ReadUpd 22-31):</strong><br>
+                • Семантический словарь имен переменных Bukkit/Paper (ItemMeta, ConfigurationSection, NamespacedKey, World, Sound, Particle, LivingEntity).<br>
+                • Очистка синтетических артефактов javac (null-checks <code>x.getClass();</code>), десахаризация <code>Objects.requireNonNull</code>.<br>
+                • Свёртка составных операторов присваивания (<code>+=</code>, <code>-=</code>, <code>&=</code>, <code>|=</code>, <code>>>=</code>).<br>
+                • Прямое восстановление <code>switch(enum)</code> вместо синтетических таблиц <code>$SwitchMap$</code>.<br>
+                • Схлопывание избыточных префиксов <code>java.lang.</code> в типах, циклах for-each и статических вызовах <code>Math.abs</code>.</p>
+            </div>
+
+            <div class="card" style="margin-bottom: 1.25rem;">
+                <h3 style="color: var(--orange);">v1.9.163 (2026-10-12)</h3>
+                <p><strong>Исправление деобфускации пакетов и тестирование плагинов:</strong><br>
+                • Сохранение правильной иерархии пакетов (предотвращение превращения национальных доменов <code>ru</code>, <code>mc</code> в префиксы пакетов).<br>
+                • Поддержка CLI-флагов <code>-o</code> / <code>--out</code>.<br>
+                • Автоматизированное тестирование на плагинах автора (NanoForge, GlowCases, NanoMarket, NanoCore).<br>
+                • Сквозное кэширование MSYS2, NuGet, npm, electron-builder и ccache в GitHub Actions.</p>
+            </div>
+
+            <div class="card" style="margin-bottom: 1.25rem;">
+                <h3 style="color: var(--purple);">v1.9.162 (2026-10-10)</h3>
+                <p><strong>Динамическая синхронизация версий:</strong><br>
+                • Синхронизация версий GUI и нативного движка без рассинхрона (устранение ложных уведомлений об обновлении).<br>
+                • Корректная обработка Escape для всех модальных окон.</p>
+            </div>
+
+            <div class="card" style="margin-bottom: 1.25rem;">
+                <h3 style="color: var(--text-main);">v1.9.161 (2026-10-09)</h3>
+                <p><strong>Автономный NanoDecompilerLite:</strong><br>
+                • Встраивание нативного C++ движка прямо внутрь единственного исполняемого файла .NET 8 (ExtractEmbeddedCli).<br>
+                • Оптимизация размера дистрибутива: SingleFile Deflate-сжатие, удаление неиспользуемых шрифтов, стрип символов (DebugType=none).</p>
+            </div>
+
+            <div class="card" style="margin-bottom: 1.25rem;">
+                <h3 style="color: var(--text-main);">v1.9.160 (2026-10-08)</h3>
+                <p><strong>Умный поиск CLI и редукция потоков управления:</strong><br>
+                • Поддержка поиска CLI в Program Files, Desktop, Downloads, системном PATH и выбор через проводник.<br>
+                • Ликвидация нередуцируемых CFG переходов (goto) через безопасное линейное продолжение в структуризаторе C++.</p>
+            </div>
+
+            <div class="card" style="margin-bottom: 1.25rem;">
+                <h3 style="color: var(--text-main);">v1.9.159 (2026-10-07)</h3>
+                <p><strong>Глубокая деобфускация плагинов Bukkit/Paper:</strong><br>
+                • Семантическое именование EventListener и методов <code>@EventHandler on&lt;Event&gt;</code>.<br>
+                • Детекция CommandExecutor, TabCompleter, PluginMain, PluginTask, MenuHolder из <code>plugin.yml</code>.<br>
+                • Сквозное разрешение межклассовых XOR-дешифраторов строк, свёртка <code>Math.min/max</code> и <code>String.valueOf</code>.<br>
+                • Расширение фильтрации сторонних библиотек (exp4j, re2j, yamlbeans, cryptomorin/xseries).</p>
+            </div>
+
+            <div class="card" style="margin-bottom: 1.25rem;">
+                <h3>v1.9.158 (2026-10-07)</h3>
                 <p><strong>Устранение зависаний, стандартизация артефактов и новый C# GUI:</strong><br>
                 • <strong>Ликвидация O(N³) узких мест</strong>: Алгоритмы <code>collapse_temp_chains</code> и <code>inline_crossing_pass</code> оптимизированы скользящим окном lookahead и компактизацией без аллокаций. Классы с 1000+ enum-константами (<code>XMaterial.class</code>) теперь декомпилируются за миллисекунды без таймаутов.<br>
                 • <strong>Стандартизация релизных артефактов</strong>: Все бинарники теперь имеют строгий паттерн <code>[Name]-[OS]-[arch]-[version][ext]</code>.<br>

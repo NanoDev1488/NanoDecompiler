@@ -167,8 +167,9 @@ int run_decompile_console(const std::string& jar_path, const std::string& out_di
     }
 
     if (jr.rejected) {
-        std::cout << "[!] " << jr.rejected_reason.value_or("Декомпиляция не выполнена.") << "\n";
-        return 1;
+        std::string reason = jr.rejected_reason.value_or("Декомпиляция не выполнена.");
+        std::cout << "[!] " << reason << "\n";
+        return (reason.find("NanoGuard") != std::string::npos) ? 78 : 1;
     }
 
     auto warning_text = nd::format_findings_for_console(jr.malware_findings);

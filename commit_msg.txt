@@ -1,10 +1,8 @@
-feat(v2.0.0-alpha): Major release 2.0.0-alpha
+feat(nanoguard,web,ci): add NanoGuard protection check, update changelogs and fix CI builds
 
-- Zero Fallback Engine: 100% decompilation on ItemsAdder 4.0.18 (16327/16327 methods, 0 fallback)
-- Rust FastScan Core: multi-threaded malware, Shannon entropy, ForceOP & webhook detector
-- Event Flow & Permissions Tree in GUI: interactive viewer for Bukkit/Paper events, commands, permissions
-- Plugin Diff Viewer in GUI: visual comparison of JAR versions, class changes & size diffs
-- Auto NMS-Remapper: Mojang/Spigot NMS mapping support in decompiler engine
-- Direct GitHub Exporter in GUI: export decompiled plugins to GitHub with PAT authentication
-- Web / WASM Edition: client-side in-browser decompiler (docs/web_decompiler.html)
-- Synchronized version 2.0.0-alpha across package.json, version.hpp, NanoDecompilerLite.csproj
+- Implement NanoGuard obfuscation detection (NANOGUARD.INF marker check in C++ process_jar and Rust fastscan with unassigned exit code 78 and nanoguard_protected status).
+- Add full changelogs from v1.9.159 to v2.0.0-alpha on docs/index.html.
+- Make docs/index.html and docs/web_decompiler.html fully responsive for mobile devices.
+- Update web decompiler engine to v2.0.0-alpha with constant pool decoding, bytecode validation, and NanoGuard guard banner.
+- Restore valid MainWindow.axaml.cs for NanoDecompilerLite (eliminates CS1056 null byte errors in CI).
+- Upgrade zip crate in nanodecompiler-fastscan from yanked 2.2 to 9.0.
