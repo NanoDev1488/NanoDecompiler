@@ -2,6 +2,12 @@ import urllib.request
 import subprocess
 import sys
 
+if sys.stdout.encoding.lower() != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 def main():
     out = subprocess.check_output(['git', 'config', 'remote.origin.url'], text=True)
     token = out.split('@github.com')[0].split('https://')[1]

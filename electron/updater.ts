@@ -420,6 +420,27 @@ export function registerUpdateHandlers(
       await httpsDownloadFile(downloadUrl, downloadPath, (downloaded, total) => {
         event.sender.send("update:downloadProgress", { downloaded, total, kind: "client" });
       });
+
+      // Сверка SHA256 контрольной суммы перед запуском инсталлятора
+      try {
+        const release = await httpsGetJson<GhRelease>(
+          `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`
+        );
+        const checksumsAsset = release.assets.find((a) => a.name === "checksums.json");
+        const setupAsset = release.assets.find((a) => clientAssetPattern().test(a.name));
+        if (checksumsAsset && setupAsset) {
+          const checksums = await httpsGetJson<ChecksumsJson>(checksumsAsset.browser_download_url);
+          const expected = checksums[setupAsset.name];
+          const actual = await sha256File(downloadPath);
+          if (expected && actual && expected.toLowerCase() !== actual.toLowerCase()) {
+            fs.unlinkSync(downloadPath);
+            return { ok: false, error: "Контрольная сумма скачанного установщика не совпадает (SHA256 mismatch). Файл удалён." };
+          }
+        }
+      } catch (err) {
+        // не блокируем при недоступности checksums.json
+      }
+
       writeUpdateSuccessMarker();
 
       let scriptPath = "";

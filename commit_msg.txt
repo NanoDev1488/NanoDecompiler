@@ -1,8 +1,5 @@
-feat(nanoguard,web,ci): add NanoGuard protection check, update changelogs and fix CI builds
+fix(ci,updater): fallback ccache in macos job and verify sha256 checksum for full client update
 
-- Implement NanoGuard obfuscation detection (NANOGUARD.INF marker check in C++ process_jar and Rust fastscan with unassigned exit code 78 and nanoguard_protected status).
-- Add full changelogs from v1.9.159 to v2.0.0-alpha on docs/index.html.
-- Make docs/index.html and docs/web_decompiler.html fully responsive for mobile devices.
-- Update web decompiler engine to v2.0.0-alpha with constant pool decoding, bytecode validation, and NanoGuard guard banner.
-- Restore valid MainWindow.axaml.cs for NanoDecompilerLite (eliminates CS1056 null byte errors in CI).
-- Upgrade zip crate in nanodecompiler-fastscan from yanked 2.2 to 9.0.
+- Fall back to standard cmake build without ccache if brew ccache installation fails in build-clapi-macos.
+- Add strict SHA256 checksum verification from checksums.json before launching client installer in update:installClientAndRestart.
+- Fix cp1251 UnicodeEncodeError in fetch_job_log.py on Windows.

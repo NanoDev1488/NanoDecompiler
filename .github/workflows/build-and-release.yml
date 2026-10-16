@@ -508,12 +508,18 @@ jobs:
             ${{ runner.os }}-ccache-
 
       - name: Установить ccache и ninja
-        run: brew install ccache ninja --quiet || true
+        run: |
+          brew install ninja || true
+          brew install ccache || true
 
       - name: Собрать движок (macOS)
         working-directory: resources/engine_cpp
         run: |
-          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          CMAKE_FLAGS="-S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo"
+          if command -v ccache >/dev/null 2>&1; then
+            CMAKE_FLAGS="$CMAKE_FLAGS -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache"
+          fi
+          cmake $CMAKE_FLAGS
           ninja -C build -j $(sysctl -n hw.logicalcpu)
           cp build/NanoDecompilerCLI ../../NanoDecompilerClApi
 
