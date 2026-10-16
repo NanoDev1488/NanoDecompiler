@@ -20,11 +20,6 @@
   7. Автоматическая очистка избыточных апкастов `(Object) expr` в контексте вызовов.
   8. Упрощение булевых условий (`== true`, `== false`, двойные отрицания).
   9. Очистка нередуцируемых CFG переходов и пустых блоков.
-- **Сквозной аудит читабельности ItemsAdder 4.0.18**: проверены все 1747 файлов .java (3 235 833 строк кода). Результат: 0 артефактов стека (__stk/__temp/__entry), 0 нередуцированных goto, 0 избыточных boolean/ternary/upcast. Устранены последние 2 косметические шероховатости: очищены префиксы `java.lang.` в типах for-each циклов (`String` вместо `java.lang.String`) и статических вызовах (`Math.abs` вместо `java.lang.Math.abs`).
-- **Тестирование ItemsAdder 4.0.18**: завершено в GitHub Actions с РЕЗУЛЬТАТОМ **0 fallback-методов** (16327/16327 методов декомпилированы, Status: ok).
-- **Новые модули**:
-  - **Rust FastScan & Malware Core** (`crates/nanodecompiler-fastscan`): параллельный анализ JAR на Rayon/Memmap2, сканирование энтропии Шеннона, детекция ForceOP/Discord-вебхуков/RCE с Danger Score.
-  - **Event Flow & Permissions Tree** (`scripts/plugin_tree_explorer.py`): интерактивное дерево команд, прав, алиасов и слушателей эвентов Bukkit/Paper.
-  - **Plugin Diff Viewer** (`scripts/plugin_diff_viewer.py`): экспериментальный дифф-декомпилятор версий JAR (сравнение классов, байткода, plugin.yml).
-  - **Auto NMS-Remapper** (`resources/engine_cpp/src/renamer.cpp`): автоматический ремаппинг NMS / Mojang-mapped сущностей (ServerPlayer, Connection, CompoundTag).
-  - **Web / WASM Edition** (`docs/web_decompiler.html`): клиентский декомпилятор прямо в браузере с drag-and-drop.
+- **Устранение сбоя GitHub Actions**: восстановлен `MainWindow.axaml` (устранены нули в начале файла, приводившие к ошибке AVLN1001 в `build-lite-gui`).
+- **Ликвидация stack underflow в RayAuction** (`rayauction-1.1.jar`): увеличен лимит отсутствующих аргументов на стеке перед ветвлением с 8 до 32 (`underflow_missing->size() < 32` в `stackvm.cpp` и `canonical.size() < 32` в `engine.cpp`), что обеспечивает 100% покрытие методов с глубоким стеком вызовов (конструкторы сущностей и `Map.of`).
+- **CI верификация**: в `.github/workflows/test-itemsadder.yml` добавлен шаг автоматической проверки декомпиляции `rayauction-1.1.jar` с верификацией отсутствия fallback-методов.

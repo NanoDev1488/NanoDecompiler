@@ -101,6 +101,52 @@ jobs:
           echo "=== STDERR (если был) ==="
           head -n 50 itemsadder_err.log || true
 
+      - name: Скачать RayAuction для проверки
+        run: |
+          mkdir -p test_jars
+          curl -sL https://github.com/AkyRayy/RayAuction/releases/download/RELEASE/rayauction-1.1.jar -o test_jars/rayauction-1.1.jar
+          ls -la test_jars/rayauction-1.1.jar
+
+      - name: Прогнать декомпиляцию RayAuction (верификация фикса stack underflow)
+        run: |
+          ./NanoDecompilerCLI test_jars/rayauction-1.1.jar out_rayauction --no-legitimacy-check --json-output > rayauction_result.json 2> rayauction_err.log || true
+          echo "=== RAYAUCTION РЕЗУЛЬТАТ ==="
+          python3 -c "
+          import json, sys
+          try:
+              with open('rayauction_result.json', 'r', encoding='utf-8') as f:
+                  raw = f.read().strip()
+              data = None
+              for line in raw.splitlines():
+                  line = line.strip()
+                  if line.startswith('{') and line.endswith('}'):
+                      try:
+                          cand = json.loads(line)
+                          if 'total_methods' in cand or 'status' in cand:
+                              data = cand
+                              break
+                      except: pass
+              if data:
+                  print('Status:', data.get('status'))
+                  print('Total classes:', data.get('total_classes'))
+                  print('Total methods:', data.get('total_methods'))
+                  print('Decompiled:', data.get('decompiled_methods'))
+                  print('Fallback methods:', data.get('fallback_methods'))
+                  fallbacks = data.get('fallback_locations', [])
+                  print(f'Fallbacks count: {len(fallbacks)}')
+                  for loc in fallbacks:
+                      print('  FALLBACK:', loc)
+                  if data.get('fallback_methods', 0) > 0:
+                      print('::error::RayAuction has fallback methods!')
+                      sys.exit(1)
+              else:
+                  print('No valid json found')
+                  sys.exit(1)
+          except Exception as e:
+              print('Error checking RayAuction json:', e)
+              sys.exit(1)
+          "
+
       - name: Сканировать читабельность декомпилированного кода
         run: |
           python3 scripts/scan_readability.py out_itemsadder test_jars/ItemsAdder_4.0.18_.jar
@@ -114,6 +160,9 @@ jobs:
           path: |
             itemsadder_result.json
             itemsadder_err.log
+            rayauction_result.json
+            rayauction_err.log
             readability_report.json
             readability_report.md
+
 

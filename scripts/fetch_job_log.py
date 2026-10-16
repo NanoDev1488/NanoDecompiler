@@ -1,23 +1,39 @@
-import requests
+import urllib.request
 import subprocess
-import re
-import sys
 
-sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+def main():
+    out = subprocess.check_output(['git', 'config', 'remote.origin.url'], text=True)
+    token = out.split('@github.com')[0].split('https://')[1]
+    
+    class NoAuthRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            new_req = super().redirect_request(req, fp, code, msg, headers, newurl)
+            if new_req is not None and "github.com" not in newurl:
+                new_req.headers.pop("Authorization", None)
+                new_req.headers.pop("authorization", None)
+            return new_req
 
-job_id = sys.argv[1] if len(sys.argv) > 1 else '109878736247'
-remote_url = subprocess.check_output(['git', 'config', '--get', 'remote.origin.url'], text=True).strip()
-m = re.search(r'https://([^@]+)@github\.com', remote_url)
-token = m.group(1) if m else None
+    opener = urllib.request.build_opener(NoAuthRedirect)
+    job_id = "116696024026"
+    url = f"https://api.github.com/repos/NanoDev1488/NanoDecompiler/actions/jobs/{job_id}/logs"
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "Mozilla/5.0",
+        "Authorization": f"Bearer {token}",
+    })
+    
+    with opener.open(req) as resp:
+        text = resp.read().decode('utf-8', errors='replace')
+    
+    lines = text.splitlines()
+    error_indices = [i for i, l in enumerate(lines) if "error" in l.lower() or "failed" in l.lower() or "msb" in l.lower()]
+    print(f"Total log lines: {len(lines)}, error matches: {len(error_indices)}")
+    if error_indices:
+        last = error_indices[-1]
+        start = max(0, last - 15)
+        end = min(len(lines), last + 25)
+        print("=== RELEVANT ERROR LOG ===")
+        for i in range(start, end):
+            print(lines[i])
 
-headers = {'User-Agent': 'Mozilla/5.0'}
-if token:
-    headers['Authorization'] = f'token {token}'
-
-url = f'https://api.github.com/repos/NanoDev1488/NanoDecompiler/actions/jobs/{job_id}/logs'
-r = requests.get(url, headers=headers, timeout=20)
-lines = r.text.splitlines()
-start = int(sys.argv[2]) if len(sys.argv) > 2 else max(0, len(lines) - 80)
-end = int(sys.argv[3]) if len(sys.argv) > 3 else len(lines)
-for i in range(start, min(end, len(lines))):
-    print(f"[{i}] {lines[i]}")
+if __name__ == "__main__":
+    main()

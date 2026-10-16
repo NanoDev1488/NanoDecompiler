@@ -2786,7 +2786,7 @@ MethodDecompileResult decompile_method_body(const ClassFile& cf, const Method& m
             std::vector<ExprPtr> seed(canonical.rbegin(), canonical.rend());
             std::vector<ExprPtr> flag2;
             results[pc] = simulate_block(cfg.blocks.at(pc), seed, ctx, &flag2);
-            while (!flag2.empty() && canonical.size() < 16) {
+            while (!flag2.empty() && canonical.size() < 32) {
                 size_t more_needed = flag2.size();
                 flag2.clear();
                 std::vector<ExprPtr> more_canonical = get_producer_temps(preds[0], more_needed, new_chain);
